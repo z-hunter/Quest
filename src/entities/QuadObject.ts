@@ -773,6 +773,77 @@ export function expandTriangleForCoverage(
 
 /** Adds subpixel overlap without changing the geometry used for UV projection. */
 export function expandPolygonForCoverage(vertices: QuadPoint[], amount: number): QuadPoint[] {
+  if (vertices.length < 3 || amount <= 0) return vertices;
+
+  // BSP produces convex pieces. Offset their edges rather than pulling their
+  // vertices away from the centroid: radial growth can be tangential to a
+  // long skewed shared edge and leave an antialiased seam.
+  const signedArea = vertices.reduce((area, point, index) => {
+    const next = vertices[(index + 1) % vertices.length];
+    return area + point.x * next.y - next.x * point.y;
+  }, 0);
+  const winding = Math.sign(signedArea);
+  const outward = vertices.map((point, index) => {
+    const next = vertices[(index + 1) % vertices.length];
+    const dx = next.x - point.x;
+    const dy = next.y - point.y;
+    const length = Math.hypot(dx, dy);
+    if (length <= HOMOGRAPHY_EPSILON) return null;
+    return winding > 0 ? { x: dy / length, y: -dx / length } : { x: -dy / length, y: dx / length };
+  });
+  const isConvex =
+    winding !== 0 &&
+    outward.every(Boolean) &&
+    vertices.every((point, index) => {
+      const a = vertices[(index + vertices.length - 1) % vertices.length];
+      const b = point;
+      const c = vertices[(index + 1) % vertices.length];
+      const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+      return Math.abs(cross) <= HOMOGRAPHY_EPSILON || Math.sign(cross) === winding;
+    });
+  if (isConvex) {
+    const expanded: QuadPoint[] = [];
+    for (let index = 0; index < vertices.length; index++) {
+      const previous = (index + vertices.length - 1) % vertices.length;
+      const a = vertices[previous];
+      const b = vertices[index];
+      const next = vertices[(index + 1) % vertices.length];
+      const u = outward[previous]!;
+      const v = outward[index]!;
+      const p = { x: a.x + u.x * amount, y: a.y + u.y * amount };
+      const q = { x: b.x + v.x * amount, y: b.y + v.y * amount };
+      const r = { x: b.x + u.x * amount, y: b.y + u.y * amount };
+      const s = { x: next.x + v.x * amount, y: next.y + v.y * amount };
+      const sx = r.x - p.x;
+      const sy = r.y - p.y;
+      const tx = s.x - q.x;
+      const ty = s.y - q.y;
+      const determinant = sx * ty - sy * tx;
+      if (Math.abs(determinant) <= HOMOGRAPHY_EPSILON) {
+        expanded.length = 0;
+        break;
+      }
+      const cross = (q.x - p.x) * ty - (q.y - p.y) * tx;
+      const t = cross / determinant;
+      const intersection = { x: p.x + sx * t, y: p.y + sy * t };
+      const maxMiter = amount * 4;
+      if (Math.hypot(intersection.x - b.x, intersection.y - b.y) <= maxMiter) {
+        expanded.push(intersection);
+      } else {
+        // Bevel this one near-flat corner while preserving the edge offsets
+        // around it. This prevents an infinite miter/ray without reopening
+        // the BSP seam along the healthy parts of the split.
+        const nx = u.x + v.x;
+        const ny = u.y + v.y;
+        const length = Math.hypot(nx, ny) || 1;
+        expanded.push({ x: b.x + (nx / length) * amount, y: b.y + (ny / length) * amount });
+      }
+    }
+    if (expanded.length === vertices.length) return expanded;
+  }
+
+  // Author-authored non-convex Quads are not BSP pieces. Keep the safe
+  // radial fallback instead of producing a self-intersecting outline.
   const center = vertices.reduce(
     (sum, vertex) => ({
       x: sum.x + vertex.x / vertices.length,

@@ -176,6 +176,8 @@ canvasY = viewportCenterY + (Y' - Camera.y) × Camera.zoom
 
 Все Box используют одни и те же `Camera.x/y`, `F` и `Scene.box3dPerspective`. Поэтому одинаковые мировые точки разных Box всегда совпадают на экране.
 
+Перед проекцией physical face обрезается по near plane на расстоянии `1% × F` перед `camera3D`. Грань, пересекающая plane, превращается во временный render fragment; исходный managed Quad и его authored-настройки не изменяются. Полностью оказавшаяся позади камеры грань исключается, но остальные грани Box продолжают участвовать в BSP, поэтому при входе камеры внутрь объёма видны внутренние стороны его оболочки. В ортографическом режиме near-plane clipping не применяется.
+
 ### 5.3 Почему движение камеры показывает глубину
 
 При изменении Camera XY множитель `P` у каждой вершины остаётся функцией её World Z, но выражение `(world - camera) × P` меняется. Ближние и дальние вершины получают разные экранные смещения. Поэтому камера, уходящая ниже объекта, постепенно открывает нижние поверхности, а горизонтальное движение открывает боковые.
@@ -251,12 +253,13 @@ physical XYZ → projectBox3DPoint() → managed Quad XY → Canvas camera trans
 `buildBox3DRenderFragments()`:
 
 1. нормализует полигоны и исключает нулевую площадь;
-2. проецирует screen bounds;
-3. делит faces на независимые группы по пересечению 2D AABB;
-4. строит CPU BSP внутри каждой группы;
-5. рассекает пересекающиеся физические полигоны BSP-плоскостями;
-6. обходит дерево относительно общей `camera3D` far-to-near;
-7. возвращает projected fragments со ссылкой на исходный Quad или Entity.
+2. обрезает их по near plane;
+3. проецирует screen bounds;
+4. делит faces на независимые группы по пересечению 2D AABB;
+5. строит CPU BSP внутри каждой группы;
+6. рассекает пересекающиеся физические полигоны BSP-плоскостями;
+7. обходит дерево относительно общей `camera3D` far-to-near;
+8. возвращает projected fragments со ссылкой на исходный Quad или Entity.
 
 Coplanar order детерминирован: scene order, затем Box ID, затем face index.
 
@@ -314,6 +317,8 @@ Disabled Box или managed-face временно делает её spatial desc
 `3D Box` доступен в `HierarchyPanel`. Создание идёт через общий `SceneEditor.createObjectFromData()` и `DefaultBox3DData`, затем одной операцией создаются родитель и шесть Quad с именами `<BoxName>_face_0..5`.
 
 `Box3DProperties.tsx` показывает Position, Rotation, Scale, frustum dimensions, offsets и три pivots. `SceneProperties.tsx` содержит общую настройку `3D Perspective`.
+
+Флаг `Cutter` сериализуется на родителе. Активный Cutter остаётся доступен в hierarchy и через selection overlay, но его оболочка не рисуется как отдельный solid. Вместо этого она динамически вычитается из всех обычных Box3D того же Layer.
 
 Родитель — transform-контейнер: он не имеет собственной картинки, components или runtime hit target. У managed Quad Transform, vertices/P, Layer и Perspective являются derived. Остальные обычные Quad controls остаются доступны.
 
@@ -378,13 +383,27 @@ Copy/Duplicate/Prefab используют selection payload v3:
 8. Disabled/alpha openings требуют полной оболочки; безусловный backface culling нарушит этот контракт.
 9. Attached Entity должна входить в общий BSP, иначе она не будет корректно заслоняться.
 10. Изменение Camera или `3D Perspective` должно отражаться в том же render frame.
+11. Cutter изменяет только transient render/raycast fragments; authored Box и managed Quad не переписываются.
+
+### 12.1 Live Cutter
+
+`getVisibleBox3DFaces()` применяет Boolean Difference до общего BSP:
+
+1. target face последовательно рассекается шестью outward-плоскостями Cutter;
+2. части внутри Cutter удаляются, внешние сохраняют ссылку на исходный target Quad;
+3. face Cutter обрезается шестью плоскостями target;
+4. оставшийся polygon разворачивается и становится внутренней стенкой отверстия со стилем исходного Cutter Quad;
+5. полученные fragments проходят обычные near-plane clipping, BSP, projection и raycast.
+
+Cutter без пересечения ничего не меняет. Если он проходит цель насквозь, получается сквозное отверстие; при частичном входе — ниша. Disabled/hidden Cutter не участвует в вычитании. Layer является абсолютной границей операции.
 
 ## 13. Ограничения текущей реализации
 
 - Это CPU Canvas2D renderer, не GPU depth buffer.
 - Камера не имеет собственного Z и rotation; направление взгляда фиксировано вдоль `+Z`.
-- Near plane скрывает весь Box вместо clipping.
+- Near plane реализован как polygon clipping, но Camera Z/rotation пока отсутствуют.
 - BSP ограничен 1200 fragments и оптимизирован примерно для editor-sized сцен.
+- Пересекающиеся друг с другом Cutter могут создавать избыточные coplanar fragments; отдельная оптимизация их union пока не выполняется.
 - Полупрозрачность использует painter's algorithm; циклические alpha-overlap могут иметь обычные ограничения такого подхода.
 - Physical collision volume Box как отдельный solid collider не реализован. Gameplay collision идёт через возможности его Quad, например WalkBox.
 - Родитель Box не является Entity и не предназначен для components/interactions.

@@ -99,6 +99,41 @@ describe('Box3DObject', () => {
     expect(getVisibleBox3DFaces({ entities })).toHaveLength(5);
   });
 
+  it('clips individual faces at the near plane instead of hiding the whole Box', () => {
+    const game: any = { editor: null, canvas: { width: 640, height: 360 } };
+    const box = new Box3DObject(game, 'inside');
+    box.rotationX = 0;
+    box.rotationY = 0;
+    box.rotationZ = 0;
+    box.z = -420;
+    const faces = Array.from({ length: 6 }, (_, index) => {
+      const face = new QuadObject(game, `inside_face_${index}`);
+      face.box3dFaceIndex = index;
+      face.spatial = { parentNodeId: box.name, relation: 'in' };
+      return face;
+    });
+    const scene: any = {
+      game,
+      entities: [box, ...faces],
+      camera: { x: 0, y: 0, zoom: 1 },
+      box3dPerspective: 1,
+    };
+
+    box.syncFaces(scene);
+    const visible = getVisibleBox3DFaces(scene);
+    const fragments = buildBox3DRenderFragments(scene, visible);
+
+    expect(faces.filter((face) => !face.box3dHidden)).toHaveLength(5);
+    expect(visible).toHaveLength(5);
+    expect(visible.filter((face) => face.fragmented)).toHaveLength(4);
+    expect(
+      fragments.every((fragment) =>
+        fragment.projected.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+      )
+    ).toBe(true);
+    expect(raycastBox3DFace(scene, 320, 180)?.box3dFaceIndex).toBe(4);
+  });
+
   it('keeps outward winding separate from upright Quad texture corners', () => {
     const game: any = { editor: null };
     const box = new Box3DObject(game, 'box');
@@ -201,6 +236,19 @@ describe('Box3DObject', () => {
     expect(hit!.z).toBeCloseTo(-50);
   });
 
+  it('continues a face drag across its physical plane after the cursor leaves the face', () => {
+    const game: any = { editor: null, canvas: { width: 640, height: 360 } };
+    const scene: any = { game, camera: { x: 0, y: 0, zoom: 1 }, box3dPerspective: 1 };
+    const vertices = [
+      { x: -10, y: -10, z: 0 },
+      { x: 10, y: -10, z: 0 },
+      { x: 10, y: 10, z: 0 },
+      { x: -10, y: 10, z: 0 },
+    ];
+    expect(intersectBox3DFaceAtScreen(scene, vertices, 500, 180)).toBeNull();
+    expect(intersectBox3DFaceAtScreen(scene, vertices, 500, 180, false)).not.toBeNull();
+  });
+
   it('projects touching vertices from separate Boxes to the same point', () => {
     const game: any = { editor: null };
     const lower = new Box3DObject(game, 'lower');
@@ -277,6 +325,40 @@ describe('Box3DObject', () => {
     expect(expanded[0].y).toBeLessThan(0);
     expect(expanded.reduce((sum, point) => sum + point.x, 0) / 4).toBeCloseTo(5);
     expect(points[0]).toEqual({ x: 0, y: 0 });
+    expect(expanded).toEqual([
+      { x: -1, y: -1 },
+      { x: 11, y: -1 },
+      { x: 11, y: 11 },
+      { x: -1, y: 11 },
+    ]);
+  });
+
+  it('preserves coverage on a skewed BSP edge away from a beveled corner', () => {
+    const expanded = expandPolygonForCoverage(
+      [
+        { x: 0, y: 0 },
+        { x: 100, y: 1 },
+        { x: 1, y: 2 },
+      ],
+      1
+    );
+    expect(expanded[0].y).toBeLessThan(-0.9);
+    expect(Math.hypot(expanded[2].x - 1, expanded[2].y - 2)).toBeLessThanOrEqual(4);
+  });
+
+  it('never turns a nearly flat projected face into an unbounded miter', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 200, y: 0.00001 },
+      { x: 0, y: 1 },
+    ];
+    const expanded = expandPolygonForCoverage(points, 1);
+    expect(
+      expanded.every(
+        (point, index) => Math.hypot(point.x - points[index].x, point.y - points[index].y) <= 4
+      )
+    ).toBe(true);
   });
 
   it('serializes perspective on Scene only and does not reapply Quad camera parallax', () => {
@@ -321,6 +403,44 @@ describe('Box3DObject', () => {
     expect(fragments.length).toBeGreaterThan(faces.length);
     expect(fragments.some((fragment) => fragment.fragmented)).toBe(true);
     expect(raycastBox3DFace(scene, 320, 180)).toBeInstanceOf(QuadObject);
+  });
+
+  it('uses an editable Cutter Box to open and restore a live hole', () => {
+    const game: any = { editor: null, canvas: { width: 640, height: 360 } };
+    const target = new Box3DObject(game, 'wall');
+    target.rotationX = target.rotationY = target.rotationZ = 0;
+    const cutter = new Box3DObject(game, 'window');
+    cutter.rotationX = cutter.rotationY = cutter.rotationZ = 0;
+    cutter.cutter = true;
+    cutter.bottomWidth = cutter.topWidth = 40;
+    cutter.height = 40;
+    cutter.bottomDepth = cutter.topDepth = 200;
+    const boxes = [target, cutter];
+    const faces = boxes.flatMap((box) =>
+      Array.from({ length: 6 }, (_, index) => {
+        const face = new QuadObject(game, `${box.name}_face_${index}`);
+        face.box3dFaceIndex = index;
+        face.spatial = { parentNodeId: box.name, relation: 'in' };
+        return face;
+      })
+    );
+    const scene: any = {
+      game,
+      entities: [...boxes, ...faces],
+      camera: { x: 0, y: 0, zoom: 1 },
+      box3dPerspective: 1,
+    };
+    boxes.forEach((box) => box.syncFaces(scene));
+
+    const cutFaces = getVisibleBox3DFaces(scene);
+    expect(cutter.toJSON()).toHaveProperty('cutter', true);
+    expect(cutFaces.filter((face) => face.quad.name === 'wall_face_2')).toHaveLength(4);
+    expect(cutFaces.some((face) => face.boxId === cutter.name)).toBe(true);
+    expect(raycastBox3DFace(scene, 320, 180)).toBeNull();
+
+    cutter.x = 200;
+    cutter.syncFaces(scene);
+    expect(raycastBox3DFace(scene, 320, 180)?.name).toBe('wall_face_2');
   });
 
   it('uses the rendered fallback order for hit testing after the BSP fragment limit', () => {

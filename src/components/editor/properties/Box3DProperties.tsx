@@ -66,6 +66,15 @@ export const Box3DProperties: React.FC = () => {
           className="properties-section-body"
           style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
         >
+          <label className="e-label" style={{ gridColumn: '1 / -1' }}>
+            <input
+              aria-label="Cutter"
+              type="checkbox"
+              checked={obj.cutter}
+              onChange={(event) => handleChange('cutter', event.target.checked)}
+            />{' '}
+            Cutter
+          </label>
           {fields.map(([field, label]) =>
             numberInput(label, obj[field] as number, (value) =>
               handleChange(String(field), value, true)

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Actor } from '../../src/entities/Actor';
 import { Entity } from '../../src/entities/Entity';
+import { DefaultBox3DData } from '../../src/entities/EntityPrefabs';
+import { QuadObject } from '../../src/entities/QuadObject';
 import { SceneEditor } from '../../src/tools/SceneEditor';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
@@ -82,6 +84,28 @@ describe('SceneEditor object creation', () => {
     expect(actor?.components).toEqual([{ type: 'Actor' }, { type: 'Item' }]);
     expect(actor?.direction).toBe('down');
     expect(actor?.speed).toBe(0.1);
+  });
+
+  it('creates Box3D faces from the visual defaults in its template', () => {
+    const fixture = createSceneFixture();
+    const editor = createHeadlessEditor(fixture);
+    const box = SceneEditor.prototype.createObjectFromData.call(
+      editor,
+      JSON.parse(JSON.stringify(DefaultBox3DData))
+    );
+    const faces = fixture.scene.entities.filter(
+      (value) => value instanceof QuadObject
+    ) as QuadObject[];
+
+    expect(box.rotationX).toBe(24.2);
+    expect(box.rotationY).toBe(22);
+    expect(faces).toHaveLength(6);
+    expect(faces.find((face) => face.box3dFaceIndex === 2)).toMatchObject({
+      color: '#171b1c',
+      gridColor: '#413e3e',
+      checkerboard: true,
+      gridLinesY: 4,
+    });
   });
 
   it('converts an Actor back to an Entity and drops Actor-only data', () => {

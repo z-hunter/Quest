@@ -225,7 +225,9 @@ export class EditorTransformManager {
       box.rotationZ += screenDx * 0.5;
       box.z += screenDy / camera.zoom;
     } else if (drag.faceVertices && drag.faceStart && drag.boxStart) {
-      const point = intersectBox3DFaceAtScreen(scene, drag.faceVertices, pos.x, pos.y);
+      // Once a face drag starts, retain its physical plane after the cursor
+      // leaves the projected polygon.
+      const point = intersectBox3DFaceAtScreen(scene, drag.faceVertices, pos.x, pos.y, false);
       if (point) {
         box.x = drag.boxStart.x + point.x - drag.faceStart.x;
         box.y = drag.boxStart.y + point.y - drag.faceStart.y;

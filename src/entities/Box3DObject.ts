@@ -50,6 +50,7 @@ const BOX3D_FACE_UV_VERTICES = [
 ] as const;
 
 const EPSILON = 0.00001;
+const NEAR_PLANE_RATIO = 0.01;
 const SURFACE_OFFSET = 0.01;
 const INHERITED_DISABLED = '__box3dInheritedDisabled';
 // ponytail: CPU BSP is capped for editor-sized scenes; move this batch to a GPU depth buffer if dense 3D scenes become a real requirement.
@@ -58,6 +59,7 @@ let warnedAboutFragmentLimit = false;
 
 /** A transform-only frustum. Its six real Quad children carry all surface behaviour. */
 export class Box3DObject extends SceneObject {
+  cutter = false;
   x = 0;
   y = 0;
   z = 0;
@@ -81,6 +83,7 @@ export class Box3DObject extends SceneObject {
 
   static override SERIALIZABLE_PROPS = [
     ...SceneObject.SERIALIZABLE_PROPS,
+    'cutter',
     'x',
     'y',
     'z',
@@ -124,7 +127,6 @@ export class Box3DObject extends SceneObject {
         : 1;
     const camera = scene.camera || { x: 0, y: 0 };
     const focal = getBox3DProjectionFocal(camera);
-    const valid = vertices.every((v) => focal + perspective * v.z > EPSILON);
     for (const quad of scene.entities.filter(
       (o: any) =>
         o instanceof QuadObject &&
@@ -135,19 +137,25 @@ export class Box3DObject extends SceneObject {
       const uvIndices = BOX3D_FACE_UV_VERTICES[quad.box3dFaceIndex!];
       if (!indices || !uvIndices) continue;
       const physical = indices.map((i) => vertices[i]);
+      const clipped = clipBox3DPolygonToNearPlane(physical, perspective, focal);
       quad.box3dWorldVertices = physical;
       quad.box3dCameraProjected = true;
       // Keep the full shell in the depth batch: opaque front faces hide the
       // rear ones, while openings and texture alpha reveal their back sides.
-      quad.box3dHidden = !valid || this.disabled || !this.visible || quad.disabled;
+      quad.box3dHidden = !clipped || this.disabled || !this.visible || quad.disabled;
       quad.parallax = 1;
       quad.perspective = true;
       quad.perspectiveAmount = 1;
       quad.layer = this.layer;
       syncFaceChildrenDisabled(scene, quad, this.disabled || quad.disabled);
-      if (!valid) continue;
+      if (!clipped) continue;
       const points = uvIndices.map((i) =>
-        projectBox3DPoint(vertices[i], camera, perspective, focal)
+        projectBox3DPoint(
+          clampBox3DPointToNearPlane(vertices[i], perspective, focal),
+          camera,
+          perspective,
+          focal
+        )
       );
       quad.vertices = points as QuadVertex[];
       quad.x = points.reduce((n, v) => n + v.x, 0) / points.length;
@@ -298,6 +306,25 @@ export function getBox3DAttachedEntityFaces(scene: any, candidates?: any[]): Box
   return source.flatMap((value: any) => {
     const anchor = value.__box3dSurfaceAnchor as Box3DSurfaceAnchor | undefined;
     if (!anchor || value.disabled || value.visible === false) return [];
+    const box = getBox3DById(scene, anchor.boxId);
+    if (!box) return [];
+    const activeCutters = getActiveBox3DCutters(scene, box.layer);
+    if (box.cutter) {
+      if (
+        !(scene.entities || []).some(
+          (candidate: any) =>
+            candidate instanceof Box3DObject &&
+            !candidate.cutter &&
+            candidate.layer === box.layer &&
+            !candidate.disabled &&
+            candidate.visible !== false &&
+            isPointInsideBox3D(anchor.point, candidate)
+        )
+      )
+        return [];
+    } else if (activeCutters.some((cutter) => isPointInsideBox3D(anchor.point, cutter))) {
+      return [];
+    }
     return [
       {
         quad: anchor.quad,
@@ -343,6 +370,51 @@ function syncFaceChildrenDisabled(scene: any, quad: QuadObject, inheritedDisable
   }
 }
 
+function getNearPlaneDenominator(focal: number): number {
+  return Math.max(focal * NEAR_PLANE_RATIO, EPSILON);
+}
+
+function isBox3DPointPastNearPlane(point: Box3DPoint, perspective: number, focal: number): boolean {
+  return perspective === 0 || focal + perspective * point.z >= getNearPlaneDenominator(focal);
+}
+
+function clampBox3DPointToNearPlane(
+  point: Box3DPoint,
+  perspective: number,
+  focal: number
+): Box3DPoint {
+  if (isBox3DPointPastNearPlane(point, perspective, focal)) return point;
+  return { ...point, z: (getNearPlaneDenominator(focal) - focal) / perspective };
+}
+
+function clipBox3DPolygonToNearPlane(
+  vertices: Box3DPoint[],
+  perspective: number,
+  focal: number
+): Box3DPoint[] | null {
+  if (perspective === 0) return vertices;
+  const near = getNearPlaneDenominator(focal);
+  const clipped: Box3DPoint[] = [];
+  for (let index = 0; index < vertices.length; index++) {
+    const current = vertices[index];
+    const next = vertices[(index + 1) % vertices.length];
+    const currentDistance = focal + perspective * current.z - near;
+    const nextDistance = focal + perspective * next.z - near;
+    const currentInside = currentDistance >= 0;
+    const nextInside = nextDistance >= 0;
+    if (currentInside) clipped.push(current);
+    if (currentInside !== nextInside) {
+      const t = currentDistance / (currentDistance - nextDistance);
+      clipped.push({
+        x: current.x + (next.x - current.x) * t,
+        y: current.y + (next.y - current.y) * t,
+        z: current.z + (next.z - current.z) * t,
+      });
+    }
+  }
+  return normalizeFaceVertices(clipped);
+}
+
 export function projectBox3DPoint(
   v: Box3DPoint,
   camera: { x: number; y: number },
@@ -386,7 +458,13 @@ export function getBox3DFrontAxisSegment(
 
 export function getVisibleBox3DFaces(scene: any, candidates?: any[]): Box3DFace[] {
   const source = candidates || scene.entities || [];
-  return source.flatMap((value: any) => {
+  const camera = scene.camera || { x: 0, y: 0 };
+  const perspective =
+    Number.isFinite(scene.box3dPerspective) && scene.box3dPerspective >= 0
+      ? scene.box3dPerspective
+      : 1;
+  const focal = getBox3DProjectionFocal(camera);
+  const faces = source.flatMap((value: any) => {
     if (
       !(value instanceof QuadObject) ||
       value.box3dHidden ||
@@ -404,30 +482,138 @@ export function getVisibleBox3DFaces(scene: any, candidates?: any[]): Box3DFace[
     if (!box || box.disabled || box.visible === false) return [];
     const vertices = normalizeFaceVertices(value.box3dWorldVertices);
     if (!vertices) return [];
+    const clipped = clipBox3DPolygonToNearPlane(vertices, perspective, focal);
+    if (!clipped) return [];
     return [
       {
         quad: value,
-        vertices,
+        vertices: clipped,
         sceneOrder: scene.entities.indexOf(value),
         boxId,
         faceIndex,
+        fragmented: vertices.some(
+          (vertex) => !isBox3DPointPastNearPlane(vertex, perspective, focal)
+        ),
       },
     ];
   });
+  return applyBox3DCutters(scene, faces);
+}
+
+function applyBox3DCutters(scene: any, faces: Box3DFace[]): Box3DFace[] {
+  const boxes = new Map<string, Box3DObject>();
+  for (const value of scene.entities || [])
+    if (value instanceof Box3DObject) boxes.set(value.name, value);
+  const cutters = [...boxes.values()].filter(
+    (box) => box.cutter && !box.disabled && box.visible !== false
+  );
+  if (!cutters.length) return faces;
+
+  const facesByBox = new Map<string, Box3DFace[]>();
+  for (const face of faces) {
+    const group = facesByBox.get(face.boxId) || [];
+    group.push(face);
+    facesByBox.set(face.boxId, group);
+  }
+
+  const result: Box3DFace[] = [];
+  for (const [boxId, targetFaces] of facesByBox) {
+    const target = boxes.get(boxId);
+    if (!target || target.cutter) continue;
+    const targetPlanes = getBox3DPlanes(target);
+    const layerCutters = cutters.filter((cutter) => cutter.layer === target.layer);
+    let remaining = targetFaces;
+    for (const cutter of layerCutters) {
+      const cutterPlanes = getBox3DPlanes(cutter);
+      remaining = remaining.flatMap((face) => subtractConvexVolumeFromFace(face, cutterPlanes));
+      for (const cutterFace of facesByBox.get(cutter.name) || []) {
+        const cavity = clipFaceToConvexVolume(cutterFace, targetPlanes);
+        if (cavity)
+          result.push({ ...cavity, vertices: cavity.vertices.slice().reverse(), fragmented: true });
+      }
+    }
+    result.push(...remaining);
+  }
+  return result;
+}
+
+function getBox3DById(scene: any, id: string): Box3DObject | undefined {
+  return (scene.entities || []).find(
+    (value: any) => value instanceof Box3DObject && value.name === id
+  );
+}
+
+function getActiveBox3DCutters(scene: any, layer: number): Box3DObject[] {
+  return (scene.entities || []).filter(
+    (value: any) =>
+      value instanceof Box3DObject &&
+      value.cutter &&
+      value.layer === layer &&
+      !value.disabled &&
+      value.visible !== false
+  );
+}
+
+function getBox3DPlanes(box: Box3DObject): Plane[] {
+  const vertices = box.getWorldVertices();
+  return BOX3D_FACE_VERTICES.map((indices) => planeFrom(indices.map((index) => vertices[index])));
+}
+
+function isPointInsideBox3D(point: Box3DPoint, box: Box3DObject): boolean {
+  return getBox3DPlanes(box).every((plane) => signedDistance(plane, point) <= EPSILON);
+}
+
+function subtractConvexVolumeFromFace(face: Box3DFace, planes: Plane[]): Box3DFace[] {
+  let inside = [face];
+  const outside: Box3DFace[] = [];
+  for (const plane of planes) {
+    const next: Box3DFace[] = [];
+    for (const part of inside) {
+      const split = splitFace(part, plane);
+      outside.push(...split.front);
+      next.push(...split.back, ...split.coplanar);
+    }
+    inside = next;
+    if (!inside.length) break;
+  }
+  return outside;
+}
+
+function clipFaceToConvexVolume(face: Box3DFace, planes: Plane[]): Box3DFace | null {
+  let clipped = face;
+  for (const plane of planes) {
+    const split = splitFace(clipped, plane);
+    const next = split.back[0] || split.coplanar[0];
+    if (!next) return null;
+    clipped = next;
+  }
+  return clipped;
 }
 
 export function buildBox3DRenderFragments(scene: any, faces: Box3DFace[]): Box3DFragment[] {
-  faces = faces.flatMap((face) => {
-    const vertices = normalizeFaceVertices(face.vertices);
-    return vertices ? [{ ...face, vertices }] : [];
-  });
-  if (!faces.length) return [];
   const camera = scene.camera || { x: 0, y: 0 };
   const perspective =
     Number.isFinite(scene.box3dPerspective) && scene.box3dPerspective >= 0
       ? scene.box3dPerspective
       : 1;
   const focal = getBox3DProjectionFocal(camera);
+  faces = faces.flatMap((face) => {
+    const vertices = normalizeFaceVertices(face.vertices);
+    if (!vertices) return [];
+    const clipped = clipBox3DPolygonToNearPlane(vertices, perspective, focal);
+    return clipped
+      ? [
+          {
+            ...face,
+            vertices: clipped,
+            fragmented:
+              !!face.fragmented ||
+              vertices.some((vertex) => !isBox3DPointPastNearPlane(vertex, perspective, focal)),
+          },
+        ]
+      : [];
+  });
+  if (!faces.length) return [];
   let count = faces.length;
   const ordered: Box3DFace[] = [];
   for (const group of partitionScreenOverlaps(faces, camera, perspective, focal)) {
@@ -590,7 +776,8 @@ export function intersectBox3DFaceAtScreen(
   scene: any,
   vertices: Box3DPoint[],
   screenX: number,
-  screenY: number
+  screenY: number,
+  requireInside = true
 ): Box3DPoint | null {
   const canvas = scene.game?.canvas;
   const halfW = (canvas?.width || 640) / 2,
@@ -610,7 +797,7 @@ export function intersectBox3DFaceAtScreen(
     perspective === 0
       ? { x: 0, y: 0, z: 1 }
       : { x: projectedX - scene.camera.x, y: projectedY - scene.camera.y, z: focal / perspective };
-  const distance = intersectFace(origin, direction, vertices);
+  const distance = intersectFace(origin, direction, vertices, requireInside);
   return distance === null
     ? null
     : {
@@ -751,7 +938,8 @@ function dot(a: Box3DPoint, b: Box3DPoint): number {
 function intersectFace(
   origin: Box3DPoint,
   direction: Box3DPoint,
-  vertices: Box3DPoint[]
+  vertices: Box3DPoint[],
+  requireInside = true
 ): number | null {
   const plane = planeFrom(vertices);
   const denominator = dot(plane.normal, direction);
@@ -763,10 +951,12 @@ function intersectFace(
     y: origin.y + direction.y * t,
     z: origin.z + direction.z * t,
   };
-  for (let i = 0; i < vertices.length; i++) {
-    const edge = subtract(vertices[(i + 1) % vertices.length], vertices[i]);
-    const relative = subtract(point, vertices[i]);
-    if (dot(cross(edge, relative), plane.normal) < -EPSILON) return null;
+  if (requireInside) {
+    for (let i = 0; i < vertices.length; i++) {
+      const edge = subtract(vertices[(i + 1) % vertices.length], vertices[i]);
+      const relative = subtract(point, vertices[i]);
+      if (dot(cross(edge, relative), plane.normal) < -EPSILON) return null;
+    }
   }
   return t;
 }

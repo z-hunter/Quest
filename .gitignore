@@ -8,6 +8,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies & Build artifacts
 node_modules
 dist
 dist-ssr
@@ -21,19 +22,55 @@ docs
 !docs/obsidian/
 !docs/obsidian/**
 
+# Playwright & Browser testing
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+.playwright/
+.playwright-cli/
+.playwright-mcp/
+playwright-*.png
+playwright-*.jpg
+playwright-*.jpeg
+playwright-*.webp
+output/playwright/
+output/
+
+# Test coverage & Tool caches
+coverage/
+.nyc_output/
+*.tsbuildinfo
+.eslintcache
+.cache/
+
+# Temporary, scratch & backup files
+*.tmp
+*.temp
+temp_*.txt
+temp_output.txt
+*.bak
+*~
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
-.playwright-mcp/
-playwright-*.png
-output/playwright/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# OS & System files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
 # Ghost directory
 public?

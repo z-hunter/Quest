@@ -1013,7 +1013,10 @@ export class SceneEditor {
         scene.addEntity(newObj as any);
         if (newObj instanceof Box3DObject && !options?.skipBoxFaces) {
           for (let index = 0; index < 6; index++) {
+            const faceTemplate =
+              data.faces?.find((face: any) => face?.box3dFaceIndex === index) || {};
             const face = QuadObject.fromJSON(this.game, {
+              ...faceTemplate,
               type: 'Quad',
               name: `${newObj.name}_face_${index}`,
               vertices: [],

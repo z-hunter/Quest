@@ -495,6 +495,24 @@ describe('QuadObject', () => {
     expect(ctx.fill).not.toHaveBeenCalled();
   });
 
+  it('draws texture and Grid over a transparent no-fill Quad', () => {
+    const fixture = createSceneFixture();
+    const quad = new QuadObject(fixture.game, 'transparent_textured_quad');
+    quad.filled = false;
+    quad.isGrid = true;
+    quad.spriteName = 'transparent.json';
+    quad.image = { complete: true } as HTMLImageElement;
+    quad.animator = { getCurrentFrame: () => ({ x: 0, y: 0, w: 16, h: 16 }) } as any;
+    fixture.scene.addEntity(quad);
+
+    const ctx = createMockContext();
+    quad.render(ctx);
+
+    expect(ctx.drawImage).toHaveBeenCalled();
+    expect(ctx.fill).not.toHaveBeenCalled();
+    expect(ctx.stroke).toHaveBeenCalledTimes(2);
+  });
+
   it('flips an affine Quad texture without changing its surface geometry', () => {
     const fixture = createSceneFixture();
     const quad = new QuadObject(fixture.game, 'flipped_textured_quad');
