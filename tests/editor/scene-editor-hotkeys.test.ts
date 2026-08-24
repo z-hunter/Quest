@@ -101,4 +101,48 @@ describe('SceneEditor hotkey and paste interception', () => {
     // Clean up
     textarea.remove();
   });
+
+  it('creates a Box3D at the mouse world position with B', () => {
+    const startCreating = vi.fn();
+    const editor = {
+      enabled: true,
+      isArrowKey: () => false,
+      getMouseWorldPosIfOverCanvas: () => ({ x: 120, y: 80 }),
+      startCreating,
+    } as any;
+
+    SceneEditor.prototype.handleGlobalKey.call(editor, {
+      key: 'b',
+      code: 'KeyB',
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+    } as KeyboardEvent);
+
+    expect(startCreating).toHaveBeenCalledWith('Box3D', 120, 80);
+  });
+
+  it('saves and restores a selected Compound Box3D folder', () => {
+    const folder = { type: 'Folder', name: 'Compound3D' } as any;
+    const selectObject = vi.fn();
+    const editor = Object.assign(Object.create(SceneEditor.prototype), {
+      selectionManager: {
+        selectedObject: folder,
+        hasMultiSelection: () => false,
+      },
+      selectionSlots: [null, null],
+      game: {
+        showNotification: vi.fn(),
+        sceneManager: { currentScene: { folders: [folder] } },
+      },
+      selectObject,
+    }) as SceneEditor;
+
+    editor.saveSelectionSlot(0);
+    expect(editor.selectionSlots[0]).toEqual(['Folder:Compound3D']);
+
+    editor.restoreSelectionSlot(0);
+    expect(selectObject).toHaveBeenCalledWith(folder);
+  });
 });

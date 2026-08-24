@@ -3,7 +3,8 @@ import { SceneObject } from '../../entities/SceneObject';
 import { Actor } from '../../entities/Actor';
 import { Entity } from '../../entities/Entity';
 import { QuadObject, type QuadVertex } from '../../entities/QuadObject';
-import { Box3DObject } from '../../entities/Box3DObject';
+import { Box3DObject, rotateAroundAxis, type Box3DPoint } from '../../entities/Box3DObject';
+import { Folder, type CompoundBox3DState } from '../../entities/Folder';
 import { Walkbox } from '../../entities/Walkbox';
 import { Triggerbox } from '../../entities/Triggerbox';
 import { useEditorStore } from '../../store/editorStore';
@@ -55,6 +56,8 @@ type PreparedPreview = {
 };
 
 const ASSEMBLY_EPSILON = 0.0001;
+const COMPOUND_MIN_MULTIPLIER = 0.01;
+type CompoundNumericField = Exclude<keyof CompoundBox3DState, 'pivotX' | 'pivotY' | 'pivotZ'>;
 
 export class EditorSelectionManager {
   private editor: SceneEditor;
@@ -220,6 +223,178 @@ export class EditorSelectionManager {
 
   getGroupTransform() {
     return { ...this._groupTransform };
+  }
+
+  getCompoundBox3DObjects(folder: Folder): Box3DObject[] {
+    const scene = this.editor.game.sceneManager.currentScene;
+    if (!scene) return [];
+    const folderIds = new Set<string>([folder.folderId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const child of scene.folders || []) {
+        if (child.folder && folderIds.has(child.folder) && !folderIds.has(child.folderId)) {
+          folderIds.add(child.folderId);
+          changed = true;
+        }
+      }
+    }
+    return (scene.entities || []).filter(
+      (object: any): object is Box3DObject =>
+        object instanceof Box3DObject && !!object.folder && folderIds.has(object.folder)
+    );
+  }
+
+  isCompoundBox3DFolder(value: unknown): value is Folder {
+    return value instanceof Folder && this.getCompoundBox3DObjects(value).length > 0;
+  }
+
+  private createCompoundBox3DState(boxes: Box3DObject[]): CompoundBox3DState {
+    const vertices = boxes.flatMap((box) => box.getWorldVertices());
+    const min = {
+      x: Math.min(...vertices.map((point) => point.x)),
+      y: Math.min(...vertices.map((point) => point.y)),
+      z: Math.min(...vertices.map((point) => point.z)),
+    };
+    const max = {
+      x: Math.max(...vertices.map((point) => point.x)),
+      y: Math.max(...vertices.map((point) => point.y)),
+      z: Math.max(...vertices.map((point) => point.z)),
+    };
+    const center = {
+      x: (min.x + max.x) / 2,
+      y: (min.y + max.y) / 2,
+      z: (min.z + max.z) / 2,
+    };
+    return {
+      ...center,
+      rotationX: 0,
+      rotationY: 0,
+      rotationZ: 0,
+      uniformScale: 1,
+      scaleX: 1,
+      scaleY: 1,
+      scaleZ: 1,
+      bottomWidth: 1,
+      bottomDepth: 1,
+      topWidth: 1,
+      topDepth: 1,
+      height: 1,
+      topOffsetX: 0,
+      topOffsetZ: 0,
+      pivotX: { ...center },
+      pivotY: { ...center },
+      pivotZ: { ...center },
+    };
+  }
+
+  getCompoundBox3DState(folder: Folder): CompoundBox3DState | null {
+    const boxes = this.getCompoundBox3DObjects(folder);
+    if (boxes.length === 0) return null;
+    return JSON.parse(JSON.stringify(folder.compoundBox3D || this.createCompoundBox3DState(boxes)));
+  }
+
+  private getCompoundAxisDirections(
+    state: CompoundBox3DState
+  ): Record<'x' | 'y' | 'z', Box3DPoint> {
+    const origin = { x: 0, y: 0, z: 0 };
+    const x = { x: 1, y: 0, z: 0 };
+    const y = rotateAroundAxis({ x: 0, y: 1, z: 0 }, origin, x, state.rotationX);
+    let z = rotateAroundAxis({ x: 0, y: 0, z: 1 }, origin, { x: 0, y: 1, z: 0 }, state.rotationY);
+    z = rotateAroundAxis(z, origin, x, state.rotationX);
+    return { x, y, z };
+  }
+
+  applyCompoundBox3DPivot(
+    folder: Folder,
+    pivot: 'pivotX' | 'pivotY' | 'pivotZ',
+    axis: keyof Box3DPoint,
+    value: number
+  ): boolean {
+    const state = this.getCompoundBox3DState(folder);
+    if (!state || !Number.isFinite(value)) return false;
+    state[pivot][axis] = value;
+    folder.compoundBox3D = state;
+    this.editor.updateUIFromObject();
+    this.editor.refreshHierarchy();
+    return true;
+  }
+
+  applyCompoundBox3DField(folder: Folder, field: CompoundNumericField, value: number): boolean {
+    const state = this.getCompoundBox3DState(folder);
+    const boxes = this.getCompoundBox3DObjects(folder);
+    if (!state || boxes.length === 0 || !Number.isFinite(value)) return false;
+    const current = state[field];
+    if (typeof current !== 'number') return false;
+
+    if (field === 'x' || field === 'y' || field === 'z') {
+      const delta = value - current;
+      boxes.forEach((box) => (box[field] += delta));
+      state[field] = value;
+      (['pivotX', 'pivotY', 'pivotZ'] as const).forEach((pivot) => {
+        state[pivot][field] += delta;
+      });
+    } else if (field === 'rotationX' || field === 'rotationY' || field === 'rotationZ') {
+      const axis = field.slice(-1).toLowerCase() as 'x' | 'y' | 'z';
+      const pivotKey = `pivot${axis.toUpperCase()}` as 'pivotX' | 'pivotY' | 'pivotZ';
+      const delta = value - current;
+      const direction = this.getCompoundAxisDirections(state)[axis];
+      const pivot = state[pivotKey];
+      boxes.forEach((box) => box.rotateAroundWorldAxis(pivot, direction, delta));
+      const center = rotateAroundAxis(
+        { x: state.x, y: state.y, z: state.z },
+        pivot,
+        direction,
+        delta
+      );
+      state.x = center.x;
+      state.y = center.y;
+      state.z = center.z;
+      (['pivotX', 'pivotY', 'pivotZ'] as const).forEach((key) => {
+        state[key] = rotateAroundAxis(state[key], pivot, direction, delta);
+      });
+      state[field] = value;
+    } else if (
+      field === 'uniformScale' ||
+      field === 'scaleX' ||
+      field === 'scaleY' ||
+      field === 'scaleZ'
+    ) {
+      const next = Math.max(COMPOUND_MIN_MULTIPLIER, value);
+      const ratio = next / Math.max(COMPOUND_MIN_MULTIPLIER, current);
+      const axes: Array<'x' | 'y' | 'z'> =
+        field === 'uniformScale'
+          ? ['x', 'y', 'z']
+          : [field.slice(-1).toLowerCase() as 'x' | 'y' | 'z'];
+      boxes.forEach((box) => {
+        axes.forEach((axis) => {
+          box[axis] = state[axis] + (box[axis] - state[axis]) * ratio;
+        });
+        box[field] *= ratio;
+      });
+      (['pivotX', 'pivotY', 'pivotZ'] as const).forEach((pivot) => {
+        axes.forEach((axis) => {
+          state[pivot][axis] = state[axis] + (state[pivot][axis] - state[axis]) * ratio;
+        });
+      });
+      state[field] = next;
+    } else if (field === 'topOffsetX' || field === 'topOffsetZ') {
+      const delta = value - current;
+      boxes.forEach((box) => (box[field] += delta));
+      state[field] = value;
+    } else {
+      const next = Math.max(COMPOUND_MIN_MULTIPLIER, value);
+      const ratio = next / Math.max(COMPOUND_MIN_MULTIPLIER, current);
+      boxes.forEach((box) => (box[field] *= ratio));
+      state[field] = next;
+    }
+
+    folder.compoundBox3D = state;
+    const scene = this.editor.game.sceneManager.currentScene;
+    boxes.forEach((box) => box.syncFaces(scene));
+    this.editor.updateUIFromObject();
+    this.editor.refreshHierarchy();
+    return true;
   }
 
   private getSelectedQuads(): QuadObject[] {

@@ -9,6 +9,7 @@ import {
   intersectBox3DFaceAtScreen,
   projectBox3DPoint,
   raycastBox3DFace,
+  rotateAroundAxis,
 } from '../../src/entities/Box3DObject';
 import { expandPolygonForCoverage, QuadObject } from '../../src/entities/QuadObject';
 import { Scene } from '../../src/scene/Scene';
@@ -78,6 +79,26 @@ describe('Box3DObject', () => {
 
     expect(midpoint(axes.y)).toEqual({ x: 110, y: 220, z: 330 });
     expect(midpoint(axes.x)).toEqual({ x: 140, y: 250, z: 360 });
+  });
+
+  it('bakes an exact rigid rotation around an arbitrary world axis', () => {
+    const box = new Box3DObject({} as any, 'box');
+    Object.assign(box, { x: 30, y: -20, z: 40, rotationX: 17, rotationY: -28, rotationZ: 9 });
+    box.pivotX = { x: 3, y: 4, z: 5 };
+    box.pivotY = { x: -2, y: 7, z: 1 };
+    box.pivotZ = { x: 6, y: -3, z: 2 };
+    const before = box.getWorldVertices();
+    const pivot = { x: 10, y: 20, z: -15 };
+    const direction = { x: 1, y: 2, z: 3 };
+
+    box.rotateAroundWorldAxis(pivot, direction, 37);
+
+    const expected = before.map((point) => rotateAroundAxis(point, pivot, direction, 37));
+    box.getWorldVertices().forEach((point, index) => {
+      expect(point.x).toBeCloseTo(expected[index].x, 6);
+      expect(point.y).toBeCloseTo(expected[index].y, 6);
+      expect(point.z).toBeCloseTo(expected[index].z, 6);
+    });
   });
 
   it('keeps all six shell faces available behind openings', () => {

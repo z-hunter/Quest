@@ -27,12 +27,12 @@ Scene
 
 В коде одновременно существуют четыре пространства. Их нельзя смешивать.
 
-| Пространство | Что хранит | Где используется |
-|---|---|---|
-| Box-local XYZ | Frustum до поворота и перемещения | `Box3DObject.getWorldVertices()` |
-| World XYZ | Физическая сцена после Scale/Rotation/Position | BSP, raycast, physical depth, surface anchors |
-| Projected world XY | Результат pinhole-проекции, записанный в managed Quad | `quad.vertices`, Grid, texture, Quad render |
-| Canvas XY | Projected world с Camera XY, Zoom и viewport center | конечный экран, mouse input |
+| Пространство       | Что хранит                                            | Где используется                              |
+| ------------------ | ----------------------------------------------------- | --------------------------------------------- |
+| Box-local XYZ      | Frustum до поворота и перемещения                     | `Box3DObject.getWorldVertices()`              |
+| World XYZ          | Физическая сцена после Scale/Rotation/Position        | BSP, raycast, physical depth, surface anchors |
+| Projected world XY | Результат pinhole-проекции, записанный в managed Quad | `quad.vertices`, Grid, texture, Quad render   |
+| Canvas XY          | Projected world с Camera XY, Zoom и viewport center   | конечный экран, mouse input                   |
 
 Соглашения:
 
@@ -50,15 +50,15 @@ Scene
 
 Сериализуемые поля родителя:
 
-| Группа | Поля |
-|---|---|
-| Position | `x`, `y`, `z` |
-| Rotation | `rotationX`, `rotationY`, `rotationZ` |
-| Axis pivots | `pivotX`, `pivotY`, `pivotZ`, каждый `{x,y,z}` |
-| Scale | `uniformScale`, `scaleX`, `scaleY`, `scaleZ` |
-| Lower base | `bottomWidth`, `bottomDepth` |
-| Upper base | `topWidth`, `topDepth`, `topOffsetX`, `topOffsetZ` |
-| Height | `height` |
+| Группа      | Поля                                               |
+| ----------- | -------------------------------------------------- |
+| Position    | `x`, `y`, `z`                                      |
+| Rotation    | `rotationX`, `rotationY`, `rotationZ`              |
+| Axis pivots | `pivotX`, `pivotY`, `pivotZ`, каждый `{x,y,z}`     |
+| Scale       | `uniformScale`, `scaleX`, `scaleY`, `scaleZ`       |
+| Lower base  | `bottomWidth`, `bottomDepth`                       |
+| Upper base  | `topWidth`, `topDepth`, `topOffsetX`, `topOffsetZ` |
+| Height      | `height`                                           |
 
 Defaults находятся в `src/entities/Box3D.template.json`: размер `100 × 100 × 100`, Scale `1`, pivots в `(0,0,0)`, Rotation `20/30/0`.
 
@@ -83,13 +83,13 @@ Defaults находятся в `src/entities/Box3D.template.json`: размер 
 Нумерация граней задаётся единственным массивом `BOX3D_FACE_VERTICES`:
 
 | `box3dFaceIndex` | Индексы физических вершин |
-|---:|---|
-| 0 | `0, 1, 2, 3` |
-| 1 | `4, 7, 6, 5` |
-| 2 | `0, 4, 5, 1` |
-| 3 | `1, 5, 6, 2` |
-| 4 | `2, 6, 7, 3` |
-| 5 | `3, 7, 4, 0` |
+| ---------------: | ------------------------- |
+|                0 | `0, 1, 2, 3`              |
+|                1 | `4, 7, 6, 5`              |
+|                2 | `0, 4, 5, 1`              |
+|                3 | `1, 5, 6, 2`              |
+|                4 | `2, 6, 7, 3`              |
+|                5 | `3, 7, 4, 0`              |
 
 В serialized data нет строковых ролей поверхности. Контрактом является только индекс `0..5` и этот массив.
 
@@ -318,6 +318,12 @@ Disabled Box или managed-face временно делает её spatial desc
 
 `Box3DProperties.tsx` показывает Position, Rotation, Scale, frustum dimensions, offsets и три pivots. `SceneProperties.tsx` содержит общую настройку `3D Perspective`.
 
+Folder с Box3D на любой глубине получает редакторский режим `Compound Box3D`. `Folder.compoundBox3D` хранит общий центр, накопленные rotation/scale/frustum modifiers, offsets и три world-space pivot; отсутствие поля означает старую сцену и ленивую инициализацию по центру общего AABB. Изменения запекаются в дочерние Box3D, поэтому runtime render/collision pipeline не получает отдельной иерархической матрицы. Новые члены группы не получают прошлые transforms, но участвуют во всех следующих изменениях.
+
+Общий gizmo Compound Box3D ориентирован по экрану, а не по текущему повороту группы: X рисуется горизонтально, Y вертикально, Z обозначается точкой/кольцом как ось, направленная в камеру.
+
+Групповой Rotation композиционно применяет world-axis rotation к текущей ориентации каждого Box3D и раскладывает результат обратно в существующий порядок `Z → Y → X`, компенсируя его собственные pivots через Position. Uniform/axis Scale применяет отношение нового и предыдущего множителя одновременно к параметру формы и смещению Position относительно общего центра. Width/Depth/Height используют только отношение множителей, а Top Offset — разность значений. Минимальный множитель `0.01` сохраняет обратимость запекаемых изменений.
+
 Флаг `Cutter` сериализуется на родителе. Активный Cutter остаётся доступен в hierarchy и через selection overlay, но его оболочка не рисуется как отдельный solid. Вместо этого она динамически вычитается из всех обычных Box3D того же Layer.
 
 Родитель — transform-контейнер: он не имеет собственной картинки, components или runtime hit target. У managed Quad Transform, vertices/P, Layer и Perspective являются derived. Остальные обычные Quad controls остаются доступны.
@@ -412,34 +418,34 @@ Cutter без пересечения ничего не меняет. Если о
 
 ## 14. Карта кода
 
-| Файл | Ответственность |
-|---|---|
-| `src/entities/Box3DObject.ts` | Geometry, projection, managed-face sync, surface anchors, BSP, raycast |
-| `src/entities/Box3D.template.json` | Default serialized Box data и шесть face indices |
-| `src/entities/EntityPrefabs.ts` | Импорт template как `DefaultBox3DData` |
-| `src/entities/QuadObject.ts` | Managed metadata, no-double-parallax path, texture/Grid rendering и seam coverage |
-| `src/scene/Scene.ts` | `box3dPerspective`, sync до/после Camera, serialization |
-| `src/scene/SceneManager.ts` | Loading Box, восстановление отсутствующих faces |
-| `src/graphics/SceneRenderer.ts` | Layer split, Box batch, BSP fragments, clip/direct Quad render |
-| `src/scene/SceneInteraction.ts` | Runtime point picking через общий raycast |
-| `src/systems/ThreeDParallaxSystem.ts` | Physical surface anchors и attached Entity |
-| `src/tools/SceneEditor.ts` | Unified creation/deletion, selection overlay и оси |
-| `src/tools/editor/EditorTransformManager.ts` | Click resolver и direct-manipulation gestures |
-| `src/tools/editor/EditorSelectionManager.ts` | Recursive copy/duplicate/prefab и reference remap |
-| `src/components/editor/properties/Box3DProperties.tsx` | Transform 3D / Frustum UI |
-| `src/components/editor/properties/SceneProperties.tsx` | Scene `3D Perspective` UI |
-| `src/components/editor/properties/QuadProperties.tsx` | Блокировка derived controls managed-face |
-| `src/components/editor/HierarchyPanel.tsx` | Создание и hierarchy labels `Face 0..5` |
+| Файл                                                   | Ответственность                                                                   |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `src/entities/Box3DObject.ts`                          | Geometry, projection, managed-face sync, surface anchors, BSP, raycast            |
+| `src/entities/Box3D.template.json`                     | Default serialized Box data и шесть face indices                                  |
+| `src/entities/EntityPrefabs.ts`                        | Импорт template как `DefaultBox3DData`                                            |
+| `src/entities/QuadObject.ts`                           | Managed metadata, no-double-parallax path, texture/Grid rendering и seam coverage |
+| `src/scene/Scene.ts`                                   | `box3dPerspective`, sync до/после Camera, serialization                           |
+| `src/scene/SceneManager.ts`                            | Loading Box, восстановление отсутствующих faces                                   |
+| `src/graphics/SceneRenderer.ts`                        | Layer split, Box batch, BSP fragments, clip/direct Quad render                    |
+| `src/scene/SceneInteraction.ts`                        | Runtime point picking через общий raycast                                         |
+| `src/systems/ThreeDParallaxSystem.ts`                  | Physical surface anchors и attached Entity                                        |
+| `src/tools/SceneEditor.ts`                             | Unified creation/deletion, selection overlay и оси                                |
+| `src/tools/editor/EditorTransformManager.ts`           | Click resolver и direct-manipulation gestures                                     |
+| `src/tools/editor/EditorSelectionManager.ts`           | Recursive copy/duplicate/prefab и reference remap                                 |
+| `src/components/editor/properties/Box3DProperties.tsx` | Transform 3D / Frustum UI                                                         |
+| `src/components/editor/properties/SceneProperties.tsx` | Scene `3D Perspective` UI                                                         |
+| `src/components/editor/properties/QuadProperties.tsx`  | Блокировка derived controls managed-face                                          |
+| `src/components/editor/HierarchyPanel.tsx`             | Создание и hierarchy labels `Face 0..5`                                           |
 
 ## 15. Тесты
 
-| Файл | Основное покрытие |
-|---|---|
-| `tests/entities/box3d-object.test.ts` | Geometry, projection, camera invariants, BSP, raycast, openings, UV order, degenerate prism, surface side |
-| `tests/entities/quad-object.test.ts` | Managed visual path и texture coverage |
-| `tests/systems/three-d-parallax-system.test.ts` | Surface binding, physical anchor, Disabled inheritance, side/depth behavior |
-| `tests/editor/editor-selection-hierarchy.test.ts` | Полное copy/duplicate subtree и exact managed faces |
-| `tests/editor/editor-snapping-system.test.ts` | Point selection, marquee policy, Ctrl-select parent и direct drag |
+| Файл                                              | Основное покрытие                                                                                         |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `tests/entities/box3d-object.test.ts`             | Geometry, projection, camera invariants, BSP, raycast, openings, UV order, degenerate prism, surface side |
+| `tests/entities/quad-object.test.ts`              | Managed visual path и texture coverage                                                                    |
+| `tests/systems/three-d-parallax-system.test.ts`   | Surface binding, physical anchor, Disabled inheritance, side/depth behavior                               |
+| `tests/editor/editor-selection-hierarchy.test.ts` | Полное copy/duplicate subtree и exact managed faces                                                       |
+| `tests/editor/editor-snapping-system.test.ts`     | Point selection, marquee policy, Ctrl-select parent и direct drag                                         |
 
 Минимальная проверка после изменения 3D-системы:
 

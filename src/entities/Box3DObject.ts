@@ -206,6 +206,46 @@ export class Box3DObject extends SceneObject {
     };
   }
 
+  /** Bake an exact rigid world-space rotation back into the existing Z/Y/X transform. */
+  rotateAroundWorldAxis(pivot: Box3DPoint, direction: Box3DPoint, degrees: number): void {
+    if (!Number.isFinite(degrees) || Math.abs(degrees) <= EPSILON) return;
+    const axisRotation = axisAngleMatrix(direction, degrees);
+    if (!axisRotation) return;
+
+    const localOrigin = this.transform({ x: 0, y: 0, z: 0 });
+    const currentRotation: Matrix3 = (
+      [
+        { x: 1, y: 0, z: 0 },
+        { x: 0, y: 1, z: 0 },
+        { x: 0, y: 0, z: 1 },
+      ] as Box3DPoint[]
+    ).map((basis) => {
+      const transformed = this.transform(basis);
+      return {
+        x: transformed.x - localOrigin.x,
+        y: transformed.y - localOrigin.y,
+        z: transformed.z - localOrigin.z,
+      };
+    }) as Matrix3;
+    const worldOrigin = {
+      x: this.x + localOrigin.x,
+      y: this.y + localOrigin.y,
+      z: this.z + localOrigin.z,
+    };
+    const targetOrigin = rotateAroundAxis(worldOrigin, pivot, direction, degrees);
+    const [rotationX, rotationY, rotationZ] = decomposeZYX(
+      multiplyMatrix(axisRotation, columnsToRows(currentRotation))
+    );
+    this.rotationX = rotationX;
+    this.rotationY = rotationY;
+    this.rotationZ = rotationZ;
+
+    const nextLocalOrigin = this.transform({ x: 0, y: 0, z: 0 });
+    this.x = targetOrigin.x - nextLocalOrigin.x;
+    this.y = targetOrigin.y - nextLocalOrigin.y;
+    this.z = targetOrigin.z - nextLocalOrigin.z;
+  }
+
   private toWorld(v: Box3DPoint, rotationIndex = 0): Box3DPoint {
     const transformed = this.transform(v, rotationIndex);
     return { x: this.x + transformed.x, y: this.y + transformed.y, z: this.z + transformed.z };
@@ -988,6 +1028,74 @@ function rotate(v: Box3DPoint, p: Box3DPoint, axis: 'x' | 'y' | 'z', deg: number
   if (axis === 'x') return { x: x + p.x, y: y * c - z * s + p.y, z: y * s + z * c + p.z };
   if (axis === 'y') return { x: x * c + z * s + p.x, y: y + p.y, z: -x * s + z * c + p.z };
   return { x: x * c - y * s + p.x, y: x * s + y * c + p.y, z: z + p.z };
+}
+
+type Matrix3 = [Box3DPoint, Box3DPoint, Box3DPoint];
+
+function columnsToRows(columns: Matrix3): Matrix3 {
+  return [
+    { x: columns[0].x, y: columns[1].x, z: columns[2].x },
+    { x: columns[0].y, y: columns[1].y, z: columns[2].y },
+    { x: columns[0].z, y: columns[1].z, z: columns[2].z },
+  ];
+}
+
+function multiplyMatrix(a: Matrix3, b: Matrix3): Matrix3 {
+  const column = (matrix: Matrix3, index: 0 | 1 | 2) => ({
+    x: index === 0 ? matrix[0].x : index === 1 ? matrix[0].y : matrix[0].z,
+    y: index === 0 ? matrix[1].x : index === 1 ? matrix[1].y : matrix[1].z,
+    z: index === 0 ? matrix[2].x : index === 1 ? matrix[2].y : matrix[2].z,
+  });
+  const dot = (row: Box3DPoint, col: Box3DPoint) => row.x * col.x + row.y * col.y + row.z * col.z;
+  const c0 = column(b, 0),
+    c1 = column(b, 1),
+    c2 = column(b, 2);
+  return a.map((row) => ({ x: dot(row, c0), y: dot(row, c1), z: dot(row, c2) })) as Matrix3;
+}
+
+function axisAngleMatrix(direction: Box3DPoint, degrees: number): Matrix3 | null {
+  const length = Math.hypot(direction.x, direction.y, direction.z);
+  if (length <= EPSILON) return null;
+  const x = direction.x / length,
+    y = direction.y / length,
+    z = direction.z / length;
+  const radians = (degrees * Math.PI) / 180,
+    c = Math.cos(radians),
+    s = Math.sin(radians),
+    t = 1 - c;
+  return [
+    { x: t * x * x + c, y: t * x * y - s * z, z: t * x * z + s * y },
+    { x: t * x * y + s * z, y: t * y * y + c, z: t * y * z - s * x },
+    { x: t * x * z - s * y, y: t * y * z + s * x, z: t * z * z + c },
+  ];
+}
+
+function decomposeZYX(matrix: Matrix3): [number, number, number] {
+  const cy = Math.hypot(matrix[0].x, matrix[0].y);
+  const y = Math.atan2(matrix[0].z, cy);
+  const x =
+    cy > EPSILON
+      ? Math.atan2(-matrix[1].z, matrix[2].z)
+      : Math.atan2(Math.sign(matrix[0].z || 1) * matrix[1].x, matrix[1].y);
+  const z = cy > EPSILON ? Math.atan2(-matrix[0].y, matrix[0].x) : 0;
+  const toDegrees = (value: number) => (value * 180) / Math.PI;
+  return [toDegrees(x), toDegrees(y), toDegrees(z)];
+}
+
+export function rotateAroundAxis(
+  point: Box3DPoint,
+  pivot: Box3DPoint,
+  direction: Box3DPoint,
+  degrees: number
+): Box3DPoint {
+  const matrix = axisAngleMatrix(direction, degrees);
+  if (!matrix) return { ...point };
+  const value = { x: point.x - pivot.x, y: point.y - pivot.y, z: point.z - pivot.z };
+  return {
+    x: pivot.x + matrix[0].x * value.x + matrix[0].y * value.y + matrix[0].z * value.z,
+    y: pivot.y + matrix[1].x * value.x + matrix[1].y * value.y + matrix[1].z * value.z,
+    z: pivot.z + matrix[2].x * value.x + matrix[2].y * value.y + matrix[2].z * value.z,
+  };
 }
 export function isManagedBox3DFace(value: any): boolean {
   return (

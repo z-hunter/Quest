@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QuadObject } from '../../src/entities/QuadObject';
 import { EditorSnappingSystem } from '../../src/tools/editor/EditorSnappingSystem';
 import { EditorTransformManager } from '../../src/tools/editor/EditorTransformManager';
+import { EditorSelectionManager } from '../../src/tools/editor/EditorSelectionManager';
+import { Folder } from '../../src/entities/Folder';
 import { useEditorStore } from '../../src/store/editorStore';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
@@ -474,5 +476,54 @@ describe('Editor parallax entity hit testing', () => {
 
     expect(box.x).toBeCloseTo(20);
     expect(box.y).toBeCloseTo(10);
+  });
+
+  it('drags a selected Compound Box3D Folder through any member face', async () => {
+    const { Box3DObject } = await import('../../src/entities/Box3DObject');
+    const fixture = createSceneFixture();
+    Object.assign(fixture.game.canvas, { width: 800, height: 600 });
+    const folder = new Folder(fixture.game, 'Group');
+    folder.folderId = 'group';
+    fixture.scene.addFolder(folder);
+    const left = new Box3DObject(fixture.game, 'left');
+    const right = new Box3DObject(fixture.game, 'right');
+    Object.assign(left, { folder: folder.folderId, x: -20, rotationX: 0, rotationY: 0 });
+    Object.assign(right, { folder: folder.folderId, x: 20, rotationX: 0, rotationY: 0 });
+    fixture.scene.addEntity(left);
+    fixture.scene.addEntity(right);
+    const face = addQuad(fixture, 'left_face_2');
+    face.box3dFaceIndex = 2;
+    face.spatial = { parentNodeId: left.name, relation: 'in' };
+    left.syncFaces(fixture.scene);
+    const editor: any = {
+      enabled: true,
+      game: fixture.game,
+      selectedObject: folder,
+      selectObject: vi.fn(),
+      saveUndoState: vi.fn(),
+      updateUIFromObject: vi.fn(),
+      refreshHierarchy: vi.fn(),
+    };
+    editor.selectionManager = new EditorSelectionManager(editor);
+    const manager = new EditorTransformManager(editor);
+    vi.spyOn(manager as any, 'findHitSelectable').mockReturnValue(face);
+    vi.spyOn(manager, 'getMousePos')
+      .mockReturnValueOnce({ x: 400, y: 300 })
+      .mockReturnValueOnce({ x: 410, y: 315 })
+      .mockReturnValueOnce({ x: 410, y: 315 });
+
+    manager.onMouseDown({
+      button: 0,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      stopPropagation: vi.fn(),
+      preventDefault: vi.fn(),
+    } as any);
+    manager.onMouseMove({ clientX: 410, clientY: 315 } as any);
+
+    expect([left.x, left.y]).toEqual([-10, 15]);
+    expect([right.x, right.y]).toEqual([30, 15]);
+    expect(editor.selectObject).not.toHaveBeenCalled();
   });
 });

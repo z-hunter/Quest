@@ -429,6 +429,12 @@ export class SceneEditor {
           this.startCreating('Quad', pos?.x, pos?.y);
         }
         break;
+      case 'b':
+        {
+          const pos = this.getMouseWorldPosIfOverCanvas();
+          this.startCreating('Box3D', pos?.x, pos?.y);
+        }
+        break;
       case 'f':
         this.startCreating('Folder');
         break;
@@ -744,6 +750,7 @@ export class SceneEditor {
 
   private getObjectKey(obj: any): string | null {
     if (!obj) return null;
+    if (obj.type === 'Folder') return `Folder:${obj.name}`;
     if (obj.type === 'Quad') return `Quad:${obj.name}`;
     if (obj instanceof Box3DObject) return `Box3D:${obj.name}`;
     if (obj instanceof Actor) return `Actor:${obj.name}`;
@@ -1277,6 +1284,11 @@ export class SceneEditor {
 
       if (selected instanceof Box3DObject) {
         this.renderBox3DSelection(ctx, selected, scene, halfW, halfH);
+      } else if (
+        selected instanceof Folder &&
+        this.selectionManager.isCompoundBox3DFolder(selected)
+      ) {
+        this.renderCompoundBox3DSelection(ctx, selected, scene, halfW, halfH);
       } else if (selected instanceof Entity) {
         if (this.game.inventoryManager?.getInventorySlotForEntity(selected)) {
           ctx.restore();
@@ -1549,7 +1561,8 @@ export class SceneEditor {
     box: Box3DObject,
     scene: Scene,
     halfW: number,
-    halfH: number
+    halfH: number,
+    showAxes = true
   ): void {
     const camera = scene.camera;
     const perspective =
@@ -1568,38 +1581,40 @@ export class SceneEditor {
     const vertices = worldVertices.map(toScreen);
     const hull = convexHull(vertices);
 
-    ctx.save();
-    if (hull.length >= 3) {
-      ctx.beginPath();
-      ctx.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
-      ctx.moveTo(hull[0].x, hull[0].y);
-      hull.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
-      ctx.closePath();
-      ctx.clip('evenodd');
-    }
-    const colors = { x: '#ff4d4d', y: '#55e06f', z: '#4da3ff' };
-    const axes = box.getWorldAxisSegments();
-    ctx.lineWidth = 1;
-    (['x', 'y', 'z'] as const).forEach((axis) => {
-      const [start, end] = axes[axis].map(toScreen);
-      ctx.strokeStyle = colors[axis];
-      ctx.beginPath();
-      ctx.moveTo(start.x, start.y);
-      ctx.lineTo(end.x, end.y);
-      ctx.stroke();
-    });
-    ctx.restore();
+    if (showAxes) {
+      ctx.save();
+      if (hull.length >= 3) {
+        ctx.beginPath();
+        ctx.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.moveTo(hull[0].x, hull[0].y);
+        hull.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
+        ctx.closePath();
+        ctx.clip('evenodd');
+      }
+      const colors = { x: '#ff4d4d', y: '#55e06f', z: '#4da3ff' };
+      const axes = box.getWorldAxisSegments();
+      ctx.lineWidth = 1;
+      (['x', 'y', 'z'] as const).forEach((axis) => {
+        const [start, end] = axes[axis].map(toScreen);
+        ctx.strokeStyle = colors[axis];
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+      });
+      ctx.restore();
 
-    (['x', 'y', 'z'] as const).forEach((axis) => {
-      const front = getBox3DFrontAxisSegment(axes[axis], worldVertices);
-      if (!front) return;
-      const [start, end] = front.map(toScreen);
-      ctx.strokeStyle = colors[axis];
-      ctx.beginPath();
-      ctx.moveTo(start.x, start.y);
-      ctx.lineTo(end.x, end.y);
-      ctx.stroke();
-    });
+      (['x', 'y', 'z'] as const).forEach((axis) => {
+        const front = getBox3DFrontAxisSegment(axes[axis], worldVertices);
+        if (!front) return;
+        const [start, end] = front.map(toScreen);
+        ctx.strokeStyle = colors[axis];
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+      });
+    }
 
     vertices.forEach((point, index) => {
       ctx.fillStyle = index < 4 ? '#00e5ff' : '#ff8a3d';
@@ -1607,5 +1622,57 @@ export class SceneEditor {
       ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
       ctx.fill();
     });
+  }
+
+  private renderCompoundBox3DSelection(
+    ctx: CanvasRenderingContext2D,
+    folder: Folder,
+    scene: Scene,
+    halfW: number,
+    halfH: number
+  ): void {
+    const boxes = this.selectionManager.getCompoundBox3DObjects(folder);
+    boxes.forEach((box) => this.renderBox3DSelection(ctx, box, scene, halfW, halfH, false));
+    const state = this.selectionManager.getCompoundBox3DState(folder);
+    if (!state) return;
+    const camera = scene.camera;
+    const perspective =
+      Number.isFinite(scene.box3dPerspective) && scene.box3dPerspective >= 0
+        ? scene.box3dPerspective
+        : 1;
+    const focal = getBox3DProjectionFocal(camera);
+    const toScreen = (point: { x: number; y: number; z: number }) => {
+      const projected = projectBox3DPoint(point, camera, perspective, focal);
+      return {
+        x: halfW + (projected.x - camera.x) * camera.zoom,
+        y: halfH + (projected.y - camera.y) * camera.zoom,
+      };
+    };
+    const colors = { x: '#ff4d4d', y: '#55e06f', z: '#4da3ff' };
+    const axisLength = Math.max(50, 100 * camera.zoom);
+    ctx.lineWidth = 1;
+    const pivotX = toScreen(state.pivotX);
+    ctx.strokeStyle = colors.x;
+    ctx.beginPath();
+    ctx.moveTo(pivotX.x - axisLength, pivotX.y);
+    ctx.lineTo(pivotX.x + axisLength, pivotX.y);
+    ctx.stroke();
+
+    const pivotY = toScreen(state.pivotY);
+    ctx.strokeStyle = colors.y;
+    ctx.beginPath();
+    ctx.moveTo(pivotY.x, pivotY.y - axisLength);
+    ctx.lineTo(pivotY.x, pivotY.y + axisLength);
+    ctx.stroke();
+
+    const pivotZ = toScreen(state.pivotZ);
+    ctx.strokeStyle = colors.z;
+    ctx.beginPath();
+    ctx.arc(pivotZ.x, pivotZ.y, 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = colors.z;
+    ctx.beginPath();
+    ctx.arc(pivotZ.x, pivotZ.y, 2, 0, Math.PI * 2);
+    ctx.fill();
   }
 }

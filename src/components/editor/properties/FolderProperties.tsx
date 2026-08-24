@@ -6,6 +6,29 @@ import {
   renderSection,
 } from './propertiesUtils';
 import { Select } from '../../common/Select';
+import { Folder, type CompoundBox3DState } from '../../../entities/Folder';
+
+const compoundFields: Array<
+  [Exclude<keyof CompoundBox3DState, 'pivotX' | 'pivotY' | 'pivotZ'>, string]
+> = [
+  ['x', 'Move X'],
+  ['y', 'Move Y'],
+  ['z', 'Move Z'],
+  ['rotationX', 'Rotate X'],
+  ['rotationY', 'Rotate Y'],
+  ['rotationZ', 'Rotate Z'],
+  ['uniformScale', 'Scale'],
+  ['scaleX', 'Scale X'],
+  ['scaleY', 'Scale Y'],
+  ['scaleZ', 'Scale Z'],
+  ['bottomWidth', 'Bottom width'],
+  ['bottomDepth', 'Bottom depth'],
+  ['topWidth', 'Top width'],
+  ['topDepth', 'Top depth'],
+  ['height', 'Height'],
+  ['topOffsetX', 'Top offset X'],
+  ['topOffsetZ', 'Top offset Z'],
+];
 
 interface FolderObject {
   type: 'Folder';
@@ -15,12 +38,96 @@ interface FolderObject {
 }
 
 export const FolderProperties: React.FC = () => {
-  const { game, obj, formatPanelNumber, setSectionRef, incrementObjectVersion } =
-    usePropertiesContext<FolderObject>();
+  const {
+    game,
+    obj,
+    formatPanelNumber,
+    setSectionRef,
+    incrementObjectVersion,
+    lastUndoObjectKeyRef,
+  } = usePropertiesContext<FolderObject>();
 
   const folder = obj;
 
   if (!folder) return null;
+
+  const compound = game?.editor?.selectionManager?.getCompoundBox3DState(folder as Folder);
+  if (compound) {
+    const saveUndoIfNeeded = () => {
+      const key = `Folder:${folder.name}`;
+      if (game?.editor && lastUndoObjectKeyRef.current !== key) {
+        game.editor.saveUndoState();
+        lastUndoObjectKeyRef.current = key;
+      }
+    };
+    const applyField = (field: (typeof compoundFields)[number][0], value: number) => {
+      if (!Number.isFinite(value)) return;
+      saveUndoIfNeeded();
+      if (game.editor.selectionManager.applyCompoundBox3DField(folder as Folder, field, value)) {
+        incrementObjectVersion();
+      }
+    };
+    const numberInput = (label: string, value: number, onChange: (value: number) => void) => (
+      <label key={label} className="e-label">
+        {label}
+        <input
+          aria-label={label}
+          className="e-input"
+          type="number"
+          step="0.1"
+          value={formatPanelNumber(value)}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+      </label>
+    );
+    const pivotControls = (key: 'pivotX' | 'pivotY' | 'pivotZ', label: string) => (
+      <React.Fragment key={key}>
+        <div
+          className="e-label ui-text-accent-blue"
+          style={{ gridColumn: '1 / -1', marginTop: '4px' }}
+        >
+          {label}
+        </div>
+        {(['x', 'y', 'z'] as const).map((axis) =>
+          numberInput(`${label} ${axis.toUpperCase()}`, compound[key][axis], (value) => {
+            if (!Number.isFinite(value)) return;
+            saveUndoIfNeeded();
+            if (
+              game.editor.selectionManager.applyCompoundBox3DPivot(
+                folder as Folder,
+                key,
+                axis,
+                value
+              )
+            ) {
+              incrementObjectVersion();
+            }
+          })
+        )}
+      </React.Fragment>
+    );
+    return (
+      <div className="e-row">
+        {renderSection(
+          1,
+          'Compound Box3D / Frustum',
+          'blue',
+          <div
+            className="properties-section-body"
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+          >
+            {compoundFields.map(([field, label]) =>
+              numberInput(label, compound[field], (value) => applyField(field, value))
+            )}
+            {pivotControls('pivotX', 'Pivot X')}
+            {pivotControls('pivotY', 'Pivot Y')}
+            {pivotControls('pivotZ', 'Pivot Z')}
+          </div>,
+          setSectionRef
+        )}
+      </div>
+    );
+  }
 
   const applyFolderDefault = (prop: string, value: any, isNew: boolean = false) => {
     const scene = game?.sceneManager?.currentScene;

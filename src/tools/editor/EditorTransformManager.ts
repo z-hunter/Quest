@@ -74,6 +74,7 @@ export class EditorTransformManager {
   private boxSelectCurrent: { x: number; y: number } | null = null;
   private box3dDrag: {
     box: Box3DObject;
+    folder?: Folder;
     mode: 'move' | 'scale' | 'top' | 'bottom' | 'rotate' | 'rotateZMoveZ' | 'face';
     lastScreen: { x: number; y: number };
     lastWorld: { x: number; y: number };
@@ -139,14 +140,24 @@ export class EditorTransformManager {
     ) as Box3DObject | undefined;
     if (!box) return false;
 
-    if (e.button === 0 && e.ctrlKey && this.editor.selectedObject !== box) {
+    const selectedFolder =
+      this.editor.selectedObject instanceof Folder ? this.editor.selectedObject : null;
+    const compoundFolder =
+      selectedFolder &&
+      this.editor.selectionManager
+        .getCompoundBox3DObjects(selectedFolder)
+        .some((candidate) => candidate === box)
+        ? selectedFolder
+        : null;
+
+    if (e.button === 0 && e.ctrlKey && this.editor.selectedObject !== box && !compoundFolder) {
       this.editor.selectObject(box);
       e.stopPropagation();
       return true;
     }
 
     let mode: NonNullable<EditorTransformManager['box3dDrag']>['mode'] | null = null;
-    if (this.editor.selectedObject === box) {
+    if (this.editor.selectedObject === box || compoundFolder) {
       mode =
         e.button === 1
           ? e.ctrlKey
@@ -166,7 +177,13 @@ export class EditorTransformManager {
     ) {
       mode = 'face';
     }
-    if (!mode || box.disabled || box.locked) return false;
+    if (
+      !mode ||
+      (compoundFolder
+        ? compoundFolder.disabled || compoundFolder.locked
+        : box.disabled || box.locked)
+    )
+      return false;
 
     const camera = scene.camera;
     const world = {
@@ -174,7 +191,13 @@ export class EditorTransformManager {
       y: (pos.y - this.editor.game.canvas.height / 2) / camera.zoom + camera.y,
     };
     this.editor.saveUndoState();
-    this.box3dDrag = { box, mode, lastScreen: pos, lastWorld: world };
+    this.box3dDrag = {
+      box,
+      ...(compoundFolder ? { folder: compoundFolder } : {}),
+      mode,
+      lastScreen: pos,
+      lastWorld: world,
+    };
     if (mode === 'face' && face.box3dWorldVertices) {
       const vertices = face.box3dWorldVertices.map((vertex) => ({ ...vertex }));
       const point = intersectBox3DFaceAtScreen(scene, vertices, pos.x, pos.y);
@@ -195,7 +218,7 @@ export class EditorTransformManager {
   private updateBox3DDrag(pos: { x: number; y: number }, scene: any): void {
     const drag = this.box3dDrag;
     if (!drag) return;
-    const { box } = drag;
+    const { box, folder } = drag;
     const camera = scene.camera;
     const world = {
       x: (pos.x - this.editor.game.canvas.width / 2) / camera.zoom + camera.x,
@@ -206,7 +229,69 @@ export class EditorTransformManager {
     const screenDx = pos.x - drag.lastScreen.x;
     const screenDy = pos.y - drag.lastScreen.y;
 
-    if (drag.mode === 'move') {
+    if (folder) {
+      const state = this.editor.selectionManager.getCompoundBox3DState(folder);
+      if (!state) return;
+      if (drag.mode === 'move') {
+        this.editor.selectionManager.applyCompoundBox3DField(folder, 'x', state.x + dx);
+        this.editor.selectionManager.applyCompoundBox3DField(folder, 'y', state.y + dy);
+      } else if (drag.mode === 'scale') {
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'scaleX',
+          state.scaleX + dx / 100
+        );
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'scaleY',
+          state.scaleY + dy / 100
+        );
+      } else if (drag.mode === 'top') {
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'topWidth',
+          state.topWidth + dx / 100
+        );
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'topDepth',
+          state.topDepth + dy / 100
+        );
+      } else if (drag.mode === 'bottom') {
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'bottomWidth',
+          state.bottomWidth + dx / 100
+        );
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'bottomDepth',
+          state.bottomDepth + dy / 100
+        );
+      } else if (drag.mode === 'rotate') {
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'rotationY',
+          state.rotationY + screenDx * 0.5
+        );
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'rotationX',
+          state.rotationX + screenDy * 0.5
+        );
+      } else if (drag.mode === 'rotateZMoveZ') {
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'rotationZ',
+          state.rotationZ + screenDx * 0.5
+        );
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'z',
+          state.z + screenDy / camera.zoom
+        );
+      }
+    } else if (drag.mode === 'move') {
       box.x += dx;
       box.y += dy;
     } else if (drag.mode === 'scale') {
@@ -237,7 +322,7 @@ export class EditorTransformManager {
 
     drag.lastScreen = pos;
     drag.lastWorld = world;
-    box.syncFaces(scene);
+    if (!folder) box.syncFaces(scene);
     useEditorStore.getState().incrementObjectVersion();
     this.editor.updateUIFromObject();
   }
@@ -1488,12 +1573,30 @@ export class EditorTransformManager {
 
     const scene = editor.game.sceneManager.currentScene;
     if (scene && scene.camera) {
-      if (editor.selectedObject instanceof Box3DObject && (e.ctrlKey || e.shiftKey)) {
+      const compoundFolder =
+        editor.selectedObject instanceof Folder &&
+        editor.selectionManager.isCompoundBox3DFolder(editor.selectedObject)
+          ? editor.selectedObject
+          : null;
+      if (
+        (editor.selectedObject instanceof Box3DObject || compoundFolder) &&
+        (e.ctrlKey || e.shiftKey)
+      ) {
         editor.saveUndoState();
         const step = e.deltaY < 0 ? 5 : -5;
-        if (e.ctrlKey) editor.selectedObject.topOffsetX += step;
-        else editor.selectedObject.topOffsetZ += step;
-        editor.selectedObject.syncFaces(scene);
+        if (compoundFolder) {
+          const state = editor.selectionManager.getCompoundBox3DState(compoundFolder)!;
+          editor.selectionManager.applyCompoundBox3DField(
+            compoundFolder,
+            e.ctrlKey ? 'topOffsetX' : 'topOffsetZ',
+            (e.ctrlKey ? state.topOffsetX : state.topOffsetZ) + step
+          );
+        } else {
+          const box = editor.selectedObject as Box3DObject;
+          if (e.ctrlKey) box.topOffsetX += step;
+          else box.topOffsetZ += step;
+          box.syncFaces(scene);
+        }
         useEditorStore.getState().incrementObjectVersion();
         editor.updateUIFromObject();
         return;
