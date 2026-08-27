@@ -111,6 +111,7 @@ export class CRTFilter {
   init(): void {
     if (!this.gl) return;
     const gl = this.gl;
+    gl.getExtension('OES_standard_derivatives');
 
     // Vertex Shader
     const vsSource = `
@@ -125,6 +126,9 @@ export class CRTFilter {
 
     // Fragment Shader (The CRT Magic)
     const fsSource = `
+            #ifdef GL_OES_standard_derivatives
+            #extension GL_OES_standard_derivatives : enable
+            #endif
             precision mediump float;
             uniform sampler2D u_image;
             uniform vec2 u_resolution;
@@ -313,12 +317,17 @@ export class CRTFilter {
                     color += noise * 0.05 * u_phosphor;
                 }
 
-                // Scanlines
-                // Use cos() to align scanline peak with integer coordinates (avoids center gap)
-                // Clamp to 0.0-1.0 to ensure we only darken (gaps), never lighten (negative values)
-                float scanline = clamp(cos(curvedUV.y * u_scanlineCount * 3.14159 * 2.0), 0.0, 1.0);
-                // Scale scanline by intensity
-                color -= scanline * u_scanlineIntensity * 0.1;
+                // Scanlines (CRT-Geom dual-beam energy-preserving profile)
+                if (u_scanlineCount > 0.0 && u_scanlineIntensity > 0.0) {
+                    float pos = curvedUV.y * u_scanlineCount;
+                    float dist = fract(pos) - 0.5;
+                    float beam1 = exp(-dist * dist * 8.0);
+                    float dist2 = 1.0 - abs(dist);
+                    float beam2 = exp(-dist2 * dist2 * 8.0);
+                    float normBeam = beam1 / (beam1 + beam2);
+                    float scanline = mix(1.0 - (u_scanlineIntensity * 0.5), 1.0, normBeam);
+                    color *= scanline;
+                }
 
                 // Vignette
                 float vignette = uv.x * uv.y * (1.0 - uv.x) * (1.0 - uv.y);
@@ -420,6 +429,7 @@ export class CRTFilter {
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.uniform1i(gl.getUniformLocation(this.program, 'u_image'), 0);
 
     // Draw Main

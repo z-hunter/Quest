@@ -189,9 +189,9 @@ export const SettingsProperties: React.FC = () => {
             <input
               type="range"
               className="e-input"
-              min="100"
-              max="2000"
-              step="50"
+              min="50"
+              max="600"
+              step="10"
               value={formatPanelNumber(settings.crt.scanlineCount)}
               onChange={(e) => {
                 settings.crt!.scanlineCount = parseFloat(e.target.value);
