@@ -156,7 +156,7 @@ export const SettingsProperties: React.FC = () => {
         <>
           <div className="e-row">
             <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              Curvature <span>{formatPanelNumber(settings.crt.curvature)}</span>
+              Curvature <span>{formatPanelNumber(settings.crt.curvature ?? 0)}</span>
             </label>
             <input
               type="range"
@@ -164,7 +164,7 @@ export const SettingsProperties: React.FC = () => {
               min="0"
               max="0.5"
               step="0.01"
-              value={formatPanelNumber(settings.crt.curvature)}
+              value={Number((settings.crt.curvature ?? 0).toFixed(2))}
               onChange={(e) => {
                 settings.crt!.curvature = parseFloat(e.target.value);
                 incrementObjectVersion();
@@ -173,7 +173,7 @@ export const SettingsProperties: React.FC = () => {
           </div>
           <div className="e-row">
             <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              Vignette <span>{formatPanelNumber(settings.crt.vignette)}</span>
+              Vignette <span>{formatPanelNumber(settings.crt.vignette ?? 0)}</span>
             </label>
             <input
               type="range"
@@ -181,7 +181,7 @@ export const SettingsProperties: React.FC = () => {
               min="0"
               max="1"
               step="0.05"
-              value={formatPanelNumber(settings.crt.vignette)}
+              value={Number((settings.crt.vignette ?? 0).toFixed(2))}
               onChange={(e) => {
                 settings.crt!.vignette = parseFloat(e.target.value);
                 incrementObjectVersion();
@@ -190,7 +190,7 @@ export const SettingsProperties: React.FC = () => {
           </div>
           <div className="e-row">
             <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              Scanline Count <span>{formatPanelNumber(settings.crt.scanlineCount)}</span>
+              Scanline Count <span>{formatPanelNumber(settings.crt.scanlineCount ?? 200)}</span>
             </label>
             <input
               type="range"
@@ -198,14 +198,14 @@ export const SettingsProperties: React.FC = () => {
               min="0"
               max="600"
               step="10"
-              value={formatPanelNumber(settings.crt.scanlineCount)}
+              value={Math.round(settings.crt.scanlineCount ?? 200)}
               onChange={(e) => {
                 settings.crt!.scanlineCount = parseFloat(e.target.value);
                 incrementObjectVersion();
               }}
             />
           </div>
-          {settings.crt.scanlineCount > 0 && (
+          {(settings.crt.scanlineCount ?? 0) > 0 && (
             <>
               <div className="e-row">
                 <label
@@ -213,7 +213,7 @@ export const SettingsProperties: React.FC = () => {
                   style={{ display: 'flex', justifyContent: 'space-between' }}
                 >
                   Scanline Intensity{' '}
-                  <span>{formatPanelNumber(settings.crt.scanlineIntensity)}</span>
+                  <span>{formatPanelNumber(settings.crt.scanlineIntensity ?? 0)}</span>
                 </label>
                 <input
                   type="range"
@@ -221,14 +221,14 @@ export const SettingsProperties: React.FC = () => {
                   min="0"
                   max="1"
                   step="0.05"
-                  value={formatPanelNumber(settings.crt.scanlineIntensity)}
+                  value={Number((settings.crt.scanlineIntensity ?? 0).toFixed(2))}
                   onChange={(e) => {
                     settings.crt!.scanlineIntensity = parseFloat(e.target.value);
                     incrementObjectVersion();
                   }}
                 />
               </div>
-              {settings.crt.scanlineIntensity > 0 && (
+              {(settings.crt.scanlineIntensity ?? 0) > 0 && (
                 <div className="e-row">
                   <label
                     className="e-label"
@@ -243,7 +243,7 @@ export const SettingsProperties: React.FC = () => {
                     min="0"
                     max="1"
                     step="0.05"
-                    value={formatPanelNumber(settings.crt.beamModulation ?? 0)}
+                    value={Number((settings.crt.beamModulation ?? 0).toFixed(2))}
                     onChange={(e) => {
                       settings.crt!.beamModulation = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -263,7 +263,7 @@ export const SettingsProperties: React.FC = () => {
               min="0"
               max="1"
               step="0.05"
-              value={formatPanelNumber(settings.crt.humBar ?? 0)}
+              value={Number((settings.crt.humBar ?? 0).toFixed(2))}
               onChange={(e) => {
                 settings.crt!.humBar = parseFloat(e.target.value);
                 incrementObjectVersion();
@@ -280,7 +280,7 @@ export const SettingsProperties: React.FC = () => {
               min="0"
               max="1"
               step="0.05"
-              value={formatPanelNumber(settings.crt.breathing ?? 0)}
+              value={Number((settings.crt.breathing ?? 0).toFixed(2))}
               onChange={(e) => {
                 settings.crt!.breathing = parseFloat(e.target.value);
                 incrementObjectVersion();
@@ -289,7 +289,7 @@ export const SettingsProperties: React.FC = () => {
           </div>
           <div className="e-row">
             <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              RGB Split <span>{formatPanelNumber(settings.crt.aberration)}</span>
+              RGB Split <span>{formatPanelNumber(settings.crt.aberration ?? 0)}</span>
             </label>
             <input
               type="range"
@@ -297,7 +297,7 @@ export const SettingsProperties: React.FC = () => {
               min="0"
               max="5"
               step="0.1"
-              value={formatPanelNumber(settings.crt.aberration)}
+              value={Number((settings.crt.aberration ?? 0).toFixed(1))}
               onChange={(e) => {
                 settings.crt!.aberration = parseFloat(e.target.value);
                 incrementObjectVersion();
@@ -306,7 +306,7 @@ export const SettingsProperties: React.FC = () => {
           </div>
           <div className="e-row">
             <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              Bloom <span>{formatPanelNumber(settings.crt.bloom)}</span>
+              Bloom <span>{formatPanelNumber(settings.crt.bloom ?? 0)}</span>
             </label>
             <input
               type="range"
@@ -314,7 +314,7 @@ export const SettingsProperties: React.FC = () => {
               min="0"
               max="1"
               step="0.05"
-              value={formatPanelNumber(settings.crt.bloom)}
+              value={Number((settings.crt.bloom ?? 0).toFixed(2))}
               onChange={(e) => {
                 settings.crt!.bloom = parseFloat(e.target.value);
                 incrementObjectVersion();
@@ -331,7 +331,7 @@ export const SettingsProperties: React.FC = () => {
               min="0"
               max="1"
               step="0.05"
-              value={formatPanelNumber(settings.crt.glow ?? 0.2)}
+              value={Number((settings.crt.glow ?? 0.2).toFixed(2))}
               onChange={(e) => {
                 settings.crt!.glow = parseFloat(e.target.value);
                 incrementObjectVersion();
@@ -348,7 +348,7 @@ export const SettingsProperties: React.FC = () => {
               min="0"
               max="1"
               step="0.05"
-              value={formatPanelNumber(settings.crt.persistence ?? 0)}
+              value={Number((settings.crt.persistence ?? 0).toFixed(2))}
               onChange={(e) => {
                 settings.crt!.persistence = parseFloat(e.target.value);
                 incrementObjectVersion();
@@ -357,7 +357,7 @@ export const SettingsProperties: React.FC = () => {
           </div>
           <div className="e-row">
             <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              Phosphor / Grain <span>{formatPanelNumber(settings.crt.phosphor || 0)}</span>
+              Phosphor / Grain <span>{formatPanelNumber(settings.crt.phosphor ?? 0)}</span>
             </label>
             <input
               type="range"
@@ -365,7 +365,7 @@ export const SettingsProperties: React.FC = () => {
               min="0"
               max="1"
               step="0.05"
-              value={formatPanelNumber(settings.crt.phosphor || 0)}
+              value={Number((settings.crt.phosphor ?? 0).toFixed(2))}
               onChange={(e) => {
                 settings.crt!.phosphor = parseFloat(e.target.value);
                 incrementObjectVersion();
