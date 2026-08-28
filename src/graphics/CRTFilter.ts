@@ -350,8 +350,10 @@ export class CRTFilter {
 
                 // 60 Hz AC Power Supply Hum Bar (Slowly rolling ground loop / hum bar artifact)
                 if (u_humBar > 0.0) {
-                    float hum = 1.0 + sin(curvedUV.y * 6.2831853 * 1.25 - u_time * 1.5) * (u_humBar * 0.06);
-                    color *= hum;
+                    float humWave = sin(curvedUV.y * 6.2831853 * 1.5 - u_time * 2.0);
+                    // Modulate both video gain and cathode black level pedestal
+                    color *= 1.0 + humWave * (u_humBar * 0.15);
+                    color += humWave * (u_humBar * 0.04);
                 }
 
                 // Phosphor Surface Simulation (The "Greyish" look)
