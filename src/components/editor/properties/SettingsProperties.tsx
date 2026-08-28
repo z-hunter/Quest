@@ -23,6 +23,7 @@ interface GameSettings {
     bloom: number;
     glow?: number;
     persistence?: number;
+    beamModulation?: number;
     phosphor?: number;
     bezelGlow: boolean;
   };
@@ -214,6 +215,23 @@ export const SettingsProperties: React.FC = () => {
               value={formatPanelNumber(settings.crt.scanlineIntensity)}
               onChange={(e) => {
                 settings.crt!.scanlineIntensity = parseFloat(e.target.value);
+                incrementObjectVersion();
+              }}
+            />
+          </div>
+          <div className="e-row">
+            <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              Beam Modulation <span>{formatPanelNumber(settings.crt.beamModulation ?? 0)}</span>
+            </label>
+            <input
+              type="range"
+              className="e-input"
+              min="0"
+              max="1"
+              step="0.05"
+              value={formatPanelNumber(settings.crt.beamModulation ?? 0)}
+              onChange={(e) => {
+                settings.crt!.beamModulation = parseFloat(e.target.value);
                 incrementObjectVersion();
               }}
             />

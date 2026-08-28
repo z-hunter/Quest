@@ -199,6 +199,7 @@ export class Game implements IGame {
         bloom: 0.05,
         glow: 0.2,
         persistence: 0.0,
+        beamModulation: 0.0,
       },
       editor: {
         uiScale: 1.0,
@@ -412,6 +413,7 @@ export class Game implements IGame {
           bloom: 0,
           glow: 0,
           persistence: 0,
+          beamModulation: 0,
         };
       }
 
@@ -1213,6 +1215,10 @@ export class Game implements IGame {
             bloom: coerceNumber(loadedCrt.bloom, this.settings.crt.bloom),
             glow: coerceNumber(loadedCrt.glow, this.settings.crt.glow ?? 0.2),
             persistence: coerceNumber(loadedCrt.persistence, this.settings.crt.persistence ?? 0.0),
+            beamModulation: coerceNumber(
+              loadedCrt.beamModulation,
+              this.settings.crt.beamModulation ?? 0.0
+            ),
             enabled:
               typeof loadedCrt.enabled === 'boolean'
                 ? loadedCrt.enabled

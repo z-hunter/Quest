@@ -9,6 +9,7 @@ export interface CRTSettings {
   bloom: number; // 0.0 to 1.0 (Halation intensity)
   glow?: number; // 0.0 to 1.0 (Ambient screen glow)
   persistence?: number; // 0.0 to 1.0 (Phosphor trail / afterglow)
+  beamModulation?: number; // 0.0 to 1.0 (Dynamically widens electron beam on bright pixels)
 }
 
 export class CRTFilter {
@@ -32,6 +33,7 @@ export class CRTFilter {
   glowLocation: WebGLUniformLocation | null;
   trailLocation: WebGLUniformLocation | null;
   persistenceLocation: WebGLUniformLocation | null;
+  beamModulationLocation: WebGLUniformLocation | null;
 
   // Accumulation / Persistence resources
   accumProgram: WebGLProgram | null = null;
@@ -75,6 +77,7 @@ export class CRTFilter {
       this.glowLocation = null;
       this.trailLocation = null;
       this.persistenceLocation = null;
+      this.beamModulationLocation = null;
       return;
     }
 
@@ -96,6 +99,7 @@ export class CRTFilter {
     this.glowLocation = null;
     this.trailLocation = null;
     this.persistenceLocation = null;
+    this.beamModulationLocation = null;
 
     this.init();
   }
@@ -170,6 +174,7 @@ export class CRTFilter {
             uniform float u_bloom;
             uniform float u_glow;
             uniform float u_persistence;
+            uniform float u_beamModulation;
             uniform sampler2D u_trail;
             varying vec2 v_texCoord;
 
@@ -378,8 +383,12 @@ export class CRTFilter {
                     // Map harmonics [-0.5, 1.0] to normalized beam intensity [0.0, 1.0]
                     float beam = clamp(0.6666667 * harmonics + 0.3333333, 0.0, 1.0);
 
-                    // 4. Intensity Modulation: perfectly uniform across all lines and resolutions
-                    float scanline = mix(1.0 - (u_scanlineIntensity * 0.6), 1.0, beam);
+                    // 4. Beam Spot Modulation (Dynamic electron beam widening on bright pixels)
+                    float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+                    float effectiveIntensity = u_scanlineIntensity * mix(1.0, max(0.1, 1.0 - luma * 0.9), u_beamModulation);
+
+                    // 5. Intensity Modulation: perfectly uniform across all lines and resolutions
+                    float scanline = mix(1.0 - (effectiveIntensity * 0.6), 1.0, beam);
                     color *= scanline;
                 }
 
@@ -453,6 +462,7 @@ export class CRTFilter {
     this.glowLocation = gl.getUniformLocation(this.program, 'u_glow');
     this.trailLocation = gl.getUniformLocation(this.program, 'u_trail');
     this.persistenceLocation = gl.getUniformLocation(this.program, 'u_persistence');
+    this.beamModulationLocation = gl.getUniformLocation(this.program, 'u_beamModulation');
 
     // Create buffer for a quad (2 triangles)
     this.buffer = gl.createBuffer();
@@ -675,6 +685,8 @@ export class CRTFilter {
       gl.uniform1f(this.bezelGlowLocation, settings.bezelGlow ? 1.0 : 0.0);
     if (this.bloomLocation) gl.uniform1f(this.bloomLocation, settings.bloom || 0.0);
     if (this.glowLocation) gl.uniform1f(this.glowLocation, settings.glow || 0.0);
+    if (this.beamModulationLocation)
+      gl.uniform1f(this.beamModulationLocation, settings.beamModulation ?? 0.0);
 
     // Texture Unit 0: Main Image (Sharp active frame)
     gl.activeTexture(gl.TEXTURE0);
