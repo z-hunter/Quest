@@ -25,6 +25,7 @@ interface GameSettings {
     persistence?: number;
     beamModulation?: number;
     humBar?: number;
+    breathing?: number;
     phosphor?: number;
     bezelGlow: boolean;
   };
@@ -264,6 +265,23 @@ export const SettingsProperties: React.FC = () => {
               value={formatPanelNumber(settings.crt.humBar ?? 0)}
               onChange={(e) => {
                 settings.crt!.humBar = parseFloat(e.target.value);
+                incrementObjectVersion();
+              }}
+            />
+          </div>
+          <div className="e-row">
+            <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              HV Breathing <span>{formatPanelNumber(settings.crt.breathing ?? 0)}</span>
+            </label>
+            <input
+              type="range"
+              className="e-input"
+              min="0"
+              max="1"
+              step="0.05"
+              value={formatPanelNumber(settings.crt.breathing ?? 0)}
+              onChange={(e) => {
+                settings.crt!.breathing = parseFloat(e.target.value);
                 incrementObjectVersion();
               }}
             />

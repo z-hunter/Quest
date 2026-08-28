@@ -11,6 +11,7 @@ export interface CRTSettings {
   persistence?: number; // 0.0 to 1.0 (Phosphor trail / afterglow)
   beamModulation?: number; // 0.0 to 1.0 (Dynamically widens electron beam on bright pixels)
   humBar?: number; // 0.0 to 1.0 (Slowly rolling 60Hz power supply hum bar)
+  breathing?: number; // 0.0 to 1.0 (High Voltage Anode Breathing / Raster Bloom)
 }
 
 export class CRTFilter {
@@ -36,6 +37,10 @@ export class CRTFilter {
   persistenceLocation: WebGLUniformLocation | null;
   beamModulationLocation: WebGLUniformLocation | null;
   humBarLocation: WebGLUniformLocation | null;
+  breathingScaleLocation: WebGLUniformLocation | null;
+
+  smoothedExpansion: number = 0;
+  lastBreathingTime: number = 0;
 
   // Accumulation / Persistence resources
   accumProgram: WebGLProgram | null = null;
@@ -81,6 +86,7 @@ export class CRTFilter {
       this.persistenceLocation = null;
       this.beamModulationLocation = null;
       this.humBarLocation = null;
+      this.breathingScaleLocation = null;
       return;
     }
 
@@ -104,6 +110,7 @@ export class CRTFilter {
     this.persistenceLocation = null;
     this.beamModulationLocation = null;
     this.humBarLocation = null;
+    this.breathingScaleLocation = null;
 
     this.init();
   }
@@ -180,6 +187,7 @@ export class CRTFilter {
             uniform float u_persistence;
             uniform float u_beamModulation;
             uniform float u_humBar;
+            uniform float u_breathingScale;
             uniform sampler2D u_trail;
             varying vec2 v_texCoord;
 
@@ -218,6 +226,10 @@ export class CRTFilter {
 
              void main() {
                  vec2 uv = v_texCoord;
+                 if (u_breathingScale > 0.0) {
+                     // High-voltage anode voltage sag physically expands the raster outward on bright scenes
+                     uv = (uv - 0.5) * (1.0 - u_breathingScale) + 0.5;
+                 }
                  vec2 curvedUV = curve(uv);
 
                  // Check invalid/bezel area explicitely
@@ -477,6 +489,7 @@ export class CRTFilter {
     this.persistenceLocation = gl.getUniformLocation(this.program, 'u_persistence');
     this.beamModulationLocation = gl.getUniformLocation(this.program, 'u_beamModulation');
     this.humBarLocation = gl.getUniformLocation(this.program, 'u_humBar');
+    this.breathingScaleLocation = gl.getUniformLocation(this.program, 'u_breathingScale');
 
     // Create buffer for a quad (2 triangles)
     this.buffer = gl.createBuffer();
@@ -702,6 +715,49 @@ export class CRTFilter {
     if (this.beamModulationLocation)
       gl.uniform1f(this.beamModulationLocation, settings.beamModulation ?? 0.0);
     if (this.humBarLocation) gl.uniform1f(this.humBarLocation, settings.humBar || 0.0);
+
+    // High-Voltage Anode Breathing (Raster Bloom expansion on bright scenes)
+    let breathingScale = 0.0;
+    const breathingSetting = settings.breathing || 0.0;
+    if (breathingSetting > 0.0) {
+      const now = performance.now();
+      const dt =
+        this.lastBreathingTime > 0
+          ? Math.min(0.1, (now - this.lastBreathingTime) / 1000)
+          : 0.016;
+      this.lastBreathingTime = now;
+
+      let avgLuma = 0.12;
+      const ctx = (sourceCanvas as any).getContext
+        ? (sourceCanvas as HTMLCanvasElement).getContext('2d')
+        : null;
+      if (ctx) {
+        try {
+          const w = sourceCanvas.width;
+          const h = sourceCanvas.height;
+          const imgData = ctx.getImageData(0, 0, w, h);
+          const data = imgData.data;
+          let sum = 0;
+          const sampleStep = Math.max(1, Math.floor(data.length / (4 * 64))); // 64 grid samples across buffer
+          let sampleCount = 0;
+          for (let i = 0; i < data.length; i += sampleStep * 4) {
+            sum +=
+              (data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722) / 255;
+            sampleCount++;
+          }
+          if (sampleCount > 0) avgLuma = sum / sampleCount;
+        } catch {}
+      }
+
+      const targetExpansion = avgLuma * breathingSetting * 0.035; // up to 3.5% raster expansion
+      this.smoothedExpansion +=
+        (targetExpansion - this.smoothedExpansion) * (1.0 - Math.exp(-dt * 12.0));
+      breathingScale = this.smoothedExpansion;
+    } else {
+      this.smoothedExpansion = 0.0;
+      this.lastBreathingTime = 0;
+    }
+    if (this.breathingScaleLocation) gl.uniform1f(this.breathingScaleLocation, breathingScale);
 
     // Texture Unit 0: Main Image (Sharp active frame)
     gl.activeTexture(gl.TEXTURE0);
