@@ -378,38 +378,37 @@ export class CRTFilter {
                     color += noise * 0.05 * u_phosphor;
                 }
 
-                // Scanlines (Anti-Aliased Dual-Beam with Timothy Lottes Phase Jitter & Derivative Filtering)
+                // Scanlines (Analytic Sinc-Integrated Fourier Beam with Timothy Lottes Phase Jitter)
                 if (u_scanlineCount > 0.0 && u_scanlineIntensity > 0.0) {
                     float pos = curvedUV.y * u_scanlineCount;
 
-                    // 1. Screen-space derivative (rate of scanline change per screen pixel)
+                    // 1. Screen-space pixel footprint in scanline units
                     #ifdef GL_OES_standard_derivatives
-                    float delta = length(vec2(dFdx(pos), dFdy(pos)));
+                    float w = max(length(vec2(dFdx(pos), dFdy(pos))), 0.0001);
                     #else
-                    float delta = u_scanlineCount / u_resolution.y;
+                    float w = max(u_scanlineCount / u_resolution.y, 0.0001);
                     #endif
 
-                    // 2. Timothy Lottes Phase Jitter: decorrelates periodic phase beats to completely dissolve moire
+                    // 2. Timothy Lottes Phase Jitter: decorrelates discrete phase beats
                     vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
                     float dither = fract(magic.z * fract(dot(v_texCoord * u_resolution, magic.xy))) - 0.5;
-                    float jitteredPos = pos + dither * min(delta * 0.6, 0.2);
+                    float jPos = pos + dither * min(w * 0.4, 0.15);
 
-                    // 3. Dynamic Beam Sigma: widens proportionally when sampling resolution approaches Nyquist limit
-                    float sigma = sqrt(0.025 + delta * delta * 0.7);
-                    float invTwoSigmaSq = 0.5 / (sigma * sigma);
+                    // 3. Analytic Area Integration (Sinc-filtered harmonics over the pixel interval):
+                    // Eliminates non-integer scaling stepping (3-4-3-4 px alternating thickness)
+                    float angle = 6.28318530718 * jPos;
+                    float piW = 3.14159265359 * w;
+                    float sinc1 = sin(piW) / piW;
+                    float sinc2 = sin(2.0 * piW) / (2.0 * piW);
 
-                    // Dual-beam distance calculation with energy conservation
-                    float dist = fract(jitteredPos) - 0.5;
-                    float beam1 = exp(-dist * dist * invTwoSigmaSq);
-                    float dist2 = 1.0 - abs(dist);
-                    float beam2 = exp(-dist2 * dist2 * invTwoSigmaSq);
-                    float normBeam = beam1 / max(beam1 + beam2, 0.0001);
+                    // 1st harmonic shapes the fundamental valley, 2nd harmonic sharpens the electron beam peak
+                    float harmonics = 0.75 * sinc1 * cos(angle) + 0.25 * sinc2 * cos(2.0 * angle);
 
-                    // 4. Nyquist band-limiting safeguard: prevents aliasing artifacts at extreme curvature / zoom
-                    float nyquistFade = 1.0 - smoothstep(0.5, 1.2, delta);
-                    float effectiveIntensity = u_scanlineIntensity * nyquistFade;
+                    // Map harmonics [-0.5, 1.0] to normalized beam intensity [0.0, 1.0]
+                    float beam = clamp(0.6666667 * harmonics + 0.3333333, 0.0, 1.0);
 
-                    float scanline = mix(1.0 - (effectiveIntensity * 0.5), 1.0, normBeam);
+                    // 4. Intensity Modulation: perfectly uniform across all lines and resolutions
+                    float scanline = mix(1.0 - (u_scanlineIntensity * 0.6), 1.0, beam);
                     color *= scanline;
                 }
 
