@@ -358,6 +358,10 @@ export class CRTFilter {
                       }
                       glowSum /= 16.0;
 
+                      // Slight desaturation: diffuse light scattered inside thick CRT faceplate glass is less chromatic
+                      float glowLuma = dot(glowSum, vec3(0.2126, 0.7152, 0.0722));
+                      glowSum = mix(glowSum, vec3(glowLuma), 0.35);
+
                       // Screen blend mode: soft glass illumination without blowing out white
                       vec3 diffuseGlow = glowSum * u_glow * 0.6;
                       color = 1.0 - (1.0 - color) * (1.0 - diffuseGlow);
