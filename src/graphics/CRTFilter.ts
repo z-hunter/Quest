@@ -338,35 +338,6 @@ export class CRTFilter {
                      color += bloomSum * u_bloom * 2.5;
                 }
 
-                 // CRT Ambient Screen Glow (Wide diffuse glass light scatter)
-                 if (u_glow > 0.0) {
-                      float glowRadius = 0.08;
-                      vec3 glowSum = vec3(0.0);
-                      
-                      // Dither pattern to ensure smooth blur without concentric banding
-                      vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
-                      float dither = fract(magic.z * fract(dot(v_texCoord * u_resolution, magic.xy)));
-                      float startAngle = dither * 6.2831853;
-
-                      for (int i = 0; i < 16; i++) {
-                           float theta = startAngle + float(i) * 2.39996323;
-                           float r = sqrt((float(i) + 0.5) / 16.0) * glowRadius;
-                           vec2 g_offset = vec2(cos(theta), sin(theta)) * r;
-                           g_offset.y *= 0.75; // aspect ratio correction
-                           vec2 sampleUV = clamp(curvedUV + g_offset, 0.0, 1.0);
-                           glowSum += texture2D(u_image, sampleUV).rgb;
-                      }
-                      glowSum /= 16.0;
-
-                      // Slight desaturation: diffuse light scattered inside thick CRT faceplate glass is less chromatic
-                      float glowLuma = dot(glowSum, vec3(0.2126, 0.7152, 0.0722));
-                      glowSum = mix(glowSum, vec3(glowLuma), 0.35);
-
-                      // Screen blend mode: soft glass illumination without blowing out white
-                      vec3 diffuseGlow = glowSum * u_glow * 0.6;
-                      color = 1.0 - (1.0 - color) * (1.0 - diffuseGlow);
-                 }
-
                 // Phosphor Surface Simulation (The "Greyish" look)
                 if (u_phosphor > 0.0) {
                      // 1. Lift blacks slightly scaling with phosphor setting
@@ -410,6 +381,42 @@ export class CRTFilter {
                     // 4. Intensity Modulation: perfectly uniform across all lines and resolutions
                     float scanline = mix(1.0 - (u_scanlineIntensity * 0.6), 1.0, beam);
                     color *= scanline;
+                }
+
+                // CRT Ambient Screen Glow (Wide diffuse glass light scatter applied OVER the scanline raster)
+                if (u_glow > 0.0) {
+                     float glowRadius = 0.18;
+                     vec3 glowSum = vec3(0.0);
+                     float totalGlowWeight = 0.0;
+                     
+                     // Dither pattern to ensure smooth blur without concentric banding
+                     vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
+                     float dither = fract(magic.z * fract(dot(v_texCoord * u_resolution, magic.xy)));
+                     float startAngle = dither * 6.28318530718;
+
+                     for (int i = 0; i < 16; i++) {
+                          float fi = float(i) + dither;
+                          float normDist = sqrt(fi / 16.0);
+                          float r = normDist * glowRadius;
+                          float theta = startAngle + float(i) * 2.39996323;
+
+                          vec2 g_offset = vec2(cos(theta), sin(theta)) * r;
+                          g_offset.y *= 0.75; // aspect ratio correction
+                          vec2 sampleUV = clamp(curvedUV + g_offset, 0.0, 1.0);
+
+                          float weight = exp(-normDist * normDist * 2.2);
+                          glowSum += texture2D(u_image, sampleUV).rgb * weight;
+                          totalGlowWeight += weight;
+                     }
+                     glowSum /= max(totalGlowWeight, 0.001);
+
+                     // Slight desaturation: diffuse light scattered inside thick CRT faceplate glass is less chromatic
+                     float glowLuma = dot(glowSum, vec3(0.2126, 0.7152, 0.0722));
+                     glowSum = mix(glowSum, vec3(glowLuma), 0.35);
+
+                     // Screen blend mode: illuminates both phosphors and scanline gaps
+                     vec3 diffuseGlow = glowSum * u_glow * 0.5;
+                     color = 1.0 - (1.0 - color) * (1.0 - diffuseGlow);
                 }
 
                 // Vignette
