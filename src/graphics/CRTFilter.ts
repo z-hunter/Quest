@@ -470,12 +470,12 @@ export class CRTFilter {
           // Extended decay duration (up to ~3.5 - 4.0 seconds at max persistence)
           float decay = mix(0.20, 0.983, clamp(u_persistence, 0.0, 1.0));
           
-          // Quantization cutoff: subtracting 0.8/255 guarantees 8-bit framebuffers decay to absolute 0
+          // Quantization cutoff: subtracting 0.5/255 guarantees 8-bit framebuffers decay to absolute 0
           // without getting stuck at a 1/255 truncation floor ("phosphor burn-in")
-          vec3 decayedHistory = max(vec3(0.0), history * decay - vec3(0.8 / 255.0));
+          vec3 decayedHistory = max(vec3(0.0), history * decay - vec3(0.5 / 255.0));
 
-          // Soft translucent trail: enters at 15% of active source brightness for an ultra-subtle afterglow
-          vec3 trail = max(current * 0.15, decayedHistory);
+          // Soft translucent trail: enters at 9% of active source brightness for an ultra-delicate afterglow
+          vec3 trail = max(current * 0.09, decayedHistory);
 
           // Slight desaturation: phosphor afterglow naturally loses saturation as it decays
           float luma = dot(trail, vec3(0.2126, 0.7152, 0.0722));
