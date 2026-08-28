@@ -423,7 +423,8 @@ export class Game implements IGame {
         const scaleX = this.rendererCanvas?.width ? this.rendererCanvas.width / designW : 1;
         const effectiveSettings = {
           ...settings,
-          scanlineCount: settings.scanlineCount || designH,
+          scanlineCount:
+            typeof settings.scanlineCount === 'number' ? settings.scanlineCount : designH,
           aberration: (settings.aberration || 0) * scaleX,
         };
         this.crtFilter.render(this.bufferCanvas, effectiveSettings);
