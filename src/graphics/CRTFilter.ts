@@ -8,6 +8,7 @@ export interface CRTSettings {
   bezelGlow: boolean; // Optimization toggle
   bloom: number; // 0.0 to 1.0 (Halation intensity)
   glow?: number; // 0.0 to 1.0 (Ambient screen glow)
+  persistence?: number; // 0.0 to 1.0 (Phosphor trail / afterglow)
 }
 
 export class CRTFilter {
@@ -29,6 +30,24 @@ export class CRTFilter {
   bezelGlowLocation: WebGLUniformLocation | null;
   bloomLocation: WebGLUniformLocation | null;
   glowLocation: WebGLUniformLocation | null;
+  trailLocation: WebGLUniformLocation | null;
+  persistenceLocation: WebGLUniformLocation | null;
+
+  // Accumulation / Persistence resources
+  accumProgram: WebGLProgram | null = null;
+  accumPosLocation: number = 0;
+  accumTexCoordLocation: number = 0;
+  accumCurrentTexLocation: WebGLUniformLocation | null = null;
+  accumHistoryTexLocation: WebGLUniformLocation | null = null;
+  accumPersistenceLocation: WebGLUniformLocation | null = null;
+
+  fboA: WebGLFramebuffer | null = null;
+  fboB: WebGLFramebuffer | null = null;
+  fboTexA: WebGLTexture | null = null;
+  fboTexB: WebGLTexture | null = null;
+  fboCurrent: number = 0;
+  fboWidth: number = 0;
+  fboHeight: number = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -54,6 +73,8 @@ export class CRTFilter {
       this.bezelGlowLocation = null;
       this.bloomLocation = null;
       this.glowLocation = null;
+      this.trailLocation = null;
+      this.persistenceLocation = null;
       return;
     }
 
@@ -73,6 +94,8 @@ export class CRTFilter {
     this.bezelGlowLocation = null;
     this.bloomLocation = null;
     this.glowLocation = null;
+    this.trailLocation = null;
+    this.persistenceLocation = null;
 
     this.init();
   }
@@ -146,6 +169,8 @@ export class CRTFilter {
             uniform float u_bezelGlow;
             uniform float u_bloom;
             uniform float u_glow;
+            uniform float u_persistence;
+            uniform sampler2D u_trail;
             varying vec2 v_texCoord;
 
             // Curvature
@@ -270,6 +295,12 @@ export class CRTFilter {
 
                 vec3 color = vec3(r, g, b);
 
+                // Phosphor Afterglow Trail (Soft, translucent trail overlay)
+                if (u_persistence > 0.0) {
+                     vec3 trail = texture2D(u_trail, curvedUV).rgb;
+                     color = max(color, trail);
+                }
+
                 // BLOOM / HALATION (Smooth phosphor electron bleed on bright highlights)
                 // Adds a continuous soft glow around bright highlights without discrete ghost duplicates
                 if (u_bloom > 0.0) {
@@ -387,6 +418,8 @@ export class CRTFilter {
     this.bezelGlowLocation = gl.getUniformLocation(this.program, 'u_bezelGlow');
     this.bloomLocation = gl.getUniformLocation(this.program, 'u_bloom');
     this.glowLocation = gl.getUniformLocation(this.program, 'u_glow');
+    this.trailLocation = gl.getUniformLocation(this.program, 'u_trail');
+    this.persistenceLocation = gl.getUniformLocation(this.program, 'u_persistence');
 
     // Create buffer for a quad (2 triangles)
     this.buffer = gl.createBuffer();
@@ -407,6 +440,85 @@ export class CRTFilter {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+    // Accumulation / Persistence Shader Pass
+    const accumVsSource = `
+      attribute vec2 a_position;
+      attribute vec2 a_texCoord;
+      varying vec2 v_texCoord;
+      void main() {
+          gl_Position = vec4(a_position.x, -a_position.y, 0.0, 1.0);
+          v_texCoord = a_texCoord;
+      }
+    `;
+
+    const accumFsSource = `
+      precision mediump float;
+      uniform sampler2D u_current;
+      uniform sampler2D u_history;
+      uniform float u_persistence;
+      varying vec2 v_texCoord;
+
+      void main() {
+          vec3 current = texture2D(u_current, v_texCoord).rgb;
+          vec3 history = texture2D(u_history, v_texCoord).rgb;
+          
+          // Extended decay duration (up to ~1.5 - 2.0 seconds at max persistence)
+          float decay = mix(0.20, 0.965, clamp(u_persistence, 0.0, 1.0));
+          
+          // Soft translucent trail: enters at 35% of active source brightness
+          vec3 trail = max(current * 0.35, history * decay);
+          gl_FragColor = vec4(trail, 1.0);
+      }
+    `;
+
+    this.accumProgram = this.createProgram(gl, accumVsSource, accumFsSource);
+    if (this.accumProgram) {
+      this.accumPosLocation = gl.getAttribLocation(this.accumProgram, 'a_position');
+      this.accumTexCoordLocation = gl.getAttribLocation(this.accumProgram, 'a_texCoord');
+      this.accumCurrentTexLocation = gl.getUniformLocation(this.accumProgram, 'u_current');
+      this.accumHistoryTexLocation = gl.getUniformLocation(this.accumProgram, 'u_history');
+      this.accumPersistenceLocation = gl.getUniformLocation(this.accumProgram, 'u_persistence');
+    }
+  }
+
+  ensureFBO(width: number, height: number): boolean {
+    if (!this.gl) return false;
+    const gl = this.gl;
+    if (this.fboA && this.fboWidth === width && this.fboHeight === height) return true;
+
+    if (this.fboA) gl.deleteFramebuffer(this.fboA);
+    if (this.fboB) gl.deleteFramebuffer(this.fboB);
+    if (this.fboTexA) gl.deleteTexture(this.fboTexA);
+    if (this.fboTexB) gl.deleteTexture(this.fboTexB);
+
+    this.fboWidth = width;
+    this.fboHeight = height;
+
+    const createFBOWithTex = () => {
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+      const fbo = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      return { fbo, tex };
+    };
+
+    const a = createFBOWithTex();
+    const b = createFBOWithTex();
+    this.fboA = a.fbo;
+    this.fboTexA = a.tex;
+    this.fboB = b.fbo;
+    this.fboTexB = b.tex;
+    this.fboCurrent = 0;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return true;
   }
 
   isValid(): boolean {
@@ -417,9 +529,56 @@ export class CRTFilter {
     if (!this.gl || !this.program || !this.buffer || !this.texture) return;
     const gl = this.gl;
 
-    // ---------------------------------------------------------
-    // SINGLE PASS CRT (Render to Screen)
-    // ---------------------------------------------------------
+    // 1. Upload source canvas to texture
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    let activeInputTexture = this.texture;
+
+    // 2. Accumulation Pass for Phosphor Persistence (if enabled)
+    const persistence = settings.persistence || 0.0;
+    if (persistence > 0.0 && this.accumProgram) {
+      this.ensureFBO(sourceCanvas.width, sourceCanvas.height);
+      const targetFBO = this.fboCurrent === 0 ? this.fboA : this.fboB;
+      const targetTex = this.fboCurrent === 0 ? this.fboTexA : this.fboTexB;
+      const historyTex = this.fboCurrent === 0 ? this.fboTexB : this.fboTexA;
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, targetFBO);
+      gl.viewport(0, 0, this.fboWidth, this.fboHeight);
+
+      gl.useProgram(this.accumProgram);
+
+      gl.enableVertexAttribArray(this.accumPosLocation);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+      gl.vertexAttribPointer(this.accumPosLocation, 2, gl.FLOAT, false, 16, 0);
+
+      gl.enableVertexAttribArray(this.accumTexCoordLocation);
+      gl.vertexAttribPointer(this.accumTexCoordLocation, 2, gl.FLOAT, false, 16, 8);
+
+      // Texture Unit 0: Current frame
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.texture);
+      if (this.accumCurrentTexLocation) gl.uniform1i(this.accumCurrentTexLocation, 0);
+
+      // Texture Unit 1: History frame
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, historyTex);
+      if (this.accumHistoryTexLocation) gl.uniform1i(this.accumHistoryTexLocation, 1);
+
+      if (this.accumPersistenceLocation) gl.uniform1f(this.accumPersistenceLocation, persistence);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      // Swap ping-pong
+      this.fboCurrent = 1 - this.fboCurrent;
+      if (targetTex) activeInputTexture = targetTex;
+    }
+
+    // 3. Final CRT Pass (Render to Screen)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -452,13 +611,20 @@ export class CRTFilter {
     if (this.bloomLocation) gl.uniform1f(this.bloomLocation, settings.bloom || 0.0);
     if (this.glowLocation) gl.uniform1f(this.glowLocation, settings.glow || 0.0);
 
-    // Texture Unit 0: Main Image (Already bound/uploaded)
+    // Texture Unit 0: Main Image (Sharp active frame)
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.uniform1i(gl.getUniformLocation(this.program, 'u_image'), 0);
+
+    // Texture Unit 1: Phosphor Trail (if persistence enabled)
+    if (persistence > 0.0) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, activeInputTexture);
+      if (this.trailLocation) gl.uniform1i(this.trailLocation, 1);
+      if (this.persistenceLocation) gl.uniform1f(this.persistenceLocation, persistence);
+    } else {
+      if (this.persistenceLocation) gl.uniform1f(this.persistenceLocation, 0.0);
+    }
 
     // Draw Main
     gl.drawArrays(gl.TRIANGLES, 0, 6);
