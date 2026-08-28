@@ -85,17 +85,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
           );
         }
 
-        const viewportWidth = viewportRef.current.clientWidth || width;
-        const viewportHeight = viewportRef.current.clientHeight || height;
         const dpr = window.devicePixelRatio || 1;
 
-        // Set RENDERER canvas size to display size * dpr for sharp rendering
-        canvasRef.current.width = Math.max(1, Math.round(viewportWidth * dpr));
-        canvasRef.current.height = Math.max(1, Math.round(viewportHeight * dpr));
+        // Set RENDERER canvas size directly to computed width/height * dpr for sharp rendering in 1:1 sync with layout
+        canvasRef.current.width = Math.max(1, Math.round(width * dpr));
+        canvasRef.current.height = Math.max(1, Math.round(height * dpr));
 
         if (editorOverlayCanvasRef.current) {
-          editorOverlayCanvasRef.current.width = Math.max(1, Math.round(viewportWidth * dpr));
-          editorOverlayCanvasRef.current.height = Math.max(1, Math.round(viewportHeight * dpr));
+          editorOverlayCanvasRef.current.width = Math.max(1, Math.round(width * dpr));
+          editorOverlayCanvasRef.current.height = Math.max(1, Math.round(height * dpr));
         }
 
         // Notify game of resize
