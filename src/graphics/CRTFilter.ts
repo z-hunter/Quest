@@ -466,8 +466,8 @@ export class CRTFilter {
           // Extended decay duration (up to ~1.5 - 2.0 seconds at max persistence)
           float decay = mix(0.20, 0.965, clamp(u_persistence, 0.0, 1.0));
           
-          // Soft translucent trail: enters at 35% of active source brightness
-          vec3 trail = max(current * 0.35, history * decay);
+          // Soft translucent trail: enters at 25% of active source brightness for a delicate afterglow
+          vec3 trail = max(current * 0.25, history * decay);
 
           // Slight desaturation: phosphor afterglow naturally loses saturation as it decays
           float luma = dot(trail, vec3(0.2126, 0.7152, 0.0722));
