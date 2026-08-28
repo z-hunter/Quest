@@ -225,14 +225,9 @@ export class CRTFilter {
              }
 
              void main() {
-                 vec2 uv = v_texCoord;
-                 if (u_breathingScale > 0.0) {
-                     // High-voltage anode voltage sag physically expands the raster outward on bright scenes
-                     uv = (uv - 0.5) * (1.0 - u_breathingScale) + 0.5;
-                 }
-                 vec2 curvedUV = curve(uv);
+                 vec2 curvedUV = curve(v_texCoord);
 
-                 // Check invalid/bezel area explicitely
+                 // Check invalid/bezel area explicitely (Static bezel and glass curvature geometry)
                  bool isBezel = (curvedUV.x < 0.0 || curvedUV.x > 1.0 || curvedUV.y < 0.0 || curvedUV.y > 1.0);
 
                  // Screen Surface / Bezel (Gray Background)
@@ -267,22 +262,10 @@ export class CRTFilter {
                                 float theta = startAngle + float(i) * 2.39996323; // Golden Angle
                                 
                                 vec2 offset = vec2(cos(theta), sin(theta)) * r;
-                                
-                                // CLAMP to Valid Screen Area to prevent infinite edge stretching
-                                // We offset from the CURRENT pixel (the bezel pixel) back towards the screen.
-                                // Actually, we just need to sample the Screen.
-                                // Since 'curvedUV' is outside 0..1, we can't use it directly as a base unless we clamp.
-                                
-                                // Better Approach: We want to sample the NEAREST edge of the screen.
-                                // The 'curvedUV' tells us where we are relative to the screen.
-                                // Let's clamp 'curvedUV' to the edge (0.01-0.99) to find the "source" pixel,
-                                // THEN apply the blur offset.
                                 vec2 sourceUV = clamp(curvedUV, 0.01, 0.99);
                                 vec2 sampleUV = clamp(sourceUV + offset, 0.01, 0.99);
                                 
                                 // MASK Edges (Simulate Black Borders on the internal screen)
-                                // If the sample works its way to the outer 1% of the screen, we consider it black.
-                                // This prevents the "Refraction" of the edge sprite while keeping glow visible.
                                 vec2 center = sampleUV - 0.5;
                                 vec2 d = abs(center) * 2.0;
                                 float mask = 1.0 - step(0.98, max(d.x, d.y));
@@ -295,12 +278,9 @@ export class CRTFilter {
                            // Distance Fade relative to the edge
                            vec2 distVec = max(vec2(0.0), max(0.0 - curvedUV, curvedUV - 1.0));
                            float dist = length(distVec);
-                           // Fade out over distance (Was 0.15, now 0.25 for greater reach)
                            float fade = 1.0 - smoothstep(0.0, 0.25, dist);
                            
-                           // Apply Gamma/Threshold (2.0 gamma for tighter/darker falloff)
                            glow = pow(glow, vec3(2.0));
-                           // Boost (Reduced from 4.0 to 2.5 to avoid "mirror" look)
                            finalColor += glow * 2.5 * fade;
                       }
 
@@ -308,29 +288,38 @@ export class CRTFilter {
                      return;
                 }
 
+                // Internal Electron Raster Space
+                // In dark/resting state: narrow black margin inside the bezel (~1.3%)
+                // In peak bright state: raster expands outward and creeps 1-2px under the static bezel
+                vec2 rasterUV = curvedUV;
+                if (u_breathingScale > 0.0) {
+                    float baseMargin = 0.015;
+                    float rasterScale = 1.0 + (baseMargin * 2.0) - u_breathingScale;
+                    rasterUV = (curvedUV - 0.5) * rasterScale + 0.5;
+                }
+
                 // Chromatic Aberration
                 float offset = u_aberration * 0.005;
                 
-                float r = texture2D(u_image, curvedUV + vec2(offset, 0.0)).r;
-                float g = texture2D(u_image, curvedUV).g;
-                float b = texture2D(u_image, curvedUV + vec2(-offset, 0.0)).b;
+                float r = sampleScreen(rasterUV + vec2(offset, 0.0)).r;
+                float g = sampleScreen(rasterUV).g;
+                float b = sampleScreen(rasterUV + vec2(-offset, 0.0)).b;
 
                 vec3 color = vec3(r, g, b);
 
                 // Phosphor Afterglow Trail (Soft, translucent trail overlay)
                 if (u_persistence > 0.0) {
-                     vec3 trail = texture2D(u_trail, curvedUV).rgb;
-                     color = max(color, trail);
+                     vec3 trail = texture2D(u_trail, rasterUV).rgb;
+                     float inBounds = step(0.0, rasterUV.x) * step(rasterUV.x, 1.0) * step(0.0, rasterUV.y) * step(rasterUV.y, 1.0);
+                     color = max(color, trail * inBounds);
                 }
 
                 // BLOOM / HALATION (Smooth phosphor electron bleed on bright highlights)
-                // Adds a continuous soft glow around bright highlights without discrete ghost duplicates
                 if (u_bloom > 0.0) {
                      float bloomRadius = 0.015;
                      vec3 bloomSum = vec3(0.0);
                      float totalWeight = 0.0;
                      
-                     // Per-pixel screen-space dither to turn discrete sample steps into a continuous smooth mist
                      vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
                      float dither = fract(magic.z * fract(dot(v_texCoord * u_resolution, magic.xy)));
                      float startAngle = dither * 6.28318530718;
@@ -344,19 +333,16 @@ export class CRTFilter {
                           vec2 b_offset = vec2(cos(theta), sin(theta)) * r;
                           b_offset.y *= 0.75;
 
-                          vec3 sample = texture2D(u_image, curvedUV + b_offset).rgb;
-                          // Strict luminance threshold: only bright pixels emit bloom
+                          vec3 sample = sampleScreen(rasterUV + b_offset);
                           float luma = dot(sample, vec3(0.2126, 0.7152, 0.0722));
                           float brightPass = smoothstep(0.55, 0.9, luma);
 
-                          // Gaussian weight decaying with distance
                           float weight = exp(-normDist * normDist * 3.5);
                           bloomSum += sample * brightPass * weight;
                           totalWeight += weight;
                      }
                      bloomSum /= max(totalWeight, 0.001);
 
-                     // Additive smooth phosphor halation
                      color += bloomSum * u_bloom * 2.5;
                 }
 
@@ -381,7 +367,7 @@ export class CRTFilter {
 
                 // Scanlines (Analytic Sinc-Integrated Fourier Beam with Timothy Lottes Phase Jitter)
                 if (u_scanlineCount > 0.0 && u_scanlineIntensity > 0.0) {
-                    float pos = curvedUV.y * u_scanlineCount;
+                    float pos = rasterUV.y * u_scanlineCount;
 
                     // 1. Screen-space pixel footprint in scanline units
                     #ifdef GL_OES_standard_derivatives
@@ -436,10 +422,9 @@ export class CRTFilter {
 
                           vec2 g_offset = vec2(cos(theta), sin(theta)) * r;
                           g_offset.y *= 0.75; // aspect ratio correction
-                          vec2 sampleUV = clamp(curvedUV + g_offset, 0.0, 1.0);
 
                           float weight = exp(-normDist * normDist * 2.2);
-                          glowSum += texture2D(u_image, sampleUV).rgb * weight;
+                          glowSum += sampleScreen(rasterUV + g_offset) * weight;
                           totalGlowWeight += weight;
                      }
                      glowSum /= max(totalGlowWeight, 0.001);
@@ -453,12 +438,9 @@ export class CRTFilter {
                      color = 1.0 - (1.0 - color) * (1.0 - diffuseGlow);
                 }
 
-                // Vignette
-                float vignette = uv.x * uv.y * (1.0 - uv.x) * (1.0 - uv.y);
-                // Power controls falloff. Multiply by strength.
-                // Parameterized:
-                float vig = pow(vignette * (15.0), 0.25); // Base curve
-                // Interpolate between 1.0 (no vignette) and vig based on u_vignette
+                // Vignette (Physical curved faceplate glass property)
+                float vignette = curvedUV.x * curvedUV.y * (1.0 - curvedUV.x) * (1.0 - curvedUV.y);
+                float vig = pow(vignette * (15.0), 0.25);
                 color *= mix(1.0, vig, u_vignette);
 
                 // Brightness boost (static for now)
@@ -749,7 +731,8 @@ export class CRTFilter {
         } catch {}
       }
 
-      const targetExpansion = avgLuma * breathingSetting * 0.105; // up to 10.5% raster expansion (tripled strength)
+      // Expansion ranges from resting narrow border (avgLuma=0) to slight overscan under the bezel (avgLuma=1)
+      const targetExpansion = (0.004 + avgLuma * 0.038) * breathingSetting;
       this.smoothedExpansion +=
         (targetExpansion - this.smoothedExpansion) * (1.0 - Math.exp(-dt * 12.0));
       breathingScale = this.smoothedExpansion;
