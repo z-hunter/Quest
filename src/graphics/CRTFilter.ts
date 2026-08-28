@@ -378,15 +378,38 @@ export class CRTFilter {
                     color += noise * 0.05 * u_phosphor;
                 }
 
-                // Scanlines (CRT-Geom dual-beam energy-preserving profile)
+                // Scanlines (Anti-Aliased Dual-Beam with Timothy Lottes Phase Jitter & Derivative Filtering)
                 if (u_scanlineCount > 0.0 && u_scanlineIntensity > 0.0) {
                     float pos = curvedUV.y * u_scanlineCount;
-                    float dist = fract(pos) - 0.5;
-                    float beam1 = exp(-dist * dist * 8.0);
+
+                    // 1. Screen-space derivative (rate of scanline change per screen pixel)
+                    #ifdef GL_OES_standard_derivatives
+                    float delta = length(vec2(dFdx(pos), dFdy(pos)));
+                    #else
+                    float delta = u_scanlineCount / u_resolution.y;
+                    #endif
+
+                    // 2. Timothy Lottes Phase Jitter: decorrelates periodic phase beats to completely dissolve moire
+                    vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
+                    float dither = fract(magic.z * fract(dot(v_texCoord * u_resolution, magic.xy))) - 0.5;
+                    float jitteredPos = pos + dither * min(delta * 0.6, 0.2);
+
+                    // 3. Dynamic Beam Sigma: widens proportionally when sampling resolution approaches Nyquist limit
+                    float sigma = sqrt(0.025 + delta * delta * 0.7);
+                    float invTwoSigmaSq = 0.5 / (sigma * sigma);
+
+                    // Dual-beam distance calculation with energy conservation
+                    float dist = fract(jitteredPos) - 0.5;
+                    float beam1 = exp(-dist * dist * invTwoSigmaSq);
                     float dist2 = 1.0 - abs(dist);
-                    float beam2 = exp(-dist2 * dist2 * 8.0);
-                    float normBeam = beam1 / (beam1 + beam2);
-                    float scanline = mix(1.0 - (u_scanlineIntensity * 0.5), 1.0, normBeam);
+                    float beam2 = exp(-dist2 * dist2 * invTwoSigmaSq);
+                    float normBeam = beam1 / max(beam1 + beam2, 0.0001);
+
+                    // 4. Nyquist band-limiting safeguard: prevents aliasing artifacts at extreme curvature / zoom
+                    float nyquistFade = 1.0 - smoothstep(0.5, 1.2, delta);
+                    float effectiveIntensity = u_scanlineIntensity * nyquistFade;
+
+                    float scanline = mix(1.0 - (effectiveIntensity * 0.5), 1.0, normBeam);
                     color *= scanline;
                 }
 
