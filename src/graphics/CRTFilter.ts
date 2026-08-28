@@ -468,6 +468,11 @@ export class CRTFilter {
           
           // Soft translucent trail: enters at 35% of active source brightness
           vec3 trail = max(current * 0.35, history * decay);
+
+          // Slight desaturation: phosphor afterglow naturally loses saturation as it decays
+          float luma = dot(trail, vec3(0.2126, 0.7152, 0.0722));
+          trail = mix(trail, vec3(luma), 0.35);
+
           gl_FragColor = vec4(trail, 1.0);
       }
     `;
