@@ -749,7 +749,7 @@ export class CRTFilter {
         } catch {}
       }
 
-      const targetExpansion = avgLuma * breathingSetting * 0.035; // up to 3.5% raster expansion
+      const targetExpansion = avgLuma * breathingSetting * 0.105; // up to 10.5% raster expansion (tripled strength)
       this.smoothedExpansion +=
         (targetExpansion - this.smoothedExpansion) * (1.0 - Math.exp(-dt * 12.0));
       breathingScale = this.smoothedExpansion;
