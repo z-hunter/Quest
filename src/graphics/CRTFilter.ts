@@ -10,6 +10,7 @@ export interface CRTSettings {
   glow?: number; // 0.0 to 1.0 (Ambient screen glow)
   persistence?: number; // 0.0 to 1.0 (Phosphor trail / afterglow)
   beamModulation?: number; // 0.0 to 1.0 (Dynamically widens electron beam on bright pixels)
+  humBar?: number; // 0.0 to 1.0 (Slowly rolling 60Hz power supply hum bar)
 }
 
 export class CRTFilter {
@@ -34,6 +35,7 @@ export class CRTFilter {
   trailLocation: WebGLUniformLocation | null;
   persistenceLocation: WebGLUniformLocation | null;
   beamModulationLocation: WebGLUniformLocation | null;
+  humBarLocation: WebGLUniformLocation | null;
 
   // Accumulation / Persistence resources
   accumProgram: WebGLProgram | null = null;
@@ -78,6 +80,7 @@ export class CRTFilter {
       this.trailLocation = null;
       this.persistenceLocation = null;
       this.beamModulationLocation = null;
+      this.humBarLocation = null;
       return;
     }
 
@@ -100,6 +103,7 @@ export class CRTFilter {
     this.trailLocation = null;
     this.persistenceLocation = null;
     this.beamModulationLocation = null;
+    this.humBarLocation = null;
 
     this.init();
   }
@@ -175,6 +179,7 @@ export class CRTFilter {
             uniform float u_glow;
             uniform float u_persistence;
             uniform float u_beamModulation;
+            uniform float u_humBar;
             uniform sampler2D u_trail;
             varying vec2 v_texCoord;
 
@@ -343,6 +348,12 @@ export class CRTFilter {
                      color += bloomSum * u_bloom * 2.5;
                 }
 
+                // 60 Hz AC Power Supply Hum Bar (Slowly rolling ground loop / hum bar artifact)
+                if (u_humBar > 0.0) {
+                    float hum = 1.0 + sin(curvedUV.y * 6.2831853 * 1.25 - u_time * 1.5) * (u_humBar * 0.06);
+                    color *= hum;
+                }
+
                 // Phosphor Surface Simulation (The "Greyish" look)
                 if (u_phosphor > 0.0) {
                      // 1. Lift blacks slightly scaling with phosphor setting
@@ -463,6 +474,7 @@ export class CRTFilter {
     this.trailLocation = gl.getUniformLocation(this.program, 'u_trail');
     this.persistenceLocation = gl.getUniformLocation(this.program, 'u_persistence');
     this.beamModulationLocation = gl.getUniformLocation(this.program, 'u_beamModulation');
+    this.humBarLocation = gl.getUniformLocation(this.program, 'u_humBar');
 
     // Create buffer for a quad (2 triangles)
     this.buffer = gl.createBuffer();
@@ -687,6 +699,7 @@ export class CRTFilter {
     if (this.glowLocation) gl.uniform1f(this.glowLocation, settings.glow || 0.0);
     if (this.beamModulationLocation)
       gl.uniform1f(this.beamModulationLocation, settings.beamModulation ?? 0.0);
+    if (this.humBarLocation) gl.uniform1f(this.humBarLocation, settings.humBar || 0.0);
 
     // Texture Unit 0: Main Image (Sharp active frame)
     gl.activeTexture(gl.TEXTURE0);

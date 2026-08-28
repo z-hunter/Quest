@@ -24,6 +24,7 @@ interface GameSettings {
     glow?: number;
     persistence?: number;
     beamModulation?: number;
+    humBar?: number;
     phosphor?: number;
     bezelGlow: boolean;
   };
@@ -202,9 +203,57 @@ export const SettingsProperties: React.FC = () => {
               }}
             />
           </div>
+          {settings.crt.scanlineCount > 0 && (
+            <>
+              <div className="e-row">
+                <label
+                  className="e-label"
+                  style={{ display: 'flex', justifyContent: 'space-between' }}
+                >
+                  Scanline Intensity{' '}
+                  <span>{formatPanelNumber(settings.crt.scanlineIntensity)}</span>
+                </label>
+                <input
+                  type="range"
+                  className="e-input"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={formatPanelNumber(settings.crt.scanlineIntensity)}
+                  onChange={(e) => {
+                    settings.crt!.scanlineIntensity = parseFloat(e.target.value);
+                    incrementObjectVersion();
+                  }}
+                />
+              </div>
+              {settings.crt.scanlineIntensity > 0 && (
+                <div className="e-row">
+                  <label
+                    className="e-label"
+                    style={{ display: 'flex', justifyContent: 'space-between' }}
+                  >
+                    Beam Modulation{' '}
+                    <span>{formatPanelNumber(settings.crt.beamModulation ?? 0)}</span>
+                  </label>
+                  <input
+                    type="range"
+                    className="e-input"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={formatPanelNumber(settings.crt.beamModulation ?? 0)}
+                    onChange={(e) => {
+                      settings.crt!.beamModulation = parseFloat(e.target.value);
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+              )}
+            </>
+          )}
           <div className="e-row">
             <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              Scanline Intensity <span>{formatPanelNumber(settings.crt.scanlineIntensity)}</span>
+              60 Hz Hum Bar <span>{formatPanelNumber(settings.crt.humBar ?? 0)}</span>
             </label>
             <input
               type="range"
@@ -212,35 +261,13 @@ export const SettingsProperties: React.FC = () => {
               min="0"
               max="1"
               step="0.05"
-              value={formatPanelNumber(settings.crt.scanlineIntensity)}
+              value={formatPanelNumber(settings.crt.humBar ?? 0)}
               onChange={(e) => {
-                settings.crt!.scanlineIntensity = parseFloat(e.target.value);
+                settings.crt!.humBar = parseFloat(e.target.value);
                 incrementObjectVersion();
               }}
             />
           </div>
-          {settings.crt.scanlineCount > 0 && settings.crt.scanlineIntensity > 0 && (
-            <div className="e-row">
-              <label
-                className="e-label"
-                style={{ display: 'flex', justifyContent: 'space-between' }}
-              >
-                Beam Modulation <span>{formatPanelNumber(settings.crt.beamModulation ?? 0)}</span>
-              </label>
-              <input
-                type="range"
-                className="e-input"
-                min="0"
-                max="1"
-                step="0.05"
-                value={formatPanelNumber(settings.crt.beamModulation ?? 0)}
-                onChange={(e) => {
-                  settings.crt!.beamModulation = parseFloat(e.target.value);
-                  incrementObjectVersion();
-                }}
-              />
-            </div>
-          )}
           <div className="e-row">
             <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
               RGB Split <span>{formatPanelNumber(settings.crt.aberration)}</span>

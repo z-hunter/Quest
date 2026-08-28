@@ -200,6 +200,7 @@ export class Game implements IGame {
         glow: 0.2,
         persistence: 0.0,
         beamModulation: 0.0,
+        humBar: 0.0,
       },
       editor: {
         uiScale: 1.0,
@@ -414,6 +415,7 @@ export class Game implements IGame {
           glow: 0,
           persistence: 0,
           beamModulation: 0,
+          humBar: 0,
         };
       }
 
@@ -1220,6 +1222,7 @@ export class Game implements IGame {
               loadedCrt.beamModulation,
               this.settings.crt.beamModulation ?? 0.0
             ),
+            humBar: coerceNumber(loadedCrt.humBar, this.settings.crt.humBar ?? 0.0),
             enabled:
               typeof loadedCrt.enabled === 'boolean'
                 ? loadedCrt.enabled
