@@ -197,6 +197,7 @@ export class Game implements IGame {
         phosphor: 1.0,
         bezelGlow: true,
         bloom: 0.05,
+        glow: 0.2,
       },
       editor: {
         uiScale: 1.0,
@@ -408,6 +409,7 @@ export class Game implements IGame {
           phosphor: 0,
           bezelGlow: false,
           bloom: 0,
+          glow: 0,
         };
       }
 
@@ -1207,6 +1209,7 @@ export class Game implements IGame {
             vignette: coerceNumber(loadedCrt.vignette, this.settings.crt.vignette),
             phosphor: coerceNumber(loadedCrt.phosphor, this.settings.crt.phosphor),
             bloom: coerceNumber(loadedCrt.bloom, this.settings.crt.bloom),
+            glow: coerceNumber(loadedCrt.glow, this.settings.crt.glow ?? 0.2),
             enabled:
               typeof loadedCrt.enabled === 'boolean'
                 ? loadedCrt.enabled

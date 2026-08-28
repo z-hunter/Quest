@@ -7,6 +7,7 @@ export interface CRTSettings {
   phosphor: number; // 0.0 to 1.0 (Surface noise/lift)
   bezelGlow: boolean; // Optimization toggle
   bloom: number; // 0.0 to 1.0 (Halation intensity)
+  glow?: number; // 0.0 to 1.0 (Ambient screen glow)
 }
 
 export class CRTFilter {
@@ -27,6 +28,7 @@ export class CRTFilter {
   phosphorLocation: WebGLUniformLocation | null;
   bezelGlowLocation: WebGLUniformLocation | null;
   bloomLocation: WebGLUniformLocation | null;
+  glowLocation: WebGLUniformLocation | null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -51,6 +53,7 @@ export class CRTFilter {
       this.phosphorLocation = null;
       this.bezelGlowLocation = null;
       this.bloomLocation = null;
+      this.glowLocation = null;
       return;
     }
 
@@ -69,6 +72,7 @@ export class CRTFilter {
     this.phosphorLocation = null;
     this.bezelGlowLocation = null;
     this.bloomLocation = null;
+    this.glowLocation = null;
 
     this.init();
   }
@@ -141,6 +145,7 @@ export class CRTFilter {
             uniform float u_phosphor;
             uniform float u_bezelGlow;
             uniform float u_bloom;
+            uniform float u_glow;
             varying vec2 v_texCoord;
 
             // Curvature
@@ -265,46 +270,67 @@ export class CRTFilter {
 
                 vec3 color = vec3(r, g, b);
 
-                // BLOOM / HALATION (Electron Bleed)
-                // Adds a soft glow around bright pixels by sampling neighbors.
+                // BLOOM / HALATION (Smooth phosphor electron bleed on bright highlights)
+                // Adds a continuous soft glow around bright highlights without discrete ghost duplicates
                 if (u_bloom > 0.0) {
-                     float bloomRadius = 0.025; // Wide spread for Halo
+                     float bloomRadius = 0.015;
                      vec3 bloomSum = vec3(0.0);
+                     float totalWeight = 0.0;
                      
-                     // Simple 12-tap Golden Angle spiral
-                     // Reuse the bezel dither logic or just a constant pattern
-                     for (int i = 0; i < 12; i++) {
-                          // Standard Golden Angle Distribution
-                          float theta = float(i) * 2.39996323; 
-                          float r = float(i) / 12.0; // Linear distribution
-                          r = sqrt(r) * bloomRadius; // Square root for even area coverage
+                     // Per-pixel screen-space dither to turn discrete sample steps into a continuous smooth mist
+                     vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
+                     float dither = fract(magic.z * fract(dot(v_texCoord * u_resolution, magic.xy)));
+                     float startAngle = dither * 6.28318530718;
+
+                     for (int i = 0; i < 16; i++) {
+                          float fi = float(i) + dither;
+                          float normDist = sqrt(fi / 16.0);
+                          float r = normDist * bloomRadius;
+                          float theta = startAngle + float(i) * 2.39996323; 
                           
                           vec2 b_offset = vec2(cos(theta), sin(theta)) * r;
-                          
-                          // Correct aspect ratio distortion (screen is wider than tall)
-                          // if we want circular glow, we should scale offset.y by aspect ratio.
-                          // But 420x300 is 1.4, so u_resolution.x/y is needed.
-                          // Simplified: just stretch Y slightly more or assume square UVs good enough for "glitchy" CRT.
-                          b_offset.y *= 0.75; // 300/420 approx correction
+                          b_offset.y *= 0.75;
 
                           vec3 sample = texture2D(u_image, curvedUV + b_offset).rgb;
-                          // Thresholding: Only bright things glow
-                          // LOWER Power (1.3) allows mid-tones to glow (e.g. orange text)
-                          // 2.2 was too restrictive (only white glowed).
-                          sample = pow(sample, vec3(1.3)); 
-                          bloomSum += sample;
+                          // Strict luminance threshold: only bright pixels emit bloom
+                          float luma = dot(sample, vec3(0.2126, 0.7152, 0.0722));
+                          float brightPass = smoothstep(0.55, 0.9, luma);
+
+                          // Gaussian weight decaying with distance
+                          float weight = exp(-normDist * normDist * 3.5);
+                          bloomSum += sample * brightPass * weight;
+                          totalWeight += weight;
                      }
-                     // Average
-                     bloomSum /= 12.0;
+                     bloomSum /= max(totalWeight, 0.001);
 
-                     // Apply Bloom Amount
-                     vec3 bloomHigh = bloomSum * u_bloom * 4.5; // Boosted intensity for visibility
-
-                     // BLEND MODE: LIGHTEN ONLY (max)
-                     // This ensures the source sprite is NEVER brightened by the glow,
-                     // but dark areas around it pick up the halo.
-                     color = max(color, bloomHigh);
+                     // Additive smooth phosphor halation
+                     color += bloomSum * u_bloom * 2.5;
                 }
+
+                 // CRT Ambient Screen Glow (Wide diffuse glass light scatter)
+                 if (u_glow > 0.0) {
+                      float glowRadius = 0.08;
+                      vec3 glowSum = vec3(0.0);
+                      
+                      // Dither pattern to ensure smooth blur without concentric banding
+                      vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
+                      float dither = fract(magic.z * fract(dot(v_texCoord * u_resolution, magic.xy)));
+                      float startAngle = dither * 6.2831853;
+
+                      for (int i = 0; i < 16; i++) {
+                           float theta = startAngle + float(i) * 2.39996323;
+                           float r = sqrt((float(i) + 0.5) / 16.0) * glowRadius;
+                           vec2 g_offset = vec2(cos(theta), sin(theta)) * r;
+                           g_offset.y *= 0.75; // aspect ratio correction
+                           vec2 sampleUV = clamp(curvedUV + g_offset, 0.0, 1.0);
+                           glowSum += texture2D(u_image, sampleUV).rgb;
+                      }
+                      glowSum /= 16.0;
+
+                      // Screen blend mode: soft glass illumination without blowing out white
+                      vec3 diffuseGlow = glowSum * u_glow * 0.6;
+                      color = 1.0 - (1.0 - color) * (1.0 - diffuseGlow);
+                 }
 
                 // Phosphor Surface Simulation (The "Greyish" look)
                 if (u_phosphor > 0.0) {
@@ -360,6 +386,7 @@ export class CRTFilter {
     this.phosphorLocation = gl.getUniformLocation(this.program, 'u_phosphor');
     this.bezelGlowLocation = gl.getUniformLocation(this.program, 'u_bezelGlow');
     this.bloomLocation = gl.getUniformLocation(this.program, 'u_bloom');
+    this.glowLocation = gl.getUniformLocation(this.program, 'u_glow');
 
     // Create buffer for a quad (2 triangles)
     this.buffer = gl.createBuffer();
@@ -423,6 +450,7 @@ export class CRTFilter {
     if (this.bezelGlowLocation)
       gl.uniform1f(this.bezelGlowLocation, settings.bezelGlow ? 1.0 : 0.0);
     if (this.bloomLocation) gl.uniform1f(this.bloomLocation, settings.bloom || 0.0);
+    if (this.glowLocation) gl.uniform1f(this.glowLocation, settings.glow || 0.0);
 
     // Texture Unit 0: Main Image (Already bound/uploaded)
     gl.activeTexture(gl.TEXTURE0);

@@ -21,6 +21,7 @@ interface GameSettings {
     scanlineIntensity: number;
     aberration: number;
     bloom: number;
+    glow?: number;
     phosphor?: number;
     bezelGlow: boolean;
   };
@@ -246,6 +247,23 @@ export const SettingsProperties: React.FC = () => {
               value={formatPanelNumber(settings.crt.bloom)}
               onChange={(e) => {
                 settings.crt!.bloom = parseFloat(e.target.value);
+                incrementObjectVersion();
+              }}
+            />
+          </div>
+          <div className="e-row">
+            <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              Screen Glow <span>{formatPanelNumber(settings.crt.glow ?? 0.2)}</span>
+            </label>
+            <input
+              type="range"
+              className="e-input"
+              min="0"
+              max="1"
+              step="0.05"
+              value={formatPanelNumber(settings.crt.glow ?? 0.2)}
+              onChange={(e) => {
+                settings.crt!.glow = parseFloat(e.target.value);
                 incrementObjectVersion();
               }}
             />
