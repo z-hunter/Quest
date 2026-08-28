@@ -202,6 +202,7 @@ export class Game implements IGame {
         beamModulation: 0.0,
         humBar: 0.0,
         breathing: 0.0,
+        antiAliasedPixels: true,
       },
       editor: {
         uiScale: 1.0,
@@ -418,6 +419,7 @@ export class Game implements IGame {
           beamModulation: 0,
           humBar: 0,
           breathing: 0,
+          antiAliasedPixels: false,
         };
       }
 
@@ -1226,6 +1228,10 @@ export class Game implements IGame {
             ),
             humBar: coerceNumber(loadedCrt.humBar, this.settings.crt.humBar ?? 0.0),
             breathing: coerceNumber(loadedCrt.breathing, this.settings.crt.breathing ?? 0.0),
+            antiAliasedPixels:
+              typeof loadedCrt.antiAliasedPixels === 'boolean'
+                ? loadedCrt.antiAliasedPixels
+                : this.settings.crt.antiAliasedPixels ?? true,
             enabled:
               typeof loadedCrt.enabled === 'boolean'
                 ? loadedCrt.enabled

@@ -26,6 +26,7 @@ interface GameSettings {
     beamModulation?: number;
     humBar?: number;
     breathing?: number;
+    antiAliasedPixels?: boolean;
     phosphor?: number;
     bezelGlow: boolean;
   };
@@ -370,6 +371,20 @@ export const SettingsProperties: React.FC = () => {
                 incrementObjectVersion();
               }}
             />
+          </div>
+          <div className="e-row">
+            <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                style={{ marginRight: '5px' }}
+                checked={settings.crt.antiAliasedPixels ?? true}
+                onChange={(e) => {
+                  settings.crt!.antiAliasedPixels = e.target.checked;
+                  incrementObjectVersion();
+                }}
+              />
+              Anti-Moiré Pixels
+            </label>
           </div>
           <div className="e-row">
             <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>

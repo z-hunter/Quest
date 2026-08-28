@@ -12,6 +12,7 @@ export interface CRTSettings {
   beamModulation?: number; // 0.0 to 1.0 (Dynamically widens electron beam on bright pixels)
   humBar?: number; // 0.0 to 1.0 (Slowly rolling 60Hz power supply hum bar)
   breathing?: number; // 0.0 to 1.0 (High Voltage Anode Breathing / Raster Bloom)
+  antiAliasedPixels?: boolean; // Anti-Moiré sharp pixel filter (Bandlimited Box Integration)
 }
 
 export class CRTFilter {
@@ -23,6 +24,8 @@ export class CRTFilter {
   positionLocation: number;
   texCoordLocation: number;
   resolutionLocation: WebGLUniformLocation | null;
+  sourceResolutionLocation: WebGLUniformLocation | null;
+  antiAliasedPixelsLocation: WebGLUniformLocation | null;
   timeLocation: WebGLUniformLocation | null;
   scanlineCountLocation: WebGLUniformLocation | null;
   curvatureLocation: WebGLUniformLocation | null;
@@ -87,6 +90,8 @@ export class CRTFilter {
       this.beamModulationLocation = null;
       this.humBarLocation = null;
       this.breathingScaleLocation = null;
+      this.sourceResolutionLocation = null;
+      this.antiAliasedPixelsLocation = null;
       return;
     }
 
@@ -96,6 +101,8 @@ export class CRTFilter {
     this.positionLocation = 0;
     this.texCoordLocation = 0;
     this.resolutionLocation = null;
+    this.sourceResolutionLocation = null;
+    this.antiAliasedPixelsLocation = null;
     this.timeLocation = null;
     this.scanlineCountLocation = null;
     this.curvatureLocation = null;
@@ -188,6 +195,8 @@ export class CRTFilter {
             uniform float u_beamModulation;
             uniform float u_humBar;
             uniform float u_breathingScale;
+            uniform vec2 u_sourceResolution;
+            uniform float u_antiAliasedPixels;
             uniform sampler2D u_trail;
             varying vec2 v_texCoord;
 
@@ -217,9 +226,31 @@ export class CRTFilter {
                 return uv_t;
             }
 
+             // Anti-Moiré Sharp Pixel Reconstruction (Continuous Bandlimited Area Integration)
+             vec2 getSmoothUV(vec2 uv) {
+                 if (u_antiAliasedPixels <= 0.5) {
+                     // Standard Nearest-Neighbor discrete stepping
+                     vec2 p = uv * u_sourceResolution;
+                     return (floor(p) + 0.5) / u_sourceResolution;
+                 }
+                 
+                 vec2 p = uv * u_sourceResolution;
+                 #ifdef GL_OES_standard_derivatives
+                 vec2 w = max(fwidth(p), vec2(0.0001));
+                 #else
+                 vec2 w = max(u_sourceResolution / u_resolution, vec2(0.0001));
+                 #endif
+                 
+                 // Analytical integral of a box filter: flat 100% sharp inside pixel center,
+                 // smooth continuous 1-physical-pixel anti-aliased blend exactly at pixel boundaries
+                 vec2 p_smooth = floor(p - 0.5) + 0.5 + clamp((fract(p - 0.5) - 0.5 + 0.5 * w) / w, 0.0, 1.0);
+                 return p_smooth / u_sourceResolution;
+             }
+
              // Helper to prevent texture wrapping/clamping artifacts
              vec3 sampleScreen(vec2 uv) {
-                 vec3 color = texture2D(u_image, uv).rgb;
+                 vec2 smoothUV = getSmoothUV(uv);
+                 vec3 color = texture2D(u_image, smoothUV).rgb;
                  float inBounds = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
                  return color * inBounds;
              }
@@ -472,6 +503,8 @@ export class CRTFilter {
     this.beamModulationLocation = gl.getUniformLocation(this.program, 'u_beamModulation');
     this.humBarLocation = gl.getUniformLocation(this.program, 'u_humBar');
     this.breathingScaleLocation = gl.getUniformLocation(this.program, 'u_breathingScale');
+    this.sourceResolutionLocation = gl.getUniformLocation(this.program, 'u_sourceResolution');
+    this.antiAliasedPixelsLocation = gl.getUniformLocation(this.program, 'u_antiAliasedPixels');
 
     // Create buffer for a quad (2 triangles)
     this.buffer = gl.createBuffer();
@@ -485,13 +518,13 @@ export class CRTFilter {
       gl.STATIC_DRAW
     );
 
-    // Create texture
+    // Create texture with LINEAR filtering for subpixel anti-aliased interpolation
     this.texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
     // Accumulation / Persistence Shader Pass
     const accumVsSource = `
@@ -697,6 +730,10 @@ export class CRTFilter {
     if (this.beamModulationLocation)
       gl.uniform1f(this.beamModulationLocation, settings.beamModulation ?? 0.0);
     if (this.humBarLocation) gl.uniform1f(this.humBarLocation, settings.humBar || 0.0);
+    if (this.sourceResolutionLocation)
+      gl.uniform2f(this.sourceResolutionLocation, sourceCanvas.width, sourceCanvas.height);
+    if (this.antiAliasedPixelsLocation)
+      gl.uniform1f(this.antiAliasedPixelsLocation, settings.antiAliasedPixels !== false ? 1.0 : 0.0);
 
     // High-Voltage Anode Breathing (Raster Bloom expansion on bright scenes)
     let breathingScale = 0.0;
