@@ -466,8 +466,12 @@ export class CRTFilter {
           // Extended decay duration (up to ~1.5 - 2.0 seconds at max persistence)
           float decay = mix(0.20, 0.965, clamp(u_persistence, 0.0, 1.0));
           
+          // Quantization cutoff: subtracting 1.5/255 guarantees 8-bit framebuffers decay to absolute 0
+          // without getting stuck at a 1/255 truncation floor ("phosphor burn-in")
+          vec3 decayedHistory = max(vec3(0.0), history * decay - vec3(1.5 / 255.0));
+
           // Soft translucent trail: enters at 25% of active source brightness for a delicate afterglow
-          vec3 trail = max(current * 0.25, history * decay);
+          vec3 trail = max(current * 0.25, decayedHistory);
 
           // Slight desaturation: phosphor afterglow naturally loses saturation as it decays
           float luma = dot(trail, vec3(0.2126, 0.7152, 0.0722));
@@ -526,6 +530,18 @@ export class CRTFilter {
     return true;
   }
 
+  clearPersistence(): void {
+    if (!this.gl || !this.fboA || !this.fboB) return;
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fboA);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fboB);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
   isValid(): boolean {
     return !!(this.gl && this.program && this.buffer && this.texture);
   }
@@ -580,6 +596,17 @@ export class CRTFilter {
       // Swap ping-pong
       this.fboCurrent = 1 - this.fboCurrent;
       if (targetTex) activeInputTexture = targetTex;
+    } else {
+      // If persistence was disabled, clear history FBOs to prevent stale trails from lingering
+      if (this.fboA && this.fboB) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.fboA);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.fboB);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      }
     }
 
     // 3. Final CRT Pass (Render to Screen)
