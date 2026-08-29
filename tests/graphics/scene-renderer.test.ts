@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { QuadObject } from '../../src/entities/QuadObject';
+import { Entity } from '../../src/entities/Entity';
+import { Box3DObject, createBox3DSurfaceAnchor } from '../../src/entities/Box3DObject';
 import {
   compareEntitiesForRender,
   getEntityRenderSortY,
@@ -32,11 +34,84 @@ function createMockContext(canvas = { width: 800, height: 600 }) {
     drawImage: vi.fn(),
     getTransform: vi.fn(() => ({ a: 1, b: 0, c: 0, d: 1 })),
     fill: vi.fn(),
+    fillRect: vi.fn(),
     stroke: vi.fn(),
   } as unknown as CanvasRenderingContext2D;
 }
 
 describe('SceneRenderer Quad depth sorting', () => {
+  it('reuses a bitmap for unchanged Box3D fragments', () => {
+    const fixture = createSceneFixture();
+    const box = new Box3DObject(fixture.game, 'box');
+    const faces = Array.from({ length: 6 }, (_, index) => {
+      const face = new QuadObject(fixture.game, `box_face_${index}`);
+      face.box3dFaceIndex = index;
+      face.spatial = { parentNodeId: box.name, relation: 'in' };
+      return face;
+    });
+    fixture.scene.addEntity(box as any);
+    faces.forEach((face) => fixture.scene.addEntity(face));
+
+    const target = createMockContext();
+    const back = createMockContext();
+    const front = createMockContext();
+    const canvases = [
+      { width: 0, height: 0, getContext: vi.fn(() => back) },
+      { width: 0, height: 0, getContext: vi.fn(() => front) },
+    ] as unknown as HTMLCanvasElement[];
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvases.shift()) });
+    try {
+      const renderer = new SceneRenderer(fixture.game);
+      renderer.render(target, fixture.scene);
+      renderer.render(target, fixture.scene);
+      expect(back.fill).toHaveBeenCalledTimes(6);
+      expect(front.fill).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('draws a surface-bound Entity between cached Box3D bitmap layers', () => {
+    const fixture = createSceneFixture();
+    const box = new Box3DObject(fixture.game, 'box');
+    const faces = Array.from({ length: 6 }, (_, index) => {
+      const face = new QuadObject(fixture.game, `box_face_${index}`);
+      face.box3dFaceIndex = index;
+      face.spatial = { parentNodeId: box.name, relation: 'in' };
+      return face;
+    });
+    fixture.scene.addEntity(box as any);
+    faces.forEach((face) => fixture.scene.addEntity(face));
+    box.syncFaces(fixture.scene);
+    const prop = new Entity(fixture.game, 0, 0, 20, 20, 'prop');
+    fixture.scene.addEntity(prop);
+    (prop as any).__box3dSurfaceAnchor = createBox3DSurfaceAnchor(
+      fixture.scene,
+      faces[2],
+      prop,
+      0.5,
+      0.5
+    );
+
+    const target = createMockContext();
+    const back = createMockContext();
+    const front = createMockContext();
+    const canvases = [
+      { width: 0, height: 0, getContext: vi.fn(() => back) },
+      { width: 0, height: 0, getContext: vi.fn(() => front) },
+    ] as unknown as HTMLCanvasElement[];
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvases.shift()) });
+    try {
+      const renderer = new SceneRenderer(fixture.game);
+      renderer.render(target, fixture.scene);
+      renderer.render(target, fixture.scene);
+      expect((back.fill as any).mock.calls.length + (front.fill as any).mock.calls.length).toBe(6);
+      expect(target.fillRect).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('batches consecutive compatible blurred screen Quads into one final composite', () => {
     const fixture = createSceneFixture();
     const first = new QuadObject(fixture.game, 'first');

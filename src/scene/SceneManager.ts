@@ -975,6 +975,8 @@ export class SceneManager {
       data.box3dPerspective >= 0
     )
       newScene.box3dPerspective = data.box3dPerspective;
+    if (data.box3dOcclusionMode === 'fast' || data.box3dOcclusionMode === 'exact')
+      newScene.box3dOcclusionMode = data.box3dOcclusionMode;
     if (data.scaling) newScene.scaling = { ...newScene.scaling, ...data.scaling };
 
     if (data.soundEnv) {

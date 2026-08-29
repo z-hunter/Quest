@@ -386,14 +386,18 @@ describe('Box3DObject', () => {
     const game: any = { editor: null };
     const scene = new Scene(game, 'test', 'Test');
     scene.box3dPerspective = 1.5;
+    scene.box3dOcclusionMode = 'fast';
     scene.camera = { x: 80, y: 40, zoom: 1 };
     const box = new Box3DObject(game, 'box');
+    box.occlusionMode = 'fast';
     const face = new QuadObject(game, 'box_face_0');
     face.box3dFaceIndex = 0;
     face.spatial = { parentNodeId: 'box', relation: 'in' };
     scene.entities.push(box as any, face);
     box.syncFaces(scene);
     expect(scene.toJSON().box3dPerspective).toBe(1.5);
+    expect(scene.toJSON().box3dOcclusionMode).toBe('fast');
+    expect(box.toJSON().occlusionMode).toBe('fast');
     expect(box.toJSON()).not.toHaveProperty('perspectiveAmount');
     expect(face.getVisualVertices()).toEqual(face.vertices.map(({ x, y }) => ({ x, y })));
   });
@@ -424,6 +428,44 @@ describe('Box3DObject', () => {
     expect(fragments.length).toBeGreaterThan(faces.length);
     expect(fragments.some((fragment) => fragment.fragmented)).toBe(true);
     expect(raycastBox3DFace(scene, 320, 180)).toBeInstanceOf(QuadObject);
+  });
+
+  it('uses whole-face depth sorting in fast occlusion mode', () => {
+    const game: any = { editor: null, canvas: { width: 640, height: 360 } };
+    const entities: any[] = [];
+    for (const [name, x, rotationY] of [
+      ['a', -25, 25],
+      ['b', 25, -25],
+    ] as const) {
+      const box = new Box3DObject(game, name);
+      box.x = x;
+      box.rotationY = rotationY;
+      entities.push(box);
+      for (let index = 0; index < 6; index++) {
+        const face = new QuadObject(game, `${name}_face_${index}`);
+        face.box3dFaceIndex = index;
+        face.spatial = { parentNodeId: name, relation: 'in' };
+        entities.push(face);
+      }
+    }
+    const scene: any = {
+      game,
+      entities,
+      camera: { x: 0, y: 0, zoom: 1 },
+      box3dPerspective: 1,
+      box3dOcclusionMode: 'exact',
+    };
+    (entities.find((entity) => entity.name === 'b') as Box3DObject).occlusionMode = 'fast';
+    entities.filter((value) => value instanceof Box3DObject).forEach((box) => box.syncFaces(scene));
+    const faces = getVisibleBox3DFaces(scene);
+    const fragments = buildBox3DRenderFragments(scene, faces);
+    expect(fragments).toHaveLength(faces.length);
+    expect(fragments.every((fragment) => !fragment.fragmented)).toBe(true);
+    expect(buildBox3DRenderFragments(scene, faces)).toBe(fragments);
+    const boxB = entities.find((entity) => entity.name === 'b') as Box3DObject;
+    boxB.x += 10;
+    boxB.syncFaces(scene);
+    expect(buildBox3DRenderFragments(scene, getVisibleBox3DFaces(scene))).not.toBe(fragments);
   });
 
   it('uses an editable Cutter Box to open and restore a live hole', () => {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box3DObject } from '../../../entities/Box3DObject';
+import { Select } from '../../common/Select';
 import { usePropertiesContext } from './PropertiesContext';
 
 const fields: Array<[keyof Box3DObject, string]> = [
@@ -74,6 +75,17 @@ export const Box3DProperties: React.FC = () => {
               onChange={(event) => handleChange('cutter', event.target.checked)}
             />{' '}
             Cutter
+          </label>
+          <label className="e-label" style={{ gridColumn: '1 / -1' }}>
+            3D Occlusion
+            <Select
+              value={obj.occlusionMode}
+              onChange={(value) => handleChange('occlusionMode', value)}
+              options={[
+                { value: 'inherit', label: 'Inherit scene' },
+                { value: 'fast', label: 'Fast' },
+              ]}
+            />
           </label>
           {fields.map(([field, label]) =>
             numberInput(label, obj[field] as number, (value) =>

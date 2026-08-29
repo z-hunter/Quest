@@ -6,6 +6,7 @@ import {
   type DistanceModelType,
   type PanningModelType,
 } from '../../../systems/SoundManager';
+import { Select } from '../../common/Select';
 
 type NumberDraftInputProps = {
   value: number;
@@ -198,6 +199,17 @@ export const SceneProperties: React.FC = () => {
                 onChange={(e) =>
                   handleChange('box3dPerspective', Math.max(0, Number(e.target.value) || 0), true)
                 }
+              />
+            </label>
+            <label className="e-label">
+              3D Occlusion
+              <Select
+                value={scene.box3dOcclusionMode}
+                onChange={(value) => handleChange('box3dOcclusionMode', value)}
+                options={[
+                  { value: 'exact', label: 'Exact' },
+                  { value: 'fast', label: 'Fast' },
+                ]}
               />
             </label>
           </div>

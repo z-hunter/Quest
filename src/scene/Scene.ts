@@ -67,6 +67,8 @@ export interface SceneScaling {
   correctionalScale?: number;
 }
 
+export type Box3DOcclusionMode = 'exact' | 'fast';
+
 export interface SceneData {
   id: string;
   name: string;
@@ -94,6 +96,7 @@ export interface SceneData {
   camDeadzoneX?: number;
   camDeadzoneY?: number;
   box3dPerspective?: number;
+  box3dOcclusionMode?: Box3DOcclusionMode;
   camMinX?: number;
   camMaxX?: number;
   camMinY?: number;
@@ -129,6 +132,7 @@ export class Scene {
   camDeadzoneX: number = 50;
   camDeadzoneY: number = 30;
   box3dPerspective: number = 1;
+  box3dOcclusionMode: Box3DOcclusionMode = 'exact';
   editorCameraSuspended: boolean = false;
   editorCameraAnchorPlayerPos: { x: number; y: number } | null = null;
 
@@ -1557,6 +1561,7 @@ export class Scene {
       camDeadzoneX: this.camDeadzoneX,
       camDeadzoneY: this.camDeadzoneY,
       box3dPerspective: this.box3dPerspective,
+      box3dOcclusionMode: this.box3dOcclusionMode,
       camMinX: this.camMinX,
       camMaxX: this.camMaxX,
       camMinY: this.camMinY,

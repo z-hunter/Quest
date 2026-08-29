@@ -7,12 +7,18 @@ import {
   buildBox3DRenderFragments,
   getBox3DAttachedEntityFaces,
   getVisibleBox3DFaces,
+  isBox3DFaceInFrontOfPoint,
+  type Box3DFragment,
 } from '../entities/Box3DObject';
 import { expandPolygonForCoverage, QuadObject } from '../entities/QuadObject';
 
 export class SceneRenderer {
   private blurCanvas: HTMLCanvasElement | null = null;
   private quadBlurCanvas: HTMLCanvasElement | null = null;
+  private box3dBitmapCache = new Map<
+    number,
+    { key: string; back: HTMLCanvasElement; front: HTMLCanvasElement }
+  >();
   game: IGame | null = null;
 
   constructor(game: IGame) {
@@ -256,39 +262,157 @@ export class SceneRenderer {
         this.renderQuadBlurBatch(ctx, batch, scene, halfW, halfH);
       }
 
-      const faces = [
-        ...getVisibleBox3DFaces(scene, layerEntities),
-        ...getBox3DAttachedEntityFaces(scene, layerEntities),
-      ];
-      for (const fragment of buildBox3DRenderFragments(scene, faces)) {
-        const entity = fragment.entity || fragment.quad;
-        ctx.save();
-        ctx.translate(halfW, halfH);
-        ctx.scale(scene.camera.zoom, scene.camera.zoom);
-        ctx.translate(-scene.camera.x, -scene.camera.y);
-        if (fragment.fragmented || fragment.entity) {
-          const clipPoints =
-            !fragment.entity &&
-            entity.opacity >= 1 &&
-            entity.blur <= 0 &&
-            entity.blendMode === 'source-over'
-              ? expandPolygonForCoverage(fragment.projected, 1.25 / scene.camera.zoom)
-              : fragment.projected;
-          ctx.beginPath();
-          clipPoints.forEach((point, index) =>
-            index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y)
-          );
-          ctx.closePath();
-          ctx.clip();
-        }
-        if (fragment.entity) {
-          const p = fragment.entity.parallax !== undefined ? fragment.entity.parallax : 1;
-          ctx.translate(scene.camera.x * (1 - p), scene.camera.y * (1 - p));
-        }
-        entity.render(ctx);
-        ctx.restore();
+      const faces = [...getVisibleBox3DFaces(scene, layerEntities)];
+      const attachedFaces = getBox3DAttachedEntityFaces(scene, layerEntities);
+      if (this.renderCachedBox3DLayer(ctx, scene, layer, faces, attachedFaces, halfW, halfH)) {
+        continue;
       }
+      for (const fragment of buildBox3DRenderFragments(scene, [...faces, ...attachedFaces]))
+        this.renderBox3DFragment(ctx, fragment, scene, halfW, halfH);
     }
+  }
+
+  private renderCachedBox3DLayer(
+    ctx: CanvasRenderingContext2D,
+    scene: Scene,
+    layer: number,
+    staticFaces: any[],
+    attachedFaces: any[],
+    halfW: number,
+    halfH: number
+  ): boolean {
+    if (!staticFaces.length || attachedFaces.length > 1 || typeof document === 'undefined')
+      return false;
+    if (staticFaces.some((face) => face.quad.blendMode !== 'source-over')) return false;
+
+    const entityFragment = attachedFaces.length
+      ? buildBox3DRenderFragments(scene, attachedFaces)[0]
+      : null;
+    const staticFragments = buildBox3DRenderFragments(scene, staticFaces);
+    const anchor = entityFragment?.entity && (entityFragment.entity as any).__box3dSurfaceAnchor;
+    if (entityFragment && !anchor) return false;
+
+    const front = anchor
+      ? staticFragments.filter((fragment) =>
+          isBox3DFaceInFrontOfPoint(scene, fragment, anchor.point)
+        )
+      : [];
+    const back = anchor
+      ? staticFragments.filter(
+          (fragment) => !isBox3DFaceInFrontOfPoint(scene, fragment, anchor.point)
+        )
+      : staticFragments;
+    const key = this.getBox3DBitmapCacheKey(scene, staticFragments, front);
+    let cached = this.box3dBitmapCache.get(layer);
+    if (
+      !cached ||
+      cached.key !== key ||
+      cached.back.width !== ctx.canvas.width ||
+      cached.back.height !== ctx.canvas.height
+    ) {
+      const backCanvas = cached?.back || document.createElement('canvas');
+      const frontCanvas = cached?.front || document.createElement('canvas');
+      backCanvas.width = frontCanvas.width = ctx.canvas.width;
+      backCanvas.height = frontCanvas.height = ctx.canvas.height;
+      const backCtx = backCanvas.getContext('2d');
+      const frontCtx = frontCanvas.getContext('2d');
+      if (!backCtx || !frontCtx) return false;
+      backCtx.clearRect(0, 0, backCanvas.width, backCanvas.height);
+      frontCtx.clearRect(0, 0, frontCanvas.width, frontCanvas.height);
+      for (const fragment of back) this.renderBox3DFragment(backCtx, fragment, scene, halfW, halfH);
+      for (const fragment of front)
+        this.renderBox3DFragment(frontCtx, fragment, scene, halfW, halfH);
+      cached = { key, back: backCanvas, front: frontCanvas };
+      this.box3dBitmapCache.set(layer, cached);
+    }
+    ctx.drawImage(cached.back, 0, 0);
+    if (entityFragment) this.renderBox3DFragment(ctx, entityFragment, scene, halfW, halfH);
+    ctx.drawImage(cached.front, 0, 0);
+    return true;
+  }
+
+  private getBox3DBitmapCacheKey(
+    scene: Scene,
+    fragments: Box3DFragment[],
+    front: Box3DFragment[]
+  ): string {
+    const camera = scene.camera;
+    return [
+      camera.x,
+      camera.y,
+      camera.zoom,
+      scene.box3dPerspective,
+      scene.box3dOcclusionMode,
+      front
+        .map(
+          (fragment) =>
+            `${fragment.quad.name}:${fragment.vertices.map((v) => `${v.x},${v.y},${v.z}`).join(';')}`
+        )
+        .join(','),
+      ...fragments.map((fragment) => {
+        const quad = fragment.quad;
+        return [
+          quad.name,
+          quad.spriteName,
+          quad.image?.complete,
+          quad.image?.naturalWidth,
+          quad.color,
+          quad.opacity,
+          quad.blur,
+          quad.brightness,
+          quad.saturation,
+          quad.contrast,
+          quad.hueShift,
+          quad.filled,
+          quad.isGrid,
+          quad.gridLinesX,
+          quad.gridLinesY,
+          quad.lineWidth,
+          quad.gridColor,
+          quad.checkerboard,
+          quad.secondColor,
+          quad.textureMode,
+          quad.tileScaleX,
+          quad.tileScaleY,
+          ...fragment.vertices.flatMap((vertex) => [vertex.x, vertex.y, vertex.z]),
+        ].join(',');
+      }),
+    ].join('|');
+  }
+
+  private renderBox3DFragment(
+    ctx: CanvasRenderingContext2D,
+    fragment: Box3DFragment,
+    scene: Scene,
+    halfW: number,
+    halfH: number
+  ): void {
+    const entity = fragment.entity || fragment.quad;
+    ctx.save();
+    ctx.translate(halfW, halfH);
+    ctx.scale(scene.camera.zoom, scene.camera.zoom);
+    ctx.translate(-scene.camera.x, -scene.camera.y);
+    if (fragment.fragmented || fragment.entity) {
+      const clipPoints =
+        !fragment.entity &&
+        entity.opacity >= 1 &&
+        entity.blur <= 0 &&
+        entity.blendMode === 'source-over'
+          ? expandPolygonForCoverage(fragment.projected, 1.25 / scene.camera.zoom)
+          : fragment.projected;
+      ctx.beginPath();
+      clipPoints.forEach((point, index) =>
+        index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y)
+      );
+      ctx.closePath();
+      ctx.clip();
+    }
+    if (fragment.entity) {
+      const p = fragment.entity.parallax !== undefined ? fragment.entity.parallax : 1;
+      ctx.translate(scene.camera.x * (1 - p), scene.camera.y * (1 - p));
+    }
+    entity.render(ctx);
+    ctx.restore();
   }
 
   private getQuadBlurBatchKey(entity: Entity): string | null {

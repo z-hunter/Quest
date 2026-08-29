@@ -271,6 +271,8 @@ Coplanar order детерминирован: scene order, затем Box ID, з�
 
 Рассечённые fragments получают Canvas clip по projected polygon, после чего внутри clip рисуется исходный Quad. Для непрозрачного `source-over` используется небольшой coverage overlap, чтобы дальняя оболочка не просвечивала через субпиксельные швы. Texture mesh отдельно расширяет triangle coverage без изменения UV.
 
+Неподвижные `source-over` Box3D fragments кэшируются в screen-space bitmap по Layer. При одном attached `3d-parallax` Entity cache разделяется относительно его surface point на back/front bitmap: Entity рисуется между ними, поэтому движение Entity не перерисовывает Box. Камера, геометрия, видимые face vertices и их визуальные свойства инвалидируют bitmap; несколько attached Entity в одном Layer используют обычный live path.
+
 ## 8. Hit-test и mouse ray
 
 Point selection и runtime interaction используют общий `raycastBox3DFace()`.

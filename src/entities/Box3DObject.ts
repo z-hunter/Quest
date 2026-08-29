@@ -5,6 +5,8 @@ import { QuadObject, type QuadVertex } from './QuadObject';
 import { SceneObject } from './SceneObject';
 
 export type Box3DPoint = { x: number; y: number; z: number };
+export type Box3DAxisMode = 'object' | 'camera';
+export type Box3DOcclusionOverride = 'inherit' | 'fast';
 export type Box3DFace = {
   quad: QuadObject;
   vertices: Box3DPoint[];
@@ -56,6 +58,7 @@ const INHERITED_DISABLED = '__box3dInheritedDisabled';
 // ponytail: CPU BSP is capped for editor-sized scenes; move this batch to a GPU depth buffer if dense 3D scenes become a real requirement.
 const MAX_BSP_FRAGMENTS = 1200;
 let warnedAboutFragmentLimit = false;
+const renderFragmentCache = new WeakMap<object, { key: string; fragments: Box3DFragment[] }>();
 
 /** A transform-only frustum. Its six real Quad children carry all surface behaviour. */
 export class Box3DObject extends SceneObject {
@@ -69,6 +72,11 @@ export class Box3DObject extends SceneObject {
   pivotX: Box3DPoint = { x: 0, y: 0, z: 0 };
   pivotY: Box3DPoint = { x: 0, y: 0, z: 0 };
   pivotZ: Box3DPoint = { x: 0, y: 0, z: 0 };
+  axisMode: Box3DAxisMode = 'object';
+  axisRotationX = 0;
+  axisRotationY = 0;
+  axisRotationZ = 0;
+  occlusionMode: Box3DOcclusionOverride = 'inherit';
   uniformScale = 1;
   scaleX = 1;
   scaleY = 1;
@@ -93,6 +101,11 @@ export class Box3DObject extends SceneObject {
     'pivotX',
     'pivotY',
     'pivotZ',
+    'axisMode',
+    'axisRotationX',
+    'axisRotationY',
+    'axisRotationZ',
+    'occlusionMode',
     'uniformScale',
     'scaleX',
     'scaleY',
@@ -199,10 +212,31 @@ export class Box3DObject extends SceneObject {
       const end = { ...pivot, [axis]: pivot[axis] + length };
       return [this.toWorld(start, rotationIndex), this.toWorld(end, rotationIndex)];
     };
-    return {
+    const axes = {
       x: segment('x', this.pivotX, 2),
       y: segment('y', this.pivotY, 1),
       z: segment('z', this.pivotZ, 0),
+    };
+    const directions = orientBox3DAxisDirections(
+      {
+        x: vectorBetween(axes.x[0], axes.x[1]),
+        y: vectorBetween(axes.y[0], axes.y[1]),
+        z: vectorBetween(axes.z[0], axes.z[1]),
+      },
+      { x: this.axisRotationX, y: this.axisRotationY, z: this.axisRotationZ }
+    );
+    return {
+      x: segmentAround(midpoint(axes.x), directions.x),
+      y: segmentAround(midpoint(axes.y), directions.y),
+      z: segmentAround(midpoint(axes.z), directions.z),
+    };
+  }
+
+  getWorldAxisPivots(): Record<'x' | 'y' | 'z', Box3DPoint> {
+    return {
+      x: this.toWorld(this.pivotX, 2),
+      y: this.toWorld(this.pivotY, 1),
+      z: this.toWorld(this.pivotZ, 0),
     };
   }
 
@@ -376,6 +410,26 @@ export function getBox3DAttachedEntityFaces(scene: any, candidates?: any[]): Box
       },
     ];
   });
+}
+
+/** True when a static face lies between the camera and a surface-bound Entity. */
+export function isBox3DFaceInFrontOfPoint(scene: any, face: Box3DFace, point: Box3DPoint): boolean {
+  const camera = scene.camera || { x: 0, y: 0 };
+  const perspective =
+    Number.isFinite(scene.box3dPerspective) && scene.box3dPerspective >= 0
+      ? scene.box3dPerspective
+      : 1;
+  const focal = getBox3DProjectionFocal(camera);
+  const viewpoint =
+    perspective === 0
+      ? orthographicRayOrigin(camera.x, camera.y, face.vertices)
+      : cameraPoint(camera, perspective, focal);
+  const plane = planeFrom(face.vertices);
+  const cameraSide = signedDistance(plane, viewpoint);
+  const pointSide = signedDistance(plane, point);
+  return (
+    Math.abs(cameraSide) > EPSILON && Math.abs(pointSide) > EPSILON && cameraSide * pointSide < 0
+  );
 }
 
 export function isSpatialDescendantOf(scene: any, value: any, ancestorName: string): boolean {
@@ -654,9 +708,20 @@ export function buildBox3DRenderFragments(scene: any, faces: Box3DFace[]): Box3D
       : [];
   });
   if (!faces.length) return [];
+  const cacheKey = getRenderFragmentCacheKey(scene, faces, camera, perspective, focal);
+  const cached = renderFragmentCache.get(scene);
+  if (cached?.key === cacheKey) return cached.fragments;
+  const cache = (fragments: Box3DFragment[]) => {
+    renderFragmentCache.set(scene, { key: cacheKey, fragments });
+    return fragments;
+  };
   let count = faces.length;
   const ordered: Box3DFace[] = [];
   for (const group of partitionScreenOverlaps(faces, camera, perspective, focal)) {
+    if (usesFastBox3DOcclusion(scene, group)) {
+      ordered.push(...sortBox3DFacesByDepth(group));
+      continue;
+    }
     const root: BspNode = {
       plane: planeFrom(group[0].vertices),
       coplanar: [group[0]],
@@ -682,21 +747,61 @@ export function buildBox3DRenderFragments(scene: any, faces: Box3DFace[]): Box3D
         `Box3D BSP fragment limit (${MAX_BSP_FRAGMENTS}) exceeded; using stable face-depth sorting.`
       );
     }
-    return faces
-      .slice()
-      .sort((a, b) => averageZ(b.vertices) - averageZ(a.vertices) || compareFaceKey(a, b))
-      .map((face) => ({
+    return cache(
+      sortBox3DFacesByDepth(faces).map((face) => ({
         ...face,
         projected: projectFace(face, camera, perspective, focal),
         fragmented: false,
         depthFallback: true,
-      }));
+      }))
+    );
   }
-  return ordered.map((face) => ({
-    ...face,
-    projected: projectFace(face, camera, perspective, focal),
-    fragmented: !!face.fragmented,
-  }));
+  return cache(
+    ordered.map((face) => ({
+      ...face,
+      projected: projectFace(face, camera, perspective, focal),
+      fragmented: !!face.fragmented,
+    }))
+  );
+}
+
+function getRenderFragmentCacheKey(
+  scene: any,
+  faces: Box3DFace[],
+  camera: { x: number; y: number; zoom?: number },
+  perspective: number,
+  focal: number
+): string {
+  return [
+    camera.x,
+    camera.y,
+    camera.zoom,
+    perspective,
+    focal,
+    scene.box3dOcclusionMode || 'exact',
+    ...faces.map((face) =>
+      [
+        face.quad.name,
+        face.entity?.name || '',
+        getBox3DById(scene, face.boxId)?.occlusionMode || 'inherit',
+        face.fragmented ? 1 : 0,
+        ...face.vertices.flatMap((vertex) => [vertex.x, vertex.y, vertex.z]),
+      ].join(',')
+    ),
+  ].join('|');
+}
+
+function usesFastBox3DOcclusion(scene: any, faces: Box3DFace[]): boolean {
+  return (
+    scene.box3dOcclusionMode === 'fast' ||
+    faces.some((face) => getBox3DById(scene, face.boxId)?.occlusionMode === 'fast')
+  );
+}
+
+function sortBox3DFacesByDepth(faces: Box3DFace[]): Box3DFace[] {
+  return faces
+    .slice()
+    .sort((a, b) => averageZ(b.vertices) - averageZ(a.vertices) || compareFaceKey(a, b));
 }
 
 function projectFace(
@@ -1096,6 +1201,38 @@ export function rotateAroundAxis(
     y: pivot.y + matrix[1].x * value.x + matrix[1].y * value.y + matrix[1].z * value.z,
     z: pivot.z + matrix[2].x * value.x + matrix[2].y * value.y + matrix[2].z * value.z,
   };
+}
+
+export function orientBox3DAxisDirections<T extends Record<'x' | 'y' | 'z', Box3DPoint>>(
+  directions: T,
+  rotation: Box3DPoint
+): T {
+  const origin = { x: 0, y: 0, z: 0 };
+  const result = { ...directions } as T;
+  (['z', 'y', 'x'] as const).forEach((axis) => {
+    const degrees = rotation[axis];
+    if (!Number.isFinite(degrees) || degrees === 0) return;
+    const direction = result[axis];
+    (['x', 'y', 'z'] as const).forEach((key) => {
+      result[key] = rotateAroundAxis(result[key], origin, direction, degrees);
+    });
+  });
+  return result;
+}
+
+function vectorBetween(start: Box3DPoint, end: Box3DPoint): Box3DPoint {
+  return { x: end.x - start.x, y: end.y - start.y, z: end.z - start.z };
+}
+
+function midpoint([start, end]: [Box3DPoint, Box3DPoint]): Box3DPoint {
+  return { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2, z: (start.z + end.z) / 2 };
+}
+
+function segmentAround(pivot: Box3DPoint, direction: Box3DPoint): [Box3DPoint, Box3DPoint] {
+  return [
+    { x: pivot.x - direction.x / 2, y: pivot.y - direction.y / 2, z: pivot.z - direction.z / 2 },
+    { x: pivot.x + direction.x / 2, y: pivot.y + direction.y / 2, z: pivot.z + direction.z / 2 },
+  ];
 }
 export function isManagedBox3DFace(value: any): boolean {
   return (
