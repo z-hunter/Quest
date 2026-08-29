@@ -4716,3 +4716,83 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 - BSP остаётся CPU-путём с ограничением числа фрагментов и fallback depth-сортировкой; это не GPU depth buffer и требует контроля сложности сцены.
 - Пересекающиеся выпуклые Box3D поддерживаются, но сложные coplanar/многообъёмные сцены должны проверяться детерминированным scene order.
 - В рабочем дереве находятся пользовательские и документационные изменения; их не следует откатывать автоматически.
+
+## Session Entry - 2026-08-29 03:20 Europe/Warsaw
+
+# Session Summary
+
+## Session Goal
+
+Исследование и реализация передовых графических техник ЭЛТ-шейдера (CRT Shader Pipeline), устранение муара, артефактов нецелочисленного масштабирования (3-4-3-4 px quantization stepping), рассинхронизации WebGL бэкбуфера при смене режимов и реализация кинематографических аналоговых эффектов кинескопа.
+
+## What Was Implemented
+
+### 1. Непрерывные Sinc-интегрированные сканлайны Фурье (Continuous Sinc-Fourier Scanlines)
+- Полностью устранено ступенчатое чередование толщины сканлайнов (3-4-3-4 px) при нецелочисленном разрешении экрана и искривлении.
+- Реализовано аналитическое интегрирование прямоугольного окна физического пикселя $w = \text{fwidth}(pos)$ по гармоникам Фурье ($\text{sinc1} = \frac{\sin(\pi w)}{\pi w}$, $\text{sinc2} = \frac{\sin(2\pi w)}{2\pi w}$) в сочетании с фазовым субпиксельным дизерингом Тимоти Лоттеса.
+
+### 2. Beam Spot Modulation (Динамическая модуляция электронного пучка)
+- Реализовано физически точное поведение кинескопа: на ярких участках электронный луч расширяется, сокращая межстрочные промежутки, тогда как в тенях и тёмных полутонах сохраняется чёткая строчная структура.
+- Добавлен настраиваемый слайдер `Beam Modulation` (`0.0 – 1.0`).
+- Реализовано динамическое скрытие зависимых слайдеров в интерфейсе (`Beam Modulation` и `Scanline Intensity`) и полный zero-cost bypass на GPU при `Scanline Count = 0`.
+
+### 3. Переупорядочивание рассеивания света (Screen Glow Pipeline Reordering)
+- Рассеивание света передней стеклянной панели экрана (`Screen Glow`) перенесено **после** сканлайнов, эмулируя физическое рассеивание внутри толстого свинцового стекла поверх люминофорного растра.
+- Использован режим Screen Blend со снижением насыщенности на 35% и увеличенным радиусом `0.18`.
+
+### 4. 60 Hz AC Hum Bar (Сетевая наводка / Ground Loop Ripple)
+- Реализована мягкая аналоговая волна помехи питания 60 Гц, медленно плывущая снизу вверх по экрану.
+- Для видимости как на светлых, так и на абсолютно чёрных участках сцены скомбинированы модуляция видеоусиления (`color *= 1.0 + wave * gain`) и модуляция пьедестала уровня чёрного (`color += wave * offset`).
+- Добавлен отключаемый слайдер `60 Hz Hum Bar` (`0.0 – 1.0`).
+
+### 5. High-Voltage Anode Breathing (Raster Bloom / «Дыхание» кинескопа)
+- Смоделирована просадка высоковольтного анодного напряжения (25 кВ) при вспышках и ярких кадрах с экспоненциальной RC-фильтрацией ($\sim 80\text{ms}$).
+- Разделена статическая геометрия колбы/бейзеля и динамический электронный растр: пластиковая рамка и кривизна стекла остаются 100% неподвижными, а растр при затемнении формирует аккуратную кайму ($\sim 1.3\%$), расширяясь и заползая на 2–3px под бейзель при ярких вспышках.
+- Добавлен слайдер `HV Breathing` (`0.0 – 1.0`).
+
+### 6. Anti-Moiré 2D Pixel Reconstruction (Непрерывная интеграция пиксельной сетки)
+- Перенесён аппарат непрерывного интегрирования бокс-фильтра на всё 2D-изображение виртуального экрана $320 \times 200$.
+- Внутри тела ретро-пикселя цвет сохраняет 100% чёткость `Nearest-Neighbor`, а субпиксельные границы между пикселями аналитически интерполируются ровно на ширину 1 физического субпикселя дисплея.
+- Устранён муар и мерцание при любом масштабе и сильном `Curvature`.
+- Добавлен чекбокс-переключатель `Anti-Moiré Pixels` в настройках.
+
+### 7. Синхронизация бэкбуфера WebGL при переключении режимов Игра/Редактор
+- Устранено падение разрешения и мыльное масштабирование canvas при переходе Game $\leftrightarrow$ Editor из-за 1-кадровой задержки `clientWidth`/`clientHeight` в DOM. Физический размер буфера теперь задаётся напрямую из геометрии `Math.round(width * dpr)` и `Math.round(height * dpr)`.
+
+### 8. Исправление перетаскивания слайдеров в панели настроек
+- Устранена блокировка перетаскивания ползунка `Bloom` и других слайдеров параметров CRT: значения нормализованы к точным шагам `step="0.05"`, исключая ошибку `stepMismatch` браузера из-за чисел с плавающей запятой или пустых строк.
+
+## Important Problems and Resolutions
+
+- **Неравномерная толщина сканлайнов (3-4-3-4 px):** Гауссовы профили при дробном масштабировании попадают на дискретные пиксели неравномерно. Решено аналитическим интегрированием гармоник Фурье с $\text{sinc}$-множителями.
+- **Размытие экрана при переходе в редактор:** Чтение DOM `clientWidth` после React setState возвращало устаревшие размеры предыдущего фрейма. Решено прямой установкой разрешения canvas из вычисленных `width * dpr`.
+- **Невидимость 60Hz Hum Bar в темноте:** Мультипликативное умножение $0 \times \text{hum} = 0$ давало ноль на чёрном фоне. Решено добавлением аддитивной модуляции уровня чёрного катода.
+- **Пульсация рамки при HV Breathing:** Масштабирование до `curve(uv)` двигало саму рамку и стекло. Решено фиксацией геометрии бейзеля и масштабированием только внутреннего растра `rasterUV`.
+- **Зависание ползунка Bloom:** Невыровненные значения с плавающей точкой вызывали `stepMismatch` в HTML5 range inputs. Решено строгой нормализацией `Number(val.toFixed(2))`.
+
+## Tests and Validation
+
+- `npm run typecheck`: 0 ошибок.
+- `vitest`: Все 876 тестов в 76 тест-сьютах успешно пройдены.
+
+## Commits Created During the Session
+
+- `c77807d`: `feat(graphics): add anti-aliased scanlines with Timothy Lottes phase jitter and derivative beam scaling`
+- `bedb006`: `feat(graphics): implement Sinc-integrated Fourier scanlines to eliminate non-integer scaling line thickness variations`
+- `00b16d3`: `fix(ui): synchronize WebGL canvas resolution immediately with computed layout dimensions on mode switch`
+- `2fe98ac`: `tune(graphics): apply Screen Glow over scanlines and widen diffuse glass scatter radius`
+- `460b954`: `feat(graphics): implement configurable Beam Spot Modulation for dynamic electron beam widening`
+- `9724067`: `feat(editor): hide Beam Modulation when scanlines are 0 and allow disabling scanlines with 0 count`
+- `16b2bbc`: `feat(graphics): implement configurable 60Hz AC Hum Bar and hide scanline intensity when scanline count is 0`
+- `e901a9b`: `tune(graphics): amplify 60Hz Hum Bar with black pedestal and video gain modulation`
+- `fd5ee57`: `feat(graphics): implement configurable High-Voltage Anode Breathing (Raster Bloom)`
+- `612b109`: `tune(graphics): triple maximum High-Voltage Anode Breathing expansion strength`
+- `365f803`: `fix(graphics): isolate HV breathing to internal raster with resting margin and fixed bezel`
+- `8c50b3d`: `feat(graphics): implement Anti-Moiré sharp pixel reconstruction with settings toggle`
+- `fd4f401`: `fix(editor): sanitize and step-align Bloom and CRT range sliders for smooth dragging`
+
+## Remaining Work / Next Steps
+
+- При необходимости исследовать добавление эмуляции теневой маски / апертурной решётки (**Aperture Grille / Shadow Mask / Slot Mask**).
+- Исследовать радиальное сведение лучей (**Radial Misconvergence / Dynamic Convergence**).
+
