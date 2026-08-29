@@ -1,6 +1,6 @@
 ﻿# Scanline Engine вЂ” Technical Specification
 
-> **Last audited**: 2026-08-23. Reflects current `src/` directory structure and implemented subsystems.
+> **Last audited**: 2026-08-29. Reflects current `src/` directory structure and implemented subsystems.
 
 ---
 
@@ -128,18 +128,18 @@ The detailed subsystem contract is [`3dSys.md`](3dSys.md). Start with these inte
 
 | File | 3D responsibility |
 |------|-------------------|
-| `src/entities/Box3DObject.ts` | Eight-vertex frustum, `Z → Y → X` transform, shared Scene projection, face synchronization, BSP, raycast, attached-surface anchors |
+| `src/entities/Box3DObject.ts` | Eight-vertex frustum, `Z → Y → X` transform, shared Scene projection, face synchronization, cached BSP fragments, raycast and attached-surface anchors |
 | `src/entities/QuadObject.ts` | Managed-face metadata and the `box3dCameraProjected` path that prevents a second Quad parallax pass |
-| `src/scene/Scene.ts` | Serializable `box3dPerspective`; face sync before components and after Camera update |
+| `src/scene/Scene.ts` | Serializable `box3dPerspective` and `box3dOcclusionMode`; face sync before components and after Camera update |
 | `src/scene/SceneManager.ts` | `Box3D` JSON loading and restoration of missing numeric faces |
-| `src/graphics/SceneRenderer.ts` | Per-Layer Box3D batch, BSP fragment drawing, alpha/open-face behavior and direct Quad render for unsplit faces |
+| `src/graphics/SceneRenderer.ts` | Per-Layer Box3D batching, exact/fast occlusion, retained static bitmap layers, BSP drawing, alpha/open-face behavior and direct Quad render for unsplit faces |
 | `src/scene/SceneInteraction.ts` | Runtime picking through the shared physical 3D raycast |
 | `src/systems/ThreeDParallaxSystem.ts` | Grid-to-physical-plane anchors and true-depth rendering of Entity attached to managed faces |
 | `src/tools/SceneEditor.ts` | Unified creation/deletion, vertex/axis overlay |
 | `src/tools/editor/EditorTransformManager.ts` | Box/face mouse manipulation and editor raycast selection |
 | `src/tools/editor/EditorSelectionManager.ts` | Recursive Box/faces/descendants copy, duplicate, paste and prefab remapping |
-| `src/components/editor/properties/Box3DProperties.tsx` | Parent Transform 3D / Frustum controls |
-| `src/components/editor/properties/SceneProperties.tsx` | Shared Scene `3D Perspective` control |
+| `src/components/editor/properties/Box3DProperties.tsx` | Parent Transform 3D / Frustum and per-Box occlusion controls |
+| `src/components/editor/properties/SceneProperties.tsx` | Shared Scene `3D Perspective` and `3D Occlusion` controls |
 | `tests/entities/box3d-object.test.ts` | Main geometry, projection, BSP, raycast and degenerate-shape regression suite |
 
 ### `src/platform/` вЂ” Platform Abstraction
@@ -164,7 +164,7 @@ Actor movement (`Actor.moveTo`) uses **A\* grid pathfinding** via `ActorNavigati
 
 ### 3.2 Rendering Pipeline
 
-`SceneRenderer.ts` is stateless: it receives a `Scene` and a Canvas context, then renders the current runtime state without retaining an independent scene model.
+`SceneRenderer.ts` renders the current runtime state from the `Scene`. It does not own a separate scene model, but retains invalidation-safe bitmap caches for static Box3D layers.
 
 1. **Sort** — by `layer`, then depth (normally visual Y). A Quad may instead select `Depth sort mode: By Parallax`: lower global P is farther away and renders first; higher P renders in front. Equal values fall back to the ordinary sorting rule.
 2. **Entity transform** — for each visible entity the renderer establishes the camera transform:
@@ -178,6 +178,12 @@ Actor movement (`Actor.moveTo`) uses **A\* grid pathfinding** via `ActorNavigati
 4. **Passes and overlays** — normal scene layer, optional subscene/focus layer, transient pickup effects, CRT/post-processing, and editor/debug overlays.
 
 The important implementation consequence is that `QuadObject.getVisualVertices()` returns coordinates in the Quad's *inner* draw space, before step 2's outer global-P camera transform. It is not, by itself, the final canvas coordinate.
+
+#### Box3D occlusion and retained layers
+
+`Scene.box3dOcclusionMode` defaults to `exact`: overlapping Box3D faces are split by BSP, preserving geometric occlusion. `fast` depth-sorts whole faces for cheaper rendering; an individual Box3D may override the Scene mode when it can be approximated safely.
+
+For unchanged `source-over` Box3D content, `SceneRenderer` retains each Layer as a screen-space bitmap instead of redrawing its BSP fragments every frame. With exactly one Entity attached through `3d-parallax`, static fragments are separated into back and front bitmaps around that Entity's surface point; the Entity is drawn every frame between them. Camera movement and relevant Box3D/face geometry or visual changes invalidate the cache. Multiple attached Entities and unsupported blend modes use the normal live rendering path.
 
 ### 3.3 Camera, Parallax, and Quad Coordinates (2.5D)
 

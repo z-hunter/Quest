@@ -318,11 +318,11 @@ Disabled Box или managed-face временно делает её spatial desc
 
 `3D Box` доступен в `HierarchyPanel`. Создание идёт через общий `SceneEditor.createObjectFromData()` и `DefaultBox3DData`, затем одной операцией создаются родитель и шесть Quad с именами `<BoxName>_face_0..5`.
 
-`Box3DProperties.tsx` показывает Position, Rotation, Scale, frustum dimensions, offsets и три pivots. `SceneProperties.tsx` содержит общую настройку `3D Perspective`.
+`Box3DProperties.tsx` показывает Position, Rotation, Scale, frustum dimensions, offsets и три pivots. Кнопка `Axes` переключает сериализуемый gizmo между `object` и `camera`; в object-режиме `Axis rotate X/Y/Z` наклоняет только оси вокруг их Pivot, не меняя frustum. `SceneProperties.tsx` содержит общие настройки `3D Perspective` и `3D Occlusion`: `exact` использует BSP, `fast` сортирует целые грани по средней Z-глубине. У каждого Box есть override `Inherit scene/Fast`; Fast затрагивает только его пересекающуюся экранную группу.
 
 Folder с Box3D на любой глубине получает редакторский режим `Compound Box3D`. `Folder.compoundBox3D` хранит общий центр, накопленные rotation/scale/frustum modifiers, offsets и три world-space pivot; отсутствие поля означает старую сцену и ленивую инициализацию по центру общего AABB. Изменения запекаются в дочерние Box3D, поэтому runtime render/collision pipeline не получает отдельной иерархической матрицы. Новые члены группы не получают прошлые transforms, но участвуют во всех следующих изменениях.
 
-Общий gizmo Compound Box3D ориентирован по экрану, а не по текущему повороту группы: X рисуется горизонтально, Y вертикально, Z обозначается точкой/кольцом как ось, направленная в камеру.
+Каждый Compound Box3D хранит независимый режим gizmo. `camera` рисует X горизонтально, Y вертикально и Z точкой/кольцом в направлении камеры; `object` использует мировые направления группы. В object-режиме `axisRotationX/Y/Z` дополнительно наклоняет только gizmo вокруг его Pivot и не влияет на запекаемый group Rotation.
 
 Групповой Rotation композиционно применяет world-axis rotation к текущей ориентации каждого Box3D и раскладывает результат обратно в существующий порядок `Z → Y → X`, компенсируя его собственные pivots через Position. Uniform/axis Scale применяет отношение нового и предыдущего множителя одновременно к параметру формы и смещению Position относительно общего центра. Width/Depth/Height используют только отношение множителей, а Top Offset — разность значений. Минимальный множитель `0.01` сохраняет обратимость запекаемых изменений.
 

@@ -81,6 +81,20 @@ describe('Box3DObject', () => {
     expect(midpoint(axes.x)).toEqual({ x: 140, y: 250, z: 360 });
   });
 
+  it('tilts object axes without changing the Box3D transform', () => {
+    const box = new Box3DObject({} as any, 'box');
+    box.rotationX = 0;
+    box.rotationY = 0;
+    box.rotationZ = 0;
+    box.axisRotationZ = 90;
+
+    const [start, end] = box.getWorldAxisSegments().x;
+
+    expect(end.x - start.x).toBeCloseTo(0, 6);
+    expect(Math.abs(end.y - start.y)).toBeGreaterThan(100);
+    expect(box.getWorldVertices()[0]).toEqual({ x: -50, y: -50, z: -50 });
+  });
+
   it('bakes an exact rigid rotation around an arbitrary world axis', () => {
     const box = new Box3DObject({} as any, 'box');
     Object.assign(box, { x: 30, y: -20, z: 40, rotationX: 17, rotationY: -28, rotationZ: 9 });
@@ -466,6 +480,31 @@ describe('Box3DObject', () => {
     boxB.x += 10;
     boxB.syncFaces(scene);
     expect(buildBox3DRenderFragments(scene, getVisibleBox3DFaces(scene))).not.toBe(fragments);
+  });
+
+  it('retains separate fragment caches for static and surface-bound face sets', () => {
+    const game: any = { editor: null, canvas: { width: 640, height: 360 } };
+    const box = new Box3DObject(game, 'box');
+    const faces = Array.from({ length: 6 }, (_, index) => {
+      const face = new QuadObject(game, `box_face_${index}`);
+      face.box3dFaceIndex = index;
+      face.spatial = { parentNodeId: box.name, relation: 'in' };
+      return face;
+    });
+    const scene: any = {
+      game,
+      entities: [box, ...faces],
+      camera: { x: 0, y: 0, zoom: 1 },
+      box3dPerspective: 1,
+      box3dOcclusionMode: 'exact',
+    };
+    box.syncFaces(scene);
+    const staticFaces = getVisibleBox3DFaces(scene);
+    const surfaceFaces = [staticFaces[0]];
+    const staticFragments = buildBox3DRenderFragments(scene, staticFaces);
+    buildBox3DRenderFragments(scene, surfaceFaces);
+
+    expect(buildBox3DRenderFragments(scene, staticFaces)).toBe(staticFragments);
   });
 
   it('uses an editable Cutter Box to open and restore a live hole', () => {

@@ -6,6 +6,7 @@ import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
 import {
   Box3DObject,
+  type Box3DPoint,
   getBox3DFrontAxisSegment,
   getBox3DProjectionFocal,
   isManagedBox3DFace,
@@ -1581,7 +1582,7 @@ export class SceneEditor {
     const vertices = worldVertices.map(toScreen);
     const hull = convexHull(vertices);
 
-    if (showAxes) {
+    if (showAxes && box.axisMode === 'object') {
       ctx.save();
       if (hull.length >= 3) {
         ctx.beginPath();
@@ -1616,6 +1617,10 @@ export class SceneEditor {
       });
     }
 
+    if (showAxes && box.axisMode === 'camera') {
+      this.renderCameraAlignedBox3DAxes(ctx, box.getWorldAxisPivots(), scene, halfW, halfH);
+    }
+
     vertices.forEach((point, index) => {
       ctx.fillStyle = index < 4 ? '#00e5ff' : '#ff8a3d';
       ctx.beginPath();
@@ -1635,13 +1640,57 @@ export class SceneEditor {
     boxes.forEach((box) => this.renderBox3DSelection(ctx, box, scene, halfW, halfH, false));
     const state = this.selectionManager.getCompoundBox3DState(folder);
     if (!state) return;
+    if (state.axisMode === 'object') {
+      const axes = this.selectionManager.getCompoundBox3DObjectAxisSegments(folder);
+      if (!axes) return;
+      const camera = scene.camera;
+      const perspective =
+        Number.isFinite(scene.box3dPerspective) && scene.box3dPerspective >= 0
+          ? scene.box3dPerspective
+          : 1;
+      const focal = getBox3DProjectionFocal(camera);
+      const toScreen = (point: Box3DPoint) => {
+        const projected = projectBox3DPoint(point, camera, perspective, focal);
+        return {
+          x: halfW + (projected.x - camera.x) * camera.zoom,
+          y: halfH + (projected.y - camera.y) * camera.zoom,
+        };
+      };
+      const colors = { x: '#ff4d4d', y: '#55e06f', z: '#4da3ff' };
+      ctx.lineWidth = 1;
+      (['x', 'y', 'z'] as const).forEach((axis) => {
+        const [start, end] = axes[axis].map(toScreen);
+        ctx.strokeStyle = colors[axis];
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+      });
+      return;
+    }
+    this.renderCameraAlignedBox3DAxes(
+      ctx,
+      { x: state.pivotX, y: state.pivotY, z: state.pivotZ },
+      scene,
+      halfW,
+      halfH
+    );
+  }
+
+  private renderCameraAlignedBox3DAxes(
+    ctx: CanvasRenderingContext2D,
+    pivots: Record<'x' | 'y' | 'z', Box3DPoint>,
+    scene: Scene,
+    halfW: number,
+    halfH: number
+  ): void {
     const camera = scene.camera;
     const perspective =
       Number.isFinite(scene.box3dPerspective) && scene.box3dPerspective >= 0
         ? scene.box3dPerspective
         : 1;
     const focal = getBox3DProjectionFocal(camera);
-    const toScreen = (point: { x: number; y: number; z: number }) => {
+    const toScreen = (point: Box3DPoint) => {
       const projected = projectBox3DPoint(point, camera, perspective, focal);
       return {
         x: halfW + (projected.x - camera.x) * camera.zoom,
@@ -1651,21 +1700,21 @@ export class SceneEditor {
     const colors = { x: '#ff4d4d', y: '#55e06f', z: '#4da3ff' };
     const axisLength = Math.max(50, 100 * camera.zoom);
     ctx.lineWidth = 1;
-    const pivotX = toScreen(state.pivotX);
+    const pivotX = toScreen(pivots.x);
     ctx.strokeStyle = colors.x;
     ctx.beginPath();
     ctx.moveTo(pivotX.x - axisLength, pivotX.y);
     ctx.lineTo(pivotX.x + axisLength, pivotX.y);
     ctx.stroke();
 
-    const pivotY = toScreen(state.pivotY);
+    const pivotY = toScreen(pivots.y);
     ctx.strokeStyle = colors.y;
     ctx.beginPath();
     ctx.moveTo(pivotY.x, pivotY.y - axisLength);
     ctx.lineTo(pivotY.x, pivotY.y + axisLength);
     ctx.stroke();
 
-    const pivotZ = toScreen(state.pivotZ);
+    const pivotZ = toScreen(pivots.z);
     ctx.strokeStyle = colors.z;
     ctx.beginPath();
     ctx.arc(pivotZ.x, pivotZ.y, 6, 0, Math.PI * 2);

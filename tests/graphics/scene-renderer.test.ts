@@ -96,17 +96,28 @@ describe('SceneRenderer Quad depth sorting', () => {
     const target = createMockContext();
     const back = createMockContext();
     const front = createMockContext();
-    const canvases = [
-      { width: 0, height: 0, getContext: vi.fn(() => back) },
-      { width: 0, height: 0, getContext: vi.fn(() => front) },
-    ] as unknown as HTMLCanvasElement[];
+    const canvases = Array.from(
+      { length: 6 },
+      (_, index) =>
+        ({
+          width: 0,
+          height: 0,
+          getContext: vi.fn(() => (index % 2 ? front : back)),
+        }) as HTMLCanvasElement
+    );
     vi.stubGlobal('document', { createElement: vi.fn(() => canvases.shift()) });
     try {
       const renderer = new SceneRenderer(fixture.game);
       renderer.render(target, fixture.scene);
+      const cachedStaticDraws =
+        (back.fill as any).mock.calls.length + (front.fill as any).mock.calls.length;
+      const liveEntityDraws = (target.fillRect as any).mock.calls.length;
       renderer.render(target, fixture.scene);
-      expect((back.fill as any).mock.calls.length + (front.fill as any).mock.calls.length).toBe(6);
-      expect(target.fillRect).toHaveBeenCalledTimes(2);
+      expect(cachedStaticDraws).toBeGreaterThan(0);
+      expect((back.fill as any).mock.calls.length + (front.fill as any).mock.calls.length).toBe(
+        cachedStaticDraws
+      );
+      expect((target.fillRect as any).mock.calls.length).toBe(liveEntityDraws * 2);
     } finally {
       vi.unstubAllGlobals();
     }

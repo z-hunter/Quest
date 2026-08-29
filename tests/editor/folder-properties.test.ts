@@ -31,6 +31,10 @@ function render(compound: boolean) {
     pivotX: { x: 0, y: 0, z: 0 },
     pivotY: { x: 0, y: 0, z: 0 },
     pivotZ: { x: 0, y: 0, z: 0 },
+    axisMode: 'camera' as const,
+    axisRotationX: 0,
+    axisRotationY: 0,
+    axisRotationZ: 0,
   };
   const context = {
     game: {
@@ -68,6 +72,7 @@ describe('FolderProperties Compound Box3D mode', () => {
     expect(html).toContain('Compound Box3D / Frustum');
     expect(html).toContain('Move X');
     expect(html).toContain('Pivot Z');
+    expect(html).toContain('Axes: Camera');
     expect(html).not.toContain('Cutter');
     expect(html).not.toContain('Select Contents');
     expect(html).not.toContain('Children Defaults');

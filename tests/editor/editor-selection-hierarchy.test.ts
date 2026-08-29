@@ -181,6 +181,7 @@ describe('EditorSelectionManager Compound Box3D', () => {
     expect(state?.y).toBe(0);
     expect(state?.z).toBe(0);
     expect(state?.pivotX).toEqual({ x: 5, y: 0, z: 0 });
+    expect(state?.axisMode).toBe('camera');
   });
 
   it('scales member sizes and spacing without retroactively transforming new members', () => {
@@ -243,5 +244,20 @@ describe('EditorSelectionManager Compound Box3D', () => {
     const restored = Folder.fromData(game, folder.toJSON());
     expect(restored.compoundBox3D?.rotationZ).toBe(90);
     expect(restored.compoundBox3D?.pivotZ).toEqual(state.pivotZ);
+  });
+
+  it('stores independent Compound axis mode and tilt without transforming members', () => {
+    const { scene, manager, game } = setup();
+    const folder = new Folder(game, 'Group');
+    folder.folderId = 'group';
+    scene.folders.push(folder);
+    const box = addBox(scene, game, 'Box', folder.folderId, 20);
+    const before = box.getWorldVertices();
+
+    expect(manager.applyCompoundBox3DAxisSetting(folder, 'axisMode', 'object')).toBe(true);
+    expect(manager.applyCompoundBox3DAxisSetting(folder, 'axisRotationZ', 90)).toBe(true);
+    expect(folder.compoundBox3D?.axisMode).toBe('object');
+    expect(folder.compoundBox3D?.axisRotationZ).toBe(90);
+    expect(box.getWorldVertices()).toEqual(before);
   });
 });

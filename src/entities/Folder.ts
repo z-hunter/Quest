@@ -1,6 +1,6 @@
 import type { IGame } from '../core/IGame';
 import { Entity } from './Entity';
-import type { Box3DPoint } from './Box3DObject';
+import type { Box3DAxisMode, Box3DPoint } from './Box3DObject';
 
 let _folderCounter = 0;
 function generateFolderId(): string {
@@ -42,6 +42,10 @@ export interface CompoundBox3DState {
   pivotX: Box3DPoint;
   pivotY: Box3DPoint;
   pivotZ: Box3DPoint;
+  axisMode: Box3DAxisMode;
+  axisRotationX: number;
+  axisRotationY: number;
+  axisRotationZ: number;
 }
 
 export class Folder extends Entity {

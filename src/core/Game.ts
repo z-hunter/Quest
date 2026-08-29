@@ -32,6 +32,8 @@ import { ActorNavigationService } from '../systems/ActorNavigationService';
 import { ActorWorldQuery } from '../systems/ActorWorldQuery';
 import { ActorCommandExecutor } from '../mechanics/ActorCommandExecutor';
 import { SaveManager } from '../systems/SaveManager';
+import { isTauriRuntime } from '../platform/fileApi';
+import { createDebugApi } from '../debug/debugApi';
 
 type EditorViewportZoom = 'fit' | '1' | '1.5' | '2';
 
@@ -252,13 +254,21 @@ export class Game implements IGame {
     this.semantic = new GameSemanticAPI(this);
     this.saveManager = new SaveManager(this);
 
+    this.editor = new SceneEditor(this);
+    this.spriteEditor = new SpriteEditor(this);
+
     if (typeof window !== 'undefined') {
       const debugWindow = window as Window & {
         __QUEST_DEBUG__?: Record<string, unknown>;
+        __SCANLINE_DEBUG__?: Record<string, unknown>;
       };
+      const isWeb = !isTauriRuntime();
+      const debugApi = isWeb ? createDebugApi(this) : undefined;
+
       debugWindow.__QUEST_DEBUG__ = {
         ...(debugWindow.__QUEST_DEBUG__ || {}),
         game: this,
+        ...(debugApi ? { api: debugApi } : {}),
         profileCurrentSceneMemory: () => this.sceneManager.profileCurrentSceneMemory(),
         profileScenes: (sceneIds: string[]) => this.sceneManager.profileScenes(sceneIds),
         enablePutDebug: () => {
@@ -269,9 +279,15 @@ export class Game implements IGame {
         },
         getScriptRuntimeState: () => ScriptRegistry.getRuntimeState(),
       };
+
+      if (debugApi) {
+        debugWindow.__SCANLINE_DEBUG__ = {
+          ...(debugWindow.__SCANLINE_DEBUG__ || {}),
+          api: debugApi,
+          game: this,
+        };
+      }
     }
-    this.editor = new SceneEditor(this);
-    this.spriteEditor = new SpriteEditor(this);
 
     this.sceneManager.loadScene('test_room.json');
 
@@ -1231,7 +1247,7 @@ export class Game implements IGame {
             antiAliasedPixels:
               typeof loadedCrt.antiAliasedPixels === 'boolean'
                 ? loadedCrt.antiAliasedPixels
-                : this.settings.crt.antiAliasedPixels ?? true,
+                : (this.settings.crt.antiAliasedPixels ?? true),
             enabled:
               typeof loadedCrt.enabled === 'boolean'
                 ? loadedCrt.enabled

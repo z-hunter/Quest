@@ -9,7 +9,19 @@ import { Select } from '../../common/Select';
 import { Folder, type CompoundBox3DState } from '../../../entities/Folder';
 
 const compoundFields: Array<
-  [Exclude<keyof CompoundBox3DState, 'pivotX' | 'pivotY' | 'pivotZ'>, string]
+  [
+    Exclude<
+      keyof CompoundBox3DState,
+      | 'pivotX'
+      | 'pivotY'
+      | 'pivotZ'
+      | 'axisMode'
+      | 'axisRotationX'
+      | 'axisRotationY'
+      | 'axisRotationZ'
+    >,
+    string,
+  ]
 > = [
   ['x', 'Move X'],
   ['y', 'Move Y'],
@@ -80,6 +92,18 @@ export const FolderProperties: React.FC = () => {
         />
       </label>
     );
+    const applyAxisSetting = (
+      field: 'axisMode' | 'axisRotationX' | 'axisRotationY' | 'axisRotationZ',
+      value: 'object' | 'camera' | number
+    ) => {
+      saveUndoIfNeeded();
+      if (
+        game.editor.selectionManager.applyCompoundBox3DAxisSetting(folder as Folder, field, value)
+      ) {
+        incrementObjectVersion();
+      }
+    };
+    const axisMode = compound.axisMode || 'camera';
     const pivotControls = (key: 'pivotX' | 'pivotY' | 'pivotZ', label: string) => (
       <React.Fragment key={key}>
         <div
@@ -119,6 +143,23 @@ export const FolderProperties: React.FC = () => {
             {compoundFields.map(([field, label]) =>
               numberInput(label, compound[field], (value) => applyField(field, value))
             )}
+            <button
+              aria-label="Axis mode"
+              type="button"
+              className="e-button"
+              style={{ gridColumn: '1 / -1' }}
+              onClick={() =>
+                applyAxisSetting('axisMode', axisMode === 'object' ? 'camera' : 'object')
+              }
+            >
+              Axes: {axisMode === 'object' ? 'Object' : 'Camera'}
+            </button>
+            {axisMode === 'object' &&
+              (['X', 'Y', 'Z'] as const).map((axis) =>
+                numberInput(`Axis rotate ${axis}`, compound[`axisRotation${axis}`] ?? 0, (value) =>
+                  applyAxisSetting(`axisRotation${axis}`, value)
+                )
+              )}
             {pivotControls('pivotX', 'Pivot X')}
             {pivotControls('pivotY', 'Pivot Y')}
             {pivotControls('pivotZ', 'Pivot Z')}

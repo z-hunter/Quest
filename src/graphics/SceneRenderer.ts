@@ -7,25 +7,77 @@ import {
   buildBox3DRenderFragments,
   getBox3DAttachedEntityFaces,
   getVisibleBox3DFaces,
-  isBox3DFaceInFrontOfPoint,
   type Box3DFragment,
 } from '../entities/Box3DObject';
 import { expandPolygonForCoverage, QuadObject } from '../entities/QuadObject';
+
+export interface Box3DLayerDiagnostics {
+  layer: number;
+  cached: boolean;
+  fallbackReason: string | null;
+  visibleFacesCount: number;
+  bspFragmentsCount: number;
+  staticBitmapCommandsCount: number;
+  surfaceEntityCommandsCount: number;
+  commandSequence: string[];
+  commandSequenceSummary: string;
+}
+
+export interface Box3DRenderDiagnostics {
+  bitmapCacheHits: number;
+  bitmapCacheMisses: number;
+  totalVisibleFaces: number;
+  totalBspFragments: number;
+  totalStaticBitmapCommands: number;
+  totalSurfaceEntityCommands: number;
+  layers: Box3DLayerDiagnostics[];
+}
 
 export class SceneRenderer {
   private blurCanvas: HTMLCanvasElement | null = null;
   private quadBlurCanvas: HTMLCanvasElement | null = null;
   private box3dBitmapCache = new Map<
     number,
-    { key: string; back: HTMLCanvasElement; front: HTMLCanvasElement }
+    { key: string; commands: Array<{ canvas?: HTMLCanvasElement; fragment?: Box3DFragment }> }
   >();
+  private box3dHits = 0;
+  private box3dMisses = 0;
+  private box3dLayerDiagnostics = new Map<number, Box3DLayerDiagnostics>();
   game: IGame | null = null;
 
   constructor(game: IGame) {
     this.game = game;
   }
 
+  getBox3DDiagnostics(): Box3DRenderDiagnostics {
+    const layers = Array.from(this.box3dLayerDiagnostics.values()).sort(
+      (a, b) => a.layer - b.layer
+    );
+    let totalVisibleFaces = 0;
+    let totalBspFragments = 0;
+    let totalStaticBitmapCommands = 0;
+    let totalSurfaceEntityCommands = 0;
+
+    for (const l of layers) {
+      totalVisibleFaces += l.visibleFacesCount;
+      totalBspFragments += l.bspFragmentsCount;
+      totalStaticBitmapCommands += l.staticBitmapCommandsCount;
+      totalSurfaceEntityCommands += l.surfaceEntityCommandsCount;
+    }
+
+    return {
+      bitmapCacheHits: this.box3dHits,
+      bitmapCacheMisses: this.box3dMisses,
+      totalVisibleFaces,
+      totalBspFragments,
+      totalStaticBitmapCommands,
+      totalSurfaceEntityCommands,
+      layers,
+    };
+  }
+
   render(ctx: CanvasRenderingContext2D, scene: Scene): void {
+    this.box3dLayerDiagnostics.clear();
     (scene.entities as any[])
       .filter((entity) => entity instanceof Box3DObject)
       .forEach((box: Box3DObject) => box.syncFaces(scene));
@@ -281,61 +333,133 @@ export class SceneRenderer {
     halfW: number,
     halfH: number
   ): boolean {
-    if (!staticFaces.length || attachedFaces.length > 1 || typeof document === 'undefined')
+    const fragments = buildBox3DRenderFragments(scene, [...staticFaces, ...attachedFaces]);
+    const bspFragmentsCount = fragments.length;
+    const visibleFacesCount = staticFaces.length + attachedFaces.length;
+
+    let fallbackReason: string | null = null;
+    if (!staticFaces.length) {
+      fallbackReason = 'no static faces';
+    } else if (typeof document === 'undefined') {
+      fallbackReason = 'unavailable canvas';
+    } else if (staticFaces.some((face) => face.quad.blendMode !== 'source-over')) {
+      fallbackReason = 'unsupported blend mode';
+    }
+
+    if (fallbackReason !== null) {
+      const commandSequence = fragments.map((f) => f.entity?.name || f.quad?.name || 'fragment');
+      this.box3dLayerDiagnostics.set(layer, {
+        layer,
+        cached: false,
+        fallbackReason,
+        visibleFacesCount,
+        bspFragmentsCount,
+        staticBitmapCommandsCount: 0,
+        surfaceEntityCommandsCount: fragments.filter((f) => f.entity).length,
+        commandSequence,
+        commandSequenceSummary: commandSequence.join(' → '),
+      });
       return false;
-    if (staticFaces.some((face) => face.quad.blendMode !== 'source-over')) return false;
+    }
 
-    const entityFragment = attachedFaces.length
-      ? buildBox3DRenderFragments(scene, attachedFaces)[0]
-      : null;
-    const staticFragments = buildBox3DRenderFragments(scene, staticFaces);
-    const anchor = entityFragment?.entity && (entityFragment.entity as any).__box3dSurfaceAnchor;
-    if (entityFragment && !anchor) return false;
-
-    const front = anchor
-      ? staticFragments.filter((fragment) =>
-          isBox3DFaceInFrontOfPoint(scene, fragment, anchor.point)
-        )
-      : [];
-    const back = anchor
-      ? staticFragments.filter(
-          (fragment) => !isBox3DFaceInFrontOfPoint(scene, fragment, anchor.point)
-        )
-      : staticFragments;
-    const key = this.getBox3DBitmapCacheKey(scene, staticFragments, front);
+    const key = this.getBox3DBitmapCacheKey(scene, fragments);
     let cached = this.box3dBitmapCache.get(layer);
-    if (
-      !cached ||
-      cached.key !== key ||
-      cached.back.width !== ctx.canvas.width ||
-      cached.back.height !== ctx.canvas.height
-    ) {
-      const backCanvas = cached?.back || document.createElement('canvas');
-      const frontCanvas = cached?.front || document.createElement('canvas');
-      backCanvas.width = frontCanvas.width = ctx.canvas.width;
-      backCanvas.height = frontCanvas.height = ctx.canvas.height;
-      const backCtx = backCanvas.getContext('2d');
-      const frontCtx = frontCanvas.getContext('2d');
-      if (!backCtx || !frontCtx) return false;
-      backCtx.clearRect(0, 0, backCanvas.width, backCanvas.height);
-      frontCtx.clearRect(0, 0, frontCanvas.width, frontCanvas.height);
-      for (const fragment of back) this.renderBox3DFragment(backCtx, fragment, scene, halfW, halfH);
-      for (const fragment of front)
-        this.renderBox3DFragment(frontCtx, fragment, scene, halfW, halfH);
-      cached = { key, back: backCanvas, front: frontCanvas };
+    const isHit =
+      cached &&
+      cached.key === key &&
+      !cached.commands.some(
+        (command) =>
+          command.canvas &&
+          (command.canvas.width !== ctx.canvas.width || command.canvas.height !== ctx.canvas.height)
+      );
+
+    if (isHit) {
+      this.box3dHits++;
+    } else {
+      this.box3dMisses++;
+      const commands: Array<{ canvas?: HTMLCanvasElement; fragment?: Box3DFragment }> = [];
+      let staticFragments: Box3DFragment[] = [];
+      const flushStaticFragments = () => {
+        if (!staticFragments.length) return true;
+        const canvas = document.createElement('canvas');
+        canvas.width = ctx.canvas.width;
+        canvas.height = ctx.canvas.height;
+        const staticCtx = canvas.getContext('2d');
+        if (!staticCtx) return false;
+        for (const fragment of staticFragments)
+          this.renderBox3DFragment(staticCtx, fragment, scene, halfW, halfH);
+        commands.push({ canvas });
+        staticFragments = [];
+        return true;
+      };
+      for (const fragment of fragments) {
+        if (!fragment.entity) {
+          staticFragments.push(fragment);
+          continue;
+        }
+        if (!flushStaticFragments()) {
+          this.box3dLayerDiagnostics.set(layer, {
+            layer,
+            cached: false,
+            fallbackReason: 'unavailable canvas',
+            visibleFacesCount,
+            bspFragmentsCount,
+            staticBitmapCommandsCount: 0,
+            surfaceEntityCommandsCount: fragments.filter((f) => f.entity).length,
+            commandSequence: fragments.map((f) => f.entity?.name || f.quad?.name || 'fragment'),
+            commandSequenceSummary: fragments
+              .map((f) => f.entity?.name || f.quad?.name || 'fragment')
+              .join(' → '),
+          });
+          return false;
+        }
+        commands.push({ fragment });
+      }
+      if (!flushStaticFragments()) {
+        this.box3dLayerDiagnostics.set(layer, {
+          layer,
+          cached: false,
+          fallbackReason: 'unavailable canvas',
+          visibleFacesCount,
+          bspFragmentsCount,
+          staticBitmapCommandsCount: 0,
+          surfaceEntityCommandsCount: fragments.filter((f) => f.entity).length,
+          commandSequence: fragments.map((f) => f.entity?.name || f.quad?.name || 'fragment'),
+          commandSequenceSummary: fragments
+            .map((f) => f.entity?.name || f.quad?.name || 'fragment')
+            .join(' → '),
+        });
+        return false;
+      }
+      cached = { key, commands };
       this.box3dBitmapCache.set(layer, cached);
     }
-    ctx.drawImage(cached.back, 0, 0);
-    if (entityFragment) this.renderBox3DFragment(ctx, entityFragment, scene, halfW, halfH);
-    ctx.drawImage(cached.front, 0, 0);
+
+    const commandSequence = cached!.commands.map((c) =>
+      c.canvas ? 'bitmap' : c.fragment?.entity?.name || 'entity'
+    );
+
+    this.box3dLayerDiagnostics.set(layer, {
+      layer,
+      cached: true,
+      fallbackReason: null,
+      visibleFacesCount,
+      bspFragmentsCount,
+      staticBitmapCommandsCount: cached!.commands.filter((c) => c.canvas).length,
+      surfaceEntityCommandsCount: cached!.commands.filter((c) => c.fragment?.entity).length,
+      commandSequence,
+      commandSequenceSummary: commandSequence.join(' → '),
+    });
+
+    for (const command of cached!.commands) {
+      if (command.canvas) ctx.drawImage(command.canvas, 0, 0);
+      else if (command.fragment)
+        this.renderBox3DFragment(ctx, command.fragment, scene, halfW, halfH);
+    }
     return true;
   }
 
-  private getBox3DBitmapCacheKey(
-    scene: Scene,
-    fragments: Box3DFragment[],
-    front: Box3DFragment[]
-  ): string {
+  private getBox3DBitmapCacheKey(scene: Scene, fragments: Box3DFragment[]): string {
     const camera = scene.camera;
     return [
       camera.x,
@@ -343,15 +467,10 @@ export class SceneRenderer {
       camera.zoom,
       scene.box3dPerspective,
       scene.box3dOcclusionMode,
-      front
-        .map(
-          (fragment) =>
-            `${fragment.quad.name}:${fragment.vertices.map((v) => `${v.x},${v.y},${v.z}`).join(';')}`
-        )
-        .join(','),
       ...fragments.map((fragment) => {
         const quad = fragment.quad;
         return [
+          fragment.entity?.name || '',
           quad.name,
           quad.spriteName,
           quad.image?.complete,

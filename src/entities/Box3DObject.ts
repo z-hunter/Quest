@@ -57,8 +57,9 @@ const SURFACE_OFFSET = 0.01;
 const INHERITED_DISABLED = '__box3dInheritedDisabled';
 // ponytail: CPU BSP is capped for editor-sized scenes; move this batch to a GPU depth buffer if dense 3D scenes become a real requirement.
 const MAX_BSP_FRAGMENTS = 1200;
+const MAX_RENDER_FRAGMENT_CACHE_ENTRIES = 4;
 let warnedAboutFragmentLimit = false;
-const renderFragmentCache = new WeakMap<object, { key: string; fragments: Box3DFragment[] }>();
+const renderFragmentCache = new WeakMap<object, Map<string, Box3DFragment[]>>();
 
 /** A transform-only frustum. Its six real Quad children carry all surface behaviour. */
 export class Box3DObject extends SceneObject {
@@ -709,10 +710,15 @@ export function buildBox3DRenderFragments(scene: any, faces: Box3DFace[]): Box3D
   });
   if (!faces.length) return [];
   const cacheKey = getRenderFragmentCacheKey(scene, faces, camera, perspective, focal);
-  const cached = renderFragmentCache.get(scene);
-  if (cached?.key === cacheKey) return cached.fragments;
+  const sceneCache = renderFragmentCache.get(scene);
+  const cached = sceneCache?.get(cacheKey);
+  if (cached) return cached;
   const cache = (fragments: Box3DFragment[]) => {
-    renderFragmentCache.set(scene, { key: cacheKey, fragments });
+    const entries = sceneCache || new Map<string, Box3DFragment[]>();
+    entries.set(cacheKey, fragments);
+    if (entries.size > MAX_RENDER_FRAGMENT_CACHE_ENTRIES)
+      entries.delete(entries.keys().next().value!);
+    renderFragmentCache.set(scene, entries);
     return fragments;
   };
   let count = faces.length;

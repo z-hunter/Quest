@@ -3,7 +3,13 @@ import { SceneObject } from '../../entities/SceneObject';
 import { Actor } from '../../entities/Actor';
 import { Entity } from '../../entities/Entity';
 import { QuadObject, type QuadVertex } from '../../entities/QuadObject';
-import { Box3DObject, rotateAroundAxis, type Box3DPoint } from '../../entities/Box3DObject';
+import {
+  Box3DObject,
+  orientBox3DAxisDirections,
+  rotateAroundAxis,
+  type Box3DAxisMode,
+  type Box3DPoint,
+} from '../../entities/Box3DObject';
 import { Folder, type CompoundBox3DState } from '../../entities/Folder';
 import { Walkbox } from '../../entities/Walkbox';
 import { Triggerbox } from '../../entities/Triggerbox';
@@ -57,7 +63,10 @@ type PreparedPreview = {
 
 const ASSEMBLY_EPSILON = 0.0001;
 const COMPOUND_MIN_MULTIPLIER = 0.01;
-type CompoundNumericField = Exclude<keyof CompoundBox3DState, 'pivotX' | 'pivotY' | 'pivotZ'>;
+type CompoundNumericField = Exclude<
+  keyof CompoundBox3DState,
+  'pivotX' | 'pivotY' | 'pivotZ' | 'axisMode' | 'axisRotationX' | 'axisRotationY' | 'axisRotationZ'
+>;
 
 export class EditorSelectionManager {
   private editor: SceneEditor;
@@ -285,13 +294,81 @@ export class EditorSelectionManager {
       pivotX: { ...center },
       pivotY: { ...center },
       pivotZ: { ...center },
+      axisMode: 'camera',
+      axisRotationX: 0,
+      axisRotationY: 0,
+      axisRotationZ: 0,
     };
   }
 
   getCompoundBox3DState(folder: Folder): CompoundBox3DState | null {
     const boxes = this.getCompoundBox3DObjects(folder);
     if (boxes.length === 0) return null;
-    return JSON.parse(JSON.stringify(folder.compoundBox3D || this.createCompoundBox3DState(boxes)));
+    const defaults = this.createCompoundBox3DState(boxes);
+    const state = folder.compoundBox3D || defaults;
+    return {
+      ...defaults,
+      ...JSON.parse(JSON.stringify(state)),
+      pivotX: { ...defaults.pivotX, ...state.pivotX },
+      pivotY: { ...defaults.pivotY, ...state.pivotY },
+      pivotZ: { ...defaults.pivotZ, ...state.pivotZ },
+    };
+  }
+
+  getCompoundBox3DObjectAxisSegments(
+    folder: Folder
+  ): Record<'x' | 'y' | 'z', [Box3DPoint, Box3DPoint]> | null {
+    const state = this.getCompoundBox3DState(folder);
+    const boxes = this.getCompoundBox3DObjects(folder);
+    if (!state || boxes.length === 0) return null;
+    const vertices = boxes.flatMap((box) => box.getWorldVertices());
+    const length = Math.max(
+      100,
+      Math.max(...vertices.map((point) => point.x)) - Math.min(...vertices.map((point) => point.x)),
+      Math.max(...vertices.map((point) => point.y)) - Math.min(...vertices.map((point) => point.y)),
+      Math.max(...vertices.map((point) => point.z)) - Math.min(...vertices.map((point) => point.z))
+    );
+    const directions = orientBox3DAxisDirections(this.getCompoundAxisDirections(state), {
+      x: state.axisRotationX,
+      y: state.axisRotationY,
+      z: state.axisRotationZ,
+    });
+    const segment = (pivot: Box3DPoint, direction: Box3DPoint): [Box3DPoint, Box3DPoint] => [
+      {
+        x: pivot.x - direction.x * length,
+        y: pivot.y - direction.y * length,
+        z: pivot.z - direction.z * length,
+      },
+      {
+        x: pivot.x + direction.x * length,
+        y: pivot.y + direction.y * length,
+        z: pivot.z + direction.z * length,
+      },
+    ];
+    return {
+      x: segment(state.pivotX, directions.x),
+      y: segment(state.pivotY, directions.y),
+      z: segment(state.pivotZ, directions.z),
+    };
+  }
+
+  applyCompoundBox3DAxisSetting(
+    folder: Folder,
+    field: 'axisMode' | 'axisRotationX' | 'axisRotationY' | 'axisRotationZ',
+    value: Box3DAxisMode | number
+  ): boolean {
+    const state = this.getCompoundBox3DState(folder);
+    if (!state) return false;
+    if (field === 'axisMode') {
+      if (value !== 'object' && value !== 'camera') return false;
+    } else if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return false;
+    }
+    (state as any)[field] = value;
+    folder.compoundBox3D = state;
+    this.editor.updateUIFromObject();
+    this.editor.refreshHierarchy();
+    return true;
   }
 
   private getCompoundAxisDirections(

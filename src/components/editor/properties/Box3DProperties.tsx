@@ -92,6 +92,23 @@ export const Box3DProperties: React.FC = () => {
               handleChange(String(field), value, true)
             )
           )}
+          <button
+            aria-label="Axis mode"
+            type="button"
+            className="e-button"
+            style={{ gridColumn: '1 / -1' }}
+            onClick={() =>
+              handleChange('axisMode', obj.axisMode === 'object' ? 'camera' : 'object')
+            }
+          >
+            Axes: {obj.axisMode === 'object' ? 'Object' : 'Camera'}
+          </button>
+          {obj.axisMode === 'object' &&
+            (['X', 'Y', 'Z'] as const).map((axis) =>
+              numberInput(`Axis rotate ${axis}`, obj[`axisRotation${axis}`], (value) =>
+                handleChange(`axisRotation${axis}`, value, true)
+              )
+            )}
           {pivotControls('pivotX', 'Pivot X')}
           {pivotControls('pivotY', 'Pivot Y')}
           {pivotControls('pivotZ', 'Pivot Z')}
