@@ -26,6 +26,12 @@ export interface QuadPoint {
   y: number;
 }
 
+export interface QuadRenderOptions {
+  skipFilters?: boolean;
+  opacity?: number;
+  blendMode?: GlobalCompositeOperation;
+}
+
 export interface QuadSurfaceMetrics {
   inside: boolean;
   u: number;
@@ -978,7 +984,8 @@ export class QuadObject extends Entity {
   private renderTexture(
     ctx: CanvasRenderingContext2D,
     screenVerts: QuadPoint[],
-    clipVerts = screenVerts
+    clipVerts = screenVerts,
+    options?: QuadRenderOptions
   ): boolean {
     const frame = this.animator?.getCurrentFrame();
     if (
@@ -1000,6 +1007,7 @@ export class QuadObject extends Entity {
     const isStretch = this.textureMode !== 'tile';
     const flatTexture = isStretch && isQuadNearlyAffine(v0, v1, v2, v3, 0.75 / screenScale);
     const pixelOverlap = 1.25 / screenScale;
+    const blendMode = options?.blendMode ?? this.blendMode;
     const needsTextureLayer = this.opacity < 1 || this.blur > 0;
     const textureCtx = needsTextureLayer ? getTextureLayerContext(ctx.canvas) : ctx;
     if (!textureCtx) return false;
@@ -1013,14 +1021,14 @@ export class QuadObject extends Entity {
       textureCtx.globalCompositeOperation = 'source-over';
       textureCtx.filter = 'none';
     } else {
-      textureCtx.globalCompositeOperation = this.blendMode;
+      textureCtx.globalCompositeOperation = blendMode;
     }
     textureCtx.save();
     clipToQuad(textureCtx, clipVerts);
     if (flatTexture) {
       drawAffineTexture(textureCtx, this.image, frame, v0, v1, v2, v3, this.flipX, this.flipY);
       textureCtx.restore();
-      if (needsTextureLayer) this.drawTextureLayer(ctx, screenVerts);
+      if (needsTextureLayer) this.drawTextureLayer(ctx, screenVerts, blendMode);
       return true;
     }
 
@@ -1095,14 +1103,18 @@ export class QuadObject extends Entity {
       }
     }
     textureCtx.restore();
-    if (needsTextureLayer) this.drawTextureLayer(ctx, screenVerts);
+    if (needsTextureLayer) this.drawTextureLayer(ctx, screenVerts, blendMode);
     return mesh.length > 0;
   }
 
-  private drawTextureLayer(ctx: CanvasRenderingContext2D, screenVerts: QuadPoint[]): void {
+  private drawTextureLayer(
+    ctx: CanvasRenderingContext2D,
+    screenVerts: QuadPoint[],
+    blendMode: GlobalCompositeOperation
+  ): void {
     if (!textureLayerCanvas) return;
     ctx.save();
-    ctx.globalCompositeOperation = this.blendMode;
+    ctx.globalCompositeOperation = blendMode;
     clipToQuad(ctx, screenVerts);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(textureLayerCanvas, 0, 0);
@@ -1110,7 +1122,7 @@ export class QuadObject extends Entity {
   }
 
   // Override render to handle per-vertex parallax
-  render(ctx: CanvasRenderingContext2D): void {
+  render(ctx: CanvasRenderingContext2D, options?: QuadRenderOptions): void {
     // Need access to Camera Position
     // @ts-ignore
     const scene = this.scene;
@@ -1120,14 +1132,18 @@ export class QuadObject extends Entity {
     const camY = scene.camera.y;
 
     ctx.save();
-    ctx.globalAlpha = this.opacity;
+    const opacity = options?.opacity ?? this.opacity;
+    const blendMode = options?.blendMode ?? this.blendMode;
+    ctx.globalAlpha = opacity;
 
     let filterStr = '';
-    if (this.blur > 0) filterStr += `blur(${this.blur}px) `;
-    if (this.brightness !== 1.0) filterStr += `brightness(${this.brightness}) `;
-    if (this.saturation !== 1.0) filterStr += `saturate(${this.saturation}) `;
-    if (this.contrast !== 1.0) filterStr += `contrast(${this.contrast}) `;
-    if (this.hueShift !== 0) filterStr += `hue-rotate(${this.hueShift}deg) `;
+    if (!options?.skipFilters) {
+      if (this.blur > 0) filterStr += `blur(${this.blur}px) `;
+      if (this.brightness !== 1.0) filterStr += `brightness(${this.brightness}) `;
+      if (this.saturation !== 1.0) filterStr += `saturate(${this.saturation}) `;
+      if (this.contrast !== 1.0) filterStr += `contrast(${this.contrast}) `;
+      if (this.hueShift !== 0) filterStr += `hue-rotate(${this.hueShift}deg) `;
+    }
     if (filterStr) ctx.filter = filterStr.trim();
 
     // Calculate Screen Positions of Vertices
@@ -1144,10 +1160,7 @@ export class QuadObject extends Entity {
       ? Math.max(Math.hypot(matrix.a, matrix.b), Math.hypot(matrix.c, matrix.d), HOMOGRAPHY_EPSILON)
       : 1;
     const useBoxCoverage =
-      !!this.box3dCameraProjected &&
-      this.opacity >= 1 &&
-      this.blur <= 0 &&
-      this.blendMode === 'source-over';
+      !!this.box3dCameraProjected && opacity >= 1 && this.blur <= 0 && blendMode === 'source-over';
     const coverageVerts = useBoxCoverage
       ? expandPolygonForCoverage(screenVerts, 1.25 / screenScale)
       : screenVerts;
@@ -1189,9 +1202,9 @@ export class QuadObject extends Entity {
     }
 
     // 1. Draw Texture or Fill (Solid / Checkerboard Mode)
-    const textured = this.renderTexture(ctx, screenVerts, coverageVerts);
+    const textured = this.renderTexture(ctx, screenVerts, coverageVerts, options);
     if (this.filled && !textured) {
-      ctx.globalCompositeOperation = useBoxCoverage ? 'source-over' : this.blendMode;
+      ctx.globalCompositeOperation = useBoxCoverage ? 'source-over' : blendMode;
       ctx.fillStyle = this.color;
       ctx.beginPath();
       (useBoxCoverage ? coverageVerts : screenVerts).forEach((v, i) => {

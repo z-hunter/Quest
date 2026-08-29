@@ -8,10 +8,11 @@ import {
   getBox3DAttachedEntityFaces,
   getVisibleBox3DFaces,
 } from '../entities/Box3DObject';
-import { expandPolygonForCoverage } from '../entities/QuadObject';
+import { expandPolygonForCoverage, QuadObject } from '../entities/QuadObject';
 
 export class SceneRenderer {
   private blurCanvas: HTMLCanvasElement | null = null;
+  private quadBlurCanvas: HTMLCanvasElement | null = null;
   game: IGame | null = null;
 
   constructor(game: IGame) {
@@ -231,26 +232,29 @@ export class SceneRenderer {
     const layers = [...new Set(entities.map(getLayer))].sort((a, b) => a - b);
     for (const layer of layers) {
       const layerEntities = entities.filter((entity) => getLayer(entity) === layer);
-      layerEntities
-        .filter((entity: any) => !entity.box3dWorldVertices && !entity.__box3dSurfaceAnchor)
-        .forEach((entity) => {
-          if (entity.disabled || (entity as any).box3dHidden) return;
-          if (entity.visible === false) return;
+      const flatEntities = layerEntities.filter(
+        (entity: any) => !entity.box3dWorldVertices && !entity.__box3dSurfaceAnchor
+      );
+      for (let index = 0; index < flatEntities.length; ) {
+        const entity = flatEntities[index];
+        const batchKey = this.getQuadBlurBatchKey(entity);
+        if (!batchKey) {
+          this.renderEntity(ctx, entity, scene, halfW, halfH);
+          index++;
+          continue;
+        }
 
-          const p = entity.parallax !== undefined ? entity.parallax : 1.0;
-          ctx.save();
-
-          // Center Pivot Transform
-          ctx.translate(halfW, halfH);
-          ctx.scale(scene.camera.zoom, scene.camera.zoom);
-          ctx.translate(-scene.camera.x * p, -scene.camera.y * p);
-
-          // DEBUG TRACE (Optional, simplified)
-          // if (Math.random() < 0.005 && entity.name.includes('Quad')) console.log(`Draw ${entity.name}`);
-
-          entity.render(ctx);
-          ctx.restore();
-        });
+        const batch = [entity as QuadObject];
+        index++;
+        while (
+          index < flatEntities.length &&
+          this.getQuadBlurBatchKey(flatEntities[index]) === batchKey
+        ) {
+          batch.push(flatEntities[index] as QuadObject);
+          index++;
+        }
+        this.renderQuadBlurBatch(ctx, batch, scene, halfW, halfH);
+      }
 
       const faces = [
         ...getVisibleBox3DFaces(scene, layerEntities),
@@ -285,6 +289,82 @@ export class SceneRenderer {
         ctx.restore();
       }
     }
+  }
+
+  private getQuadBlurBatchKey(entity: Entity): string | null {
+    if (
+      !(entity instanceof QuadObject) ||
+      entity.disabled ||
+      entity.visible === false ||
+      entity.blur <= 0 ||
+      entity.blendMode !== 'screen' ||
+      entity.brightness !== 1 ||
+      entity.saturation !== 1 ||
+      entity.contrast !== 1 ||
+      entity.hueShift !== 0
+    ) {
+      return null;
+    }
+    return `${entity.blur}:${entity.opacity}`;
+  }
+
+  private renderEntity(
+    ctx: CanvasRenderingContext2D,
+    entity: Entity,
+    scene: Scene,
+    halfW: number,
+    halfH: number,
+    quadOptions?: { skipFilters: boolean; opacity: number; blendMode: GlobalCompositeOperation }
+  ): void {
+    if (entity.disabled || (entity as any).box3dHidden || entity.visible === false) return;
+    const p = entity.parallax !== undefined ? entity.parallax : 1;
+    ctx.save();
+    ctx.translate(halfW, halfH);
+    ctx.scale(scene.camera.zoom, scene.camera.zoom);
+    ctx.translate(-scene.camera.x * p, -scene.camera.y * p);
+    if (entity instanceof QuadObject && quadOptions) entity.render(ctx, quadOptions);
+    else entity.render(ctx);
+    ctx.restore();
+  }
+
+  private renderQuadBlurBatch(
+    ctx: CanvasRenderingContext2D,
+    quads: QuadObject[],
+    scene: Scene,
+    halfW: number,
+    halfH: number
+  ): void {
+    if (!this.quadBlurCanvas) this.quadBlurCanvas = document.createElement('canvas');
+    if (
+      this.quadBlurCanvas.width !== ctx.canvas.width ||
+      this.quadBlurCanvas.height !== ctx.canvas.height
+    ) {
+      this.quadBlurCanvas.width = ctx.canvas.width;
+      this.quadBlurCanvas.height = ctx.canvas.height;
+    }
+    const batchCtx = this.quadBlurCanvas.getContext('2d');
+    if (!batchCtx) {
+      for (const quad of quads) this.renderEntity(ctx, quad, scene, halfW, halfH);
+      return;
+    }
+
+    batchCtx.setTransform(1, 0, 0, 1, 0, 0);
+    batchCtx.clearRect(0, 0, this.quadBlurCanvas.width, this.quadBlurCanvas.height);
+    for (const quad of quads) {
+      this.renderEntity(batchCtx, quad, scene, halfW, halfH, {
+        skipFilters: true,
+        opacity: 1,
+        blendMode: 'source-over',
+      });
+    }
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = quads[0].opacity;
+    ctx.globalCompositeOperation = 'screen';
+    ctx.filter = `blur(${quads[0].blur * scene.camera.zoom}px)`;
+    ctx.drawImage(this.quadBlurCanvas, 0, 0);
+    ctx.restore();
   }
 
   private renderBlurEffect(ctx: CanvasRenderingContext2D) {

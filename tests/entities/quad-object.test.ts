@@ -112,6 +112,22 @@ describe('QuadObject', () => {
     expect(ctx.strokeStyle).toBe('#000000');
   });
 
+  it('can render into a shared blur layer without applying its own filter or blend mode', () => {
+    const fixture = createSceneFixture();
+    const quad = new QuadObject(fixture.game, 'batched_quad');
+    quad.blur = 2;
+    quad.opacity = 0.95;
+    quad.blendMode = 'screen';
+    fixture.scene.addEntity(quad);
+
+    const ctx = createMockContext();
+    quad.render(ctx, { skipFilters: true, opacity: 1, blendMode: 'source-over' });
+
+    expect(ctx.filter).toBe('');
+    expect(ctx.globalAlpha).toBe(1);
+    expect(ctx.globalCompositeOperation).toBe('source-over');
+  });
+
   it('uses converging edges, not opposite edge lengths, for grid perspective', () => {
     // Top/bottom are parallel; the right edge is vertical and the left one is
     // slanted. Therefore vertical grid cuts must stay linearly spaced even

@@ -1,10 +1,113 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { QuadObject } from '../../src/entities/QuadObject';
-import { compareEntitiesForRender, getEntityRenderSortY } from '../../src/graphics/SceneRenderer';
+import {
+  compareEntitiesForRender,
+  getEntityRenderSortY,
+  SceneRenderer,
+} from '../../src/graphics/SceneRenderer';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
+function createMockContext(canvas = { width: 800, height: 600 }) {
+  return {
+    canvas,
+    filter: '',
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
+    save: vi.fn(),
+    restore: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    closePath: vi.fn(),
+    clip: vi.fn(),
+    translate: vi.fn(),
+    scale: vi.fn(),
+    setTransform: vi.fn(),
+    transform: vi.fn(),
+    clearRect: vi.fn(),
+    drawImage: vi.fn(),
+    getTransform: vi.fn(() => ({ a: 1, b: 0, c: 0, d: 1 })),
+    fill: vi.fn(),
+    stroke: vi.fn(),
+  } as unknown as CanvasRenderingContext2D;
+}
+
 describe('SceneRenderer Quad depth sorting', () => {
+  it('batches consecutive compatible blurred screen Quads into one final composite', () => {
+    const fixture = createSceneFixture();
+    const first = new QuadObject(fixture.game, 'first');
+    const second = new QuadObject(fixture.game, 'second');
+    for (const quad of [first, second]) {
+      quad.blur = 2;
+      quad.opacity = 0.95;
+      quad.blendMode = 'screen';
+      quad.isGrid = false;
+      fixture.scene.addEntity(quad);
+    }
+
+    const target = createMockContext();
+    const layer = createMockContext();
+    const batchCanvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => layer),
+    } as unknown as HTMLCanvasElement;
+    vi.stubGlobal('document', { createElement: vi.fn(() => batchCanvas) });
+    try {
+      new SceneRenderer(fixture.game).render(target, fixture.scene);
+
+      expect(layer.fill).toHaveBeenCalledTimes(2);
+      expect(target.drawImage).toHaveBeenCalledTimes(1);
+      expect(target.filter).toBe('blur(2px)');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps textured Quad seam compositing inside one shared blur batch', () => {
+    const fixture = createSceneFixture();
+    for (const name of ['first_texture', 'second_texture']) {
+      const quad = new QuadObject(fixture.game, name);
+      quad.blur = 2;
+      quad.opacity = 0.95;
+      quad.blendMode = 'screen';
+      quad.spriteName = `${name}.json`;
+      quad.image = { complete: true } as HTMLImageElement;
+      quad.animator = { getCurrentFrame: () => ({ x: 0, y: 0, w: 16, h: 16 }) } as any;
+      fixture.scene.addEntity(quad);
+    }
+
+    const target = createMockContext();
+    const batch = createMockContext();
+    const textureLayer = createMockContext();
+    const batchCanvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => batch),
+    } as unknown as HTMLCanvasElement;
+    const textureCanvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => textureLayer),
+    } as unknown as HTMLCanvasElement;
+    vi.stubGlobal('document', {
+      createElement: vi.fn().mockReturnValueOnce(batchCanvas).mockReturnValue(textureCanvas),
+    });
+    try {
+      new SceneRenderer(fixture.game).render(target, fixture.scene);
+
+      expect(textureLayer.drawImage).toHaveBeenCalledTimes(2);
+      expect(batch.drawImage).toHaveBeenCalledTimes(2);
+      expect(target.drawImage).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('defaults Entity sorting to rendered Y and can sort an Entity by parallax', () => {
     const fixture = createSceneFixture();
     const far = fixture.addEntity('far');
