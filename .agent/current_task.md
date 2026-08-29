@@ -1,25 +1,26 @@
-# Current Task: Optimize FileBrowser UX, Accessibility, and Prefab Thumbnail Loading
+# Current Task: CRT Shader Pipeline & Anti-Moiré Pixel Reconstruction
 
 ## Status: COMPLETED ✅
 
 ## Summary of the Implementation
-- **UI & Layout Optimizations**:
-  - Replaced the bottom 'Cancel' button with a standard `×` Close button in the top-right header (`e-btn`), matching `PropertiesPanel`.
-  - Moved the 'Load/Save' confirmation button inline with the filename input, freeing vertical space for the grid/list view.
-  - Aligned the `FilterInput` and LOAD button by stripping extraneous margins (`marginBottom: 0`).
-  - Removed unused `.file-browser-actions` CSS.
-- **Accessibility & UX**:
-  - Added `aria-label` and `aria-pressed` states for the List/Grid view toggles.
-  - Ensured the clear `×` button inside the `FilterInput` respects the actual selected `filename` rather than just manual `filterText` input.
-- **Thumbnail Normalization & Caching**:
-  - Added a module-level `spriteThumbnailCache` to instantly resolve and render thumbnails across view/mode switches, preventing network fetch spam and flickering.
-  - Implemented `getNormalizedUrl` to properly remove redundant `/public` prefixes.
-  - Prevented state bleed by resetting `imgSrc` to null on cache miss and explicitly keying rendered thumbnails by their normalized URLs.
-- **Prefab Thumbnails Support**:
-  - Created `PrefabThumbnail` to extract the `spriteName` from the first object inside a `.json` prefab file.
-  - Added auto-correction to append `.json` extensions if omitted (e.g., `battery_aaa.json` -> `aaa.json`), preventing 404 errors.
-  - Automatically enabled `isImageBrowser` for directories containing `prefabs`, activating the thumbnail grid natively.
+- **Sinc-Fourier Scanlines**:
+  - Implemented continuous analytical integration of Fourier harmonics with Sinc factors ($\text{sinc}(k\pi w)$ over $w = \text{fwidth}(pos)$) and Timothy Lottes phase jitter, completely eliminating 3-4-3-4 px quantization jumps on non-integer scaling.
+- **Beam Spot Modulation**:
+  - Dynamically widens electron beam spot on bright highlights, preserving crisp scanline valleys in dark shadows.
+  - Linked to UI with dynamic hiding when `scanlineCount = 0` and zero-cost GPU bypass.
+- **Screen Glow Pipeline Order**:
+  - Moved front-faceplate glass diffuse scatter to execute **after** scanlines with Screen blend and 35% desaturation.
+- **60 Hz AC Hum Bar**:
+  - Emulated analog power ripple using dual video gain modulation and black pedestal cathode shift.
+- **High-Voltage Anode Breathing (Raster Bloom)**:
+  - Decoupled physical bezel/glass geometry from dynamic electron raster scaling with RC exponential decay ($\sim 80\text{ms}$).
+- **Anti-Moiré 2D Pixel Reconstruction**:
+  - Continuous bandlimited area box-filter integration (`getSmoothUV`) preserving 100% sharp pixel colors without moiré or bilinear blur. Added settings toggle.
+- **WebGL Layout Sync & Slider Dragging Fix**:
+  - Synchronized canvas backbuffer geometry on Game $\leftrightarrow$ Editor switch.
+  - Fixed HTML5 `stepMismatch` locking on Bloom and CRT range sliders.
 
 ## Verification
-- Visually verified in-editor: FileBrowser aligns correctly, thumbnails load without flickering, prefabs show their correct sprite representation, and grid/list modes toggle smoothly.
-- Tested path normalization edge cases (`public/`, `battery_aaa` without extension).
+- `npm run typecheck`: Passed with 0 errors.
+- `vitest`: All 876 tests passed.
+
