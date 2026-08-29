@@ -186,6 +186,39 @@ export class Scene {
     return this._walkboxEntitiesCache;
   }
 
+  /** Current visual polygons for authored and component WalkBoxes. */
+  getActiveWalkboxes(): Array<{
+    name: string;
+    poly: { x: number; y: number }[];
+    mode: 'Invert' | 'Add' | 'Subtract';
+    disabled: boolean;
+  }> {
+    const active = (this.walkbox || [])
+      .filter((walkbox) => !walkbox.disabled)
+      .map((walkbox) => ({
+        name: walkbox.name,
+        poly: walkbox.poly.map((point) => ({ x: point.x, y: point.y })),
+        mode: (walkbox.mode === 'Subtract' || walkbox.mode === 'Add' ? walkbox.mode : 'Invert') as
+          | 'Invert'
+          | 'Add'
+          | 'Subtract',
+        disabled: false,
+      }));
+    for (const entity of this.getWalkboxEntities()) {
+      const component = entity.components?.find(
+        (candidate: any) => candidate.type === 'WalkBox'
+      ) as { mode?: 'Invert' | 'Add' | 'Subtract' } | undefined;
+      if (!component || entity.disabled || !(entity instanceof QuadObject)) continue;
+      active.push({
+        name: entity.name,
+        poly: entity.getVisualVertices(),
+        mode: component.mode === 'Subtract' || component.mode === 'Add' ? component.mode : 'Invert',
+        disabled: false,
+      });
+    }
+    return active;
+  }
+
   getPhysicalExits(): Triggerbox[] {
     if (!this._physicalExitsCache) {
       this._physicalExitsCache = this.triggerboxes.filter((tb) => {
@@ -1062,7 +1095,26 @@ export class Scene {
       const sp = sourceEntity.parallax !== undefined ? sourceEntity.parallax : 1.0;
       const svOx = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.x : 0;
       const svOy = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.y : 0;
-      const sourceVisual = toVisualPosition({ x, y }, cam, sp, { x: svOx, y: svOy });
+      const surfaceBinding = (sourceEntity as any).__surfaceParallaxBinding as
+        | { quadName?: string; u?: number; v?: number; worldX?: number; worldY?: number }
+        | undefined;
+      const surfaceQuad = surfaceBinding?.quadName
+        ? (this.getObjectByName(surfaceBinding.quadName) as QuadObject | null)
+        : null;
+      const surfacePoint =
+        surfaceQuad &&
+        Number.isFinite(surfaceBinding?.u) &&
+        Number.isFinite(surfaceBinding?.v) &&
+        Number.isFinite(surfaceBinding?.worldX) &&
+        Number.isFinite(surfaceBinding?.worldY)
+          ? surfaceQuad.getGridPointAt(surfaceBinding?.u ?? 0, surfaceBinding?.v ?? 0, true)
+          : null;
+      const sourceVisual = surfacePoint
+        ? {
+            x: surfacePoint.x + (x - (surfaceBinding?.worldX ?? x)) + svOx,
+            y: surfacePoint.y + (y - (surfaceBinding?.worldY ?? y)) + svOy,
+          }
+        : toVisualPosition({ x, y }, cam, sp, { x: svOx, y: svOy });
 
       sourceRect = {
         x: sourceVisual.x - sourceEntity.colliderWidth / 2,
@@ -1118,28 +1170,7 @@ export class Scene {
       }
     }
 
-    // Filter out disabled walkboxes first
-    const activeWalkboxes = this.walkbox ? this.walkbox.filter((wb) => !wb.disabled) : [];
-
-    // Integrated WalkBox Components (Quads)
-    // We look for entities with 'WalkBox' component and treat them as walkboxes
-    // Optimization: In a large scene, we might want to cache this list.
-    wbEntities.forEach((entity) => {
-      if (entity.disabled) return;
-      if (entity.components) {
-        const wbComp = entity.components.find((c: any) => c.type === 'WalkBox');
-        if (wbComp && (entity as any).vertices) {
-          const vertices = (entity as QuadObject).getVisualVertices();
-
-          activeWalkboxes.push({
-            name: entity.name,
-            poly: vertices, // Corrected Visual Vertices
-            mode: wbComp.mode || 'Invert',
-            disabled: false,
-          } as any);
-        }
-      }
-    });
+    const activeWalkboxes = this.getActiveWalkboxes();
 
     // If no active walkboxes, everything is walkable (unless blocked by entities or physical exits checked above)
     if (activeWalkboxes.length === 0) return true;

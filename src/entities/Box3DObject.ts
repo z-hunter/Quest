@@ -754,7 +754,7 @@ export function buildBox3DRenderFragments(scene: any, faces: Box3DFace[]): Box3D
       );
     }
     return cache(
-      sortBox3DFacesByDepth(faces).map((face) => ({
+      orderWalkboxSurfaceEntities(sortBox3DFacesByDepth(faces)).map((face) => ({
         ...face,
         projected: projectFace(face, camera, perspective, focal),
         fragmented: false,
@@ -763,7 +763,7 @@ export function buildBox3DRenderFragments(scene: any, faces: Box3DFace[]): Box3D
     );
   }
   return cache(
-    ordered.map((face) => ({
+    orderWalkboxSurfaceEntities(ordered).map((face) => ({
       ...face,
       projected: projectFace(face, camera, perspective, focal),
       fragmented: !!face.fragmented,
@@ -1075,6 +1075,24 @@ function averageZ(vertices: Box3DPoint[]): number {
 }
 function compareFaceKey(a: Box3DFace, b: Box3DFace): number {
   return a.sceneOrder - b.sceneOrder || a.boxId.localeCompare(b.boxId) || a.faceIndex - b.faceIndex;
+}
+
+/** A WalkBox is a floor: its owning face must not clip an Actor standing on it. */
+function orderWalkboxSurfaceEntities(faces: Box3DFace[]): Box3DFace[] {
+  const ordered = [...faces];
+  for (const entityFace of faces.filter((face) => face.entity)) {
+    const owner = (entityFace.entity as any).__box3dSurfaceAnchor?.quad as QuadObject | undefined;
+    if (!owner?.components?.some((component: any) => component?.type === 'WalkBox')) continue;
+    const firstEntityIndex = ordered.findIndex((face) => face.entity === entityFace.entity);
+    if (firstEntityIndex < 0) continue;
+    const ownerAfterEntity = ordered.filter(
+      (face, index) => index > firstEntityIndex && !face.entity && face.quad === owner
+    );
+    if (!ownerAfterEntity.length) continue;
+    for (const face of ownerAfterEntity) ordered.splice(ordered.indexOf(face), 1);
+    ordered.splice(firstEntityIndex, 0, ...ownerAfterEntity);
+  }
+  return ordered;
 }
 function subtract(a: Box3DPoint, b: Box3DPoint): Box3DPoint {
   return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };

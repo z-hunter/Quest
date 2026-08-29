@@ -71,7 +71,7 @@ describe('SceneRenderer Quad depth sorting', () => {
     }
   });
 
-  it('draws a surface-bound Entity between cached Box3D bitmap layers', () => {
+  it('caches a stable BSP split for a surface-bound Entity', () => {
     const fixture = createSceneFixture();
     const box = new Box3DObject(fixture.game, 'box');
     const faces = Array.from({ length: 6 }, (_, index) => {

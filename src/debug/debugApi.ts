@@ -438,8 +438,7 @@ export function createDebugApi(game: Game): QuestDebugApi {
     return props;
   };
 
-  const setObjectProperty = (nameOrId: string, property: string, value: unknown): boolean => {
-    const target = getObject(nameOrId);
+  const applyPropertyToObject = (target: any, property: string, value: unknown): boolean => {
     if (!target) return false;
 
     let finalValue: any = value;
@@ -480,14 +479,27 @@ export function createDebugApi(game: Game): QuestDebugApi {
     return true;
   };
 
+  const setObjectProperty = (nameOrId: string, property: string, value: unknown): boolean => {
+    const target = getObject(nameOrId);
+    if (!target) return false;
+    return applyPropertyToObject(target, property, value);
+  };
+
   const setObjectProperties = (nameOrId: string, properties: Record<string, unknown>): boolean => {
     const target = getObject(nameOrId);
     if (!target) return false;
 
-    for (const [prop, val] of Object.entries(properties)) {
-      setObjectProperty(nameOrId, prop, val);
+    const entries = Object.entries(properties);
+    if (entries.length === 0) return true;
+
+    let allSucceeded = true;
+    for (const [prop, val] of entries) {
+      const success = applyPropertyToObject(target, prop, val);
+      if (!success) {
+        allSucceeded = false;
+      }
     }
-    return true;
+    return allSucceeded;
   };
 
   // Settings implementation

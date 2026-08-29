@@ -183,7 +183,7 @@ The important implementation consequence is that `QuadObject.getVisualVertices()
 
 `Scene.box3dOcclusionMode` defaults to `exact`: overlapping Box3D faces are split by BSP, preserving geometric occlusion. `fast` depth-sorts whole faces for cheaper rendering; an individual Box3D may override the Scene mode when it can be approximated safely.
 
-For unchanged `source-over` Box3D content, `SceneRenderer` retains each Layer as a screen-space bitmap instead of redrawing its BSP fragments every frame. With exactly one Entity attached through `3d-parallax`, static fragments are separated into back and front bitmaps around that Entity's surface point; the Entity is drawn every frame between them. Camera movement and relevant Box3D/face geometry or visual changes invalidate the cache. Multiple attached Entities and unsupported blend modes use the normal live rendering path.
+For unchanged `source-over` Box3D content, `SceneRenderer.renderCachedBox3DLayer` supports any number of attached entities: it walks fragments in painter order, groups contiguous static fragments into bitmap commands, and retains each entity fragment as a live command between them. Up to four valid topology variants are retained per Layer. If a moving attached Entity is continuously BSP-split, static faces are instead cached individually and clipped from those source bitmaps each frame; only Entity fragments are rendered live. Camera movement and relevant static Box3D/face geometry or visual changes invalidate the cache. Fallback occurs only for no static faces, unavailable canvas, or unsupported blend mode; multiple attached entities must not force live rendering.
 
 ### 3.3 Camera, Parallax, and Quad Coordinates (2.5D)
 

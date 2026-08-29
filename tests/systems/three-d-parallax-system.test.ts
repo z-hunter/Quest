@@ -84,6 +84,7 @@ describe('ThreeDParallaxSystem', () => {
     box.syncFaces(fixture.scene);
     expect(prop.disabled).toBe(true);
   });
+
   it('applies surface parallax to Static objects without moving their visual position', () => {
     const fixture = createSceneFixture();
     fixture.scene.camera.x = 20;

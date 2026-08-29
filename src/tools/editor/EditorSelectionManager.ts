@@ -375,8 +375,10 @@ export class EditorSelectionManager {
     state: CompoundBox3DState
   ): Record<'x' | 'y' | 'z', Box3DPoint> {
     const origin = { x: 0, y: 0, z: 0 };
-    const x = { x: 1, y: 0, z: 0 };
-    const y = rotateAroundAxis({ x: 0, y: 1, z: 0 }, origin, x, state.rotationX);
+    const zAxis = { x: 0, y: 0, z: 1 };
+    const x = rotateAroundAxis({ x: 1, y: 0, z: 0 }, origin, zAxis, state.rotationZ);
+    let y = rotateAroundAxis({ x: 0, y: 1, z: 0 }, origin, zAxis, state.rotationZ);
+    y = rotateAroundAxis(y, origin, x, state.rotationX);
     let z = rotateAroundAxis({ x: 0, y: 0, z: 1 }, origin, { x: 0, y: 1, z: 0 }, state.rotationY);
     z = rotateAroundAxis(z, origin, x, state.rotationX);
     return { x, y, z };

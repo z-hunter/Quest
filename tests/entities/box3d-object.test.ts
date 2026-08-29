@@ -624,4 +624,33 @@ describe('Box3DObject', () => {
       fragments.findIndex((fragment) => fragment.quad === face && !fragment.entity)
     );
   });
+
+  it('never lets an owning Box3D WalkBox clip its attached Actor', () => {
+    const game: any = { editor: null };
+    const box = new Box3DObject(game, 'box');
+    const face = new QuadObject(game, 'box_face_2');
+    face.box3dFaceIndex = 2;
+    face.spatial = { parentNodeId: 'box', relation: 'in' };
+    face.components = [{ type: 'WalkBox', mode: 'Invert' }];
+    const entity: any = { width: 20, height: 20, layer: 0, visible: true, disabled: false };
+    const scene: any = {
+      entities: [box, face, entity],
+      camera: { x: 0, y: 0, zoom: 1 },
+      box3dPerspective: 1,
+    };
+    box.syncFaces(scene);
+    entity.__box3dSurfaceAnchor = createBox3DSurfaceAnchor(scene, face, entity, 0.5, 0.5, 'back');
+
+    const fragments = buildBox3DRenderFragments(scene, [
+      ...getVisibleBox3DFaces(scene, [face]),
+      ...getBox3DAttachedEntityFaces(scene, [entity]),
+    ]);
+    const entityIndex = fragments.findIndex((fragment) => fragment.entity === entity);
+
+    expect(
+      fragments.every(
+        (fragment, index) => fragment.entity || fragment.quad !== face || index < entityIndex
+      )
+    ).toBe(true);
+  });
 });

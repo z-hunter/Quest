@@ -271,7 +271,15 @@ Coplanar order детерминирован: scene order, затем Box ID, з�
 
 Рассечённые fragments получают Canvas clip по projected polygon, после чего внутри clip рисуется исходный Quad. Для непрозрачного `source-over` используется небольшой coverage overlap, чтобы дальняя оболочка не просвечивала через субпиксельные швы. Texture mesh отдельно расширяет triangle coverage без изменения UV.
 
-Неподвижные `source-over` Box3D fragments кэшируются в screen-space bitmap по Layer. При одном attached `3d-parallax` Entity cache разделяется относительно его surface point на back/front bitmap: Entity рисуется между ними, поэтому движение Entity не перерисовывает Box. Камера, геометрия, видимые face vertices и их визуальные свойства инвалидируют bitmap; несколько attached Entity в одном Layer используют обычный live path.
+### 7.5 Retained bitmap layers и движущиеся surface Entity
+
+`SceneRenderer` кэширует непрозрачные `source-over` Box3D по authored Layer. После точного BSP статические fragments собираются в bitmap-команды, а attached Entity остаются живыми командами между ними. Поэтому несколько Entity могут находиться между разными статическими слоями без принудительного полного live-render.
+
+Инвалидация учитывает Camera, проекцию, геометрию и визуальные свойства статических граней. Для одного Layer удерживается до четырёх ранее встреченных корректных topology-вариантов: при возврате Actor в прежнее отношение «перед/за» к граням bitmap повторно используется, а не рисуется заново.
+
+Если BSP разрезает attached Entity, её clip-fragments также сохраняются. Геометрия входит в ключ только у Entity, которые действительно разрезаны; движение неразрезанного Actor не инвалидирует статические bitmap другого attached Entity.
+
+Когда движущийся Actor сам непрерывно разрезается BSP, topology-вариантов было бы бесконечно много. В этом случае включается `static face bitmaps → live BSP entities`: каждая неподвижная managed face один раз растрируется в отдельный bitmap, затем на каждом кадре готовый bitmap клипуется текущим BSP-fragment. Живыми остаются только fragments Entity. Так сохраняется точная окклюзия, но неподвижные, в том числе нетекстурированные, грани не перерисовываются и не мерцают.
 
 ## 8. Hit-test и mouse ray
 

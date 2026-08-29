@@ -311,6 +311,27 @@ describe('Quest Playwright Debug API', () => {
       expect(success).toBe(true);
       expect(mockScene.renameObject).toHaveBeenCalledWith(mockScene.entities[1], 'wooden_door');
     });
+
+    it('resolves object once in setObjectProperties so renaming name does not break subsequent property updates', () => {
+      const api = createDebugApi(mockGame);
+
+      const success = api.objects.setObjectProperties('door', {
+        name: 'secret_entrance',
+        opacity: '0.4',
+        x: 450,
+      });
+
+      expect(success).toBe(true);
+      expect(mockScene.renameObject).toHaveBeenCalledWith(mockScene.entities[1], 'secret_entrance');
+      expect(mockScene.entities[1].opacity).toBe(0.4);
+      expect(mockScene.entities[1].x).toBe(450);
+    });
+
+    it('returns false in setObjectProperties if target object does not exist', () => {
+      const api = createDebugApi(mockGame);
+      const success = api.objects.setObjectProperties('non_existent', { x: 100 });
+      expect(success).toBe(false);
+    });
   });
 
   describe('Settings API', () => {

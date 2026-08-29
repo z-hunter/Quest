@@ -20,8 +20,6 @@ interface SurfaceParallaxBinding {
   v: number;
   worldX: number;
   worldY: number;
-  cameraX: number;
-  cameraY: number;
   originalParallax: number;
 }
 
@@ -83,15 +81,6 @@ export class ThreeDParallaxSystem {
   ): void {
     const currentP = target.parallax !== undefined ? target.parallax : 1;
     const ownsBinding = binding?.quadName === quad.name;
-    if (
-      ownsBinding &&
-      binding.cameraX === camX &&
-      binding.cameraY === camY &&
-      Math.abs(target.x - binding.worldX) <= EPSILON &&
-      Math.abs(target.y - binding.worldY) <= EPSILON &&
-      !quad.isVisualSurfaceUnstable()
-    )
-      return;
     let targetVisual = toVisualPosition(
       { x: target.x, y: target.y },
       { x: camX, y: camY },
@@ -143,8 +132,6 @@ export class ThreeDParallaxSystem {
         v: metrics.v,
         worldX: newWorld.x,
         worldY: newWorld.y,
-        cameraX: camX,
-        cameraY: camY,
         originalParallax: ownsBinding ? binding.originalParallax : currentP,
       } satisfies SurfaceParallaxBinding;
       return;
@@ -313,8 +300,6 @@ export class ThreeDParallaxSystem {
               v: metrics.v,
               worldX: nextWorld.x,
               worldY: nextWorld.y,
-              cameraX: camX,
-              cameraY: camY,
               originalParallax: ownsBinding ? binding.originalParallax : currentP,
             };
           }
