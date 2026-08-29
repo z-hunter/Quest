@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   Box3DObject,
   buildBox3DRenderFragments,
+  cullFullyOccludedBox3DFragments,
   createBox3DSurfaceAnchor,
   getBox3DAttachedEntityFaces,
   getBox3DFrontAxisSegment,
@@ -15,6 +16,38 @@ import { expandPolygonForCoverage, QuadObject } from '../../src/entities/QuadObj
 import { Scene } from '../../src/scene/Scene';
 
 describe('Box3DObject', () => {
+  it('skips a fully covered fragment only behind a guaranteed opaque face', () => {
+    const game: any = { editor: null };
+    const hiddenQuad = new QuadObject(game, 'hidden');
+    const frontQuad = new QuadObject(game, 'front');
+    const fragment = (quad: QuadObject, projected: Array<{ x: number; y: number }>) =>
+      ({
+        quad,
+        vertices: [],
+        projected,
+        sceneOrder: 0,
+        boxId: 'box',
+        faceIndex: 0,
+        fragmented: false,
+      }) as any;
+    const hidden = fragment(hiddenQuad, [
+      { x: 2, y: 2 },
+      { x: 8, y: 2 },
+      { x: 8, y: 8 },
+      { x: 2, y: 8 },
+    ]);
+    const front = fragment(frontQuad, [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+      { x: 0, y: 10 },
+    ]);
+
+    expect(cullFullyOccludedBox3DFragments([hidden, front])).toEqual([front]);
+    frontQuad.spriteName = 'possibly-transparent.png';
+    expect(cullFullyOccludedBox3DFragments([hidden, front])).toEqual([hidden, front]);
+  });
+
   it('treats zero-width frustum faces as triangles and drops the zero-area top', () => {
     const game: any = { editor: null, canvas: { width: 640, height: 360 } };
     const box = new Box3DObject(game, 'prism');

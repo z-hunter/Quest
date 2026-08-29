@@ -235,6 +235,27 @@ Antigravity rules:
 - For runtime/scene/gameplay bugs, prefer diagnostic helpers or temporary probes that explain engine decisions, such as why `isWalkable` returned false, which object blocked a path, or which semantic rule selected a parser target.
 - Do not revert user changes. Work with dirty files unless the user explicitly asks to revert them.
 
+## Playwright Debug API
+
+When testing the web/Vite build with Playwright, read `debugAPI.md` and use the Debug API for deterministic engine setup and inspection instead of UI clicks, coordinate guessing, or opening editor submenus.
+
+- Entry point: `window.__QUEST_DEBUG__.api` (fallback: `window.__SCANLINE_DEBUG__.api`). It is available only in the web/Vite runtime; it is intentionally absent in Tauri. Check `<html data-quest-mode>` when verifying the active mode.
+- Use `api.modes.getMode()` / `setMode('game' | 'scene-editor' | 'sprite-editor')` to switch modes, and `await api.scenes.load(filename)` to load a scene through the normal pipeline before inspecting it.
+- Use `api.objects.listObjects()`, `getObject(nameOrId)`, `getObjectProperties(nameOrId)`, and `setObjectProperty` / `setObjectProperties` for scene inspection and mutation without selecting objects in the UI.
+- Use `api.settings.getSetting(path)`, `setSetting(path, value)`, `setSettings`, `saveSettings`, and `loadSettings` for deterministic graphics/audio/editor setup; disable CRT for clean screenshots with `setSetting('crt.enabled', false)`.
+- Use `await api.console.sendCommand(command)` plus `api.console.getMessages({ afterTimestamp, type })` for parser/console tests. `#...` commands use the developer console; other commands use gameplay input. `api.console.open/close/clear` are available when overlay state matters.
+- Use `await api.performance.sample({ durationMs, sections: ['update', 'render'] })` for frame metrics and `api.renderer.getDiagnostics()` for Box3D cache, visible-face, BSP, fallback, and command-sequence checks.
+- In Playwright, call these through `page.evaluate(...)`; await scene loads, commands, and performance samples. Preserve normal UI assertions for user-visible behavior, using the API only to establish state or inspect engine results.
+
+Example:
+
+```ts
+await page.evaluate(() => window.__QUEST_DEBUG__.api.setMode('scene-editor'));
+await expect(page.locator('html')).toHaveAttribute('data-quest-mode', 'scene-editor');
+await page.evaluate(() => window.__QUEST_DEBUG__.api.scenes.load('box3d2_t.json'));
+const diagnostics = await page.evaluate(() => window.__QUEST_DEBUG__.api.renderer.getDiagnostics());
+```
+
 ## Validation Ladder
 
 Use the narrowest meaningful checks first, then broaden based on risk:

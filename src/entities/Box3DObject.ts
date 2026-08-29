@@ -3,6 +3,7 @@ import { GAME_DESIGN_WIDTH } from '../core/Resolution';
 import type { Entity } from './Entity';
 import { QuadObject, type QuadVertex } from './QuadObject';
 import { SceneObject } from './SceneObject';
+import { Geometry } from '../utils/Geometry';
 
 export type Box3DPoint = { x: number; y: number; z: number };
 export type Box3DAxisMode = 'object' | 'camera';
@@ -754,20 +755,71 @@ export function buildBox3DRenderFragments(scene: any, faces: Box3DFace[]): Box3D
       );
     }
     return cache(
-      orderWalkboxSurfaceEntities(sortBox3DFacesByDepth(faces)).map((face) => ({
-        ...face,
-        projected: projectFace(face, camera, perspective, focal),
-        fragmented: false,
-        depthFallback: true,
-      }))
+      cullFullyOccludedBox3DFragments(
+        orderWalkboxSurfaceEntities(sortBox3DFacesByDepth(faces)).map((face) => ({
+          ...face,
+          projected: projectFace(face, camera, perspective, focal),
+          fragmented: false,
+          depthFallback: true,
+        }))
+      )
     );
   }
   return cache(
-    orderWalkboxSurfaceEntities(ordered).map((face) => ({
-      ...face,
-      projected: projectFace(face, camera, perspective, focal),
-      fragmented: !!face.fragmented,
-    }))
+    cullFullyOccludedBox3DFragments(
+      orderWalkboxSurfaceEntities(ordered).map((face) => ({
+        ...face,
+        projected: projectFace(face, camera, perspective, focal),
+        fragmented: !!face.fragmented,
+      }))
+    )
+  );
+}
+
+/** Removes fragments fully hidden by one nearer guaranteed-opaque static face. */
+export function cullFullyOccludedBox3DFragments(fragments: Box3DFragment[]): Box3DFragment[] {
+  return fragments.filter(
+    (fragment, index) =>
+      !fragments
+        .slice(index + 1)
+        .some(
+          (occluder) =>
+            isGuaranteedOpaqueBox3DFace(occluder) && isProjectedFaceInside(fragment, occluder)
+        )
+  );
+}
+
+function isGuaranteedOpaqueBox3DFace(fragment: Box3DFragment): boolean {
+  const quad = fragment.quad;
+  return (
+    !fragment.entity &&
+    quad.filled &&
+    !quad.spriteName &&
+    quad.opacity >= 1 &&
+    quad.blur <= 0 &&
+    quad.blendMode === 'source-over'
+  );
+}
+
+function isProjectedFaceInside(fragment: Box3DFragment, occluder: Box3DFragment): boolean {
+  const epsilon = 0.001;
+  const bounds = (points: { x: number; y: number }[]) => ({
+    minX: Math.min(...points.map((point) => point.x)),
+    maxX: Math.max(...points.map((point) => point.x)),
+    minY: Math.min(...points.map((point) => point.y)),
+    maxY: Math.max(...points.map((point) => point.y)),
+  });
+  const source = bounds(fragment.projected);
+  const target = bounds(occluder.projected);
+  if (
+    source.minX < target.minX - epsilon ||
+    source.maxX > target.maxX + epsilon ||
+    source.minY < target.minY - epsilon ||
+    source.maxY > target.maxY + epsilon
+  )
+    return false;
+  return fragment.projected.every((point) =>
+    Geometry.isPointInPolygonWithEpsilon(point, occluder.projected, epsilon)
   );
 }
 
