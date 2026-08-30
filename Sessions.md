@@ -4814,3 +4814,53 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 
 Принятое решение: не сохранять GPU-прототип, его debug-переключатели и сценарно привязанный `benchmark.py` в основной ветке; откатиться к предыдущему коммиту. Сохранить нужно только вывод о корректной методике будущих измерений: Compound Box3D следует трансформировать через `applyCompoundBox3DField`, а не прямым изменением дочернего Box3D.
 
+## Session Entry - 2026-08-30 04:58 Europe/Bucharest
+
+## Session Goals
+
+- Найти следующий универсальный источник ускорения динамического Box3D-рендера после того, как retained layer cache, адаптивная texture mesh и layer redraw уже были реализованы.
+- Проверить результаты через Debug API на реальном вращении `Folder_300` в `box3d2`.
+- Обновить техническую документацию и оставить воспроизводимый handoff.
+
+## What Was Implemented
+
+Профилирование показало, что основное время тратилось не на `drawTexturedTriangle()`, а на построение projective mesh в `buildQuadTextureMesh()`. Одна Box3D face может быть разделена BSP на несколько fragments; при этом полная texture mesh, UV-разбиение и выбор диагоналей у всех этих fragments одинаковы.
+
+В `QuadObject` добавлен per-frame cache полной projective texture mesh. `SceneRenderer` передаёт Quad внутренний `textureMeshFrameId`, действующий только во время текущего `render()`:
+
+```text
+full Quad face -> build mesh once
+BSP fragment  -> own clip + reuse mesh
+```
+
+Кэш использует ключ из визуальных вершин, масштаба Canvas-контекста, texture mode, tile scale, perspective и projective compactness. Между кадрами mesh не переиспользуется, поэтому вращение Box3D и движение Camera сохраняют корректность.
+
+В Debug API добавлены `textureMeshBuildCalls` и `textureMeshCacheHits`. Также сохранено ранее добавленное детальное профилирование Box3D:
+
+- `api.renderer.setBox3DProfilingEnabled(true)`;
+- `api.renderer.resetBox3DProfile()`;
+- `api.renderer.getBox3DProfile()`.
+
+## Validation
+
+Реальный browser-прогон загружает `box3d2` и вращает `Folder_300` через `EditorSelectionManager.applyCompoundBox3DField` по всем трём осям. За 2 секунды профиля получено: 11 кадров, 40 textured fragments, 15 mesh builds и 25 cache hits. Таким образом, 25 повторных построений из 40 были устранены (62.5%). Измеренное время построения mesh составило 15.7 ms на прогон; texture triangle draw — 5.9 ms; Grid — 8.4 ms.
+
+Пройдены `git diff --check`, typecheck и 54 профильных теста (`quad-object`, `scene-renderer`, `debugApi`). Commit hooks успешно выполнили Prettier и ESLint.
+
+## Documentation and Commit
+
+Обновлены `3dSys.md`, `tech-spec.md`, `debugAPI.md` и `progress.md`. Создан commit `1187e1a` (`perf(box3d): reuse projective meshes across BSP fragments`).
+
+## Decisions and Next Steps
+
+- Кэшировать финальный bitmap динамической грани между кадрами нельзя: при вращении меняются projected vertices.
+- GPU-прототип для одной тестовой грани не показал надёжного выигрыша и ранее был отклонён; текущая оптимизация остаётся универсальной Canvas2D/BSP-оптимизацией.
+- Следующий кандидат для исследования — аналогичное переиспользование подготовленных Grid-данных между BSP fragments, но только после отдельной проверки порядка, clipping и прозрачности.
+- Для будущих замеров важно трансформировать Compound Box3D через `applyCompoundBox3DField`, а не напрямую изменять дочерний Box3D.
+
+## Risks / Caveats
+
+- Cache действует только в одном render frame и намеренно не скрывает изменения геометрии между кадрами.
+- Профильные headless-времена пригодны для сравнения относительной работы, но не являются абсолютным пользовательским FPS-бенчмарком.
+- Parser, mechanics, gameplay и scene data в этой сессии не изменялись.
+

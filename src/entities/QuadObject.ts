@@ -286,10 +286,12 @@ export function projectQuadGridPoint(
   amount: number = 1,
   perspectiveX: boolean = true,
   perspectiveY: boolean = true,
-  authoredCompactness?: number
+  authoredCompactness?: number,
+  stabilityOverride?: number
 ): QuadPoint {
   if (!transform) return interpolateQuadPoint(p0, p1, p2, p3, u, v);
-  const stability = getProjectiveStability(p0, p1, p2, p3, authoredCompactness);
+  const stability =
+    stabilityOverride ?? getProjectiveStability(p0, p1, p2, p3, authoredCompactness);
   const alphaX = perspectiveX ? amount * stability : 0;
   const alphaY = perspectiveY ? amount * stability : 0;
   if (alphaX === 0 && alphaY === 0) return interpolateQuadPoint(p0, p1, p2, p3, u, v);
@@ -613,8 +615,17 @@ export function buildQuadTextureMesh(
   const repeatsX = mode === 'tile' ? 1 / clampTextureTileScale(tileScaleX) : 1;
   const repeatsY = mode === 'tile' ? 1 / clampTextureTileScale(tileScaleY) : 1;
   const homography = perspectiveAmount !== 0 ? createQuadHomography(p0, p1, p2, p3) : null;
-  const mapPoint: QuadTexturePointMapper = (u: number, v: number) =>
-    projectQuadGridPoint(
+  const stability = homography ? getProjectiveStability(p0, p1, p2, p3, authoredCompactness) : 0;
+  const pointCache = new Map<number, Map<number, QuadPoint>>();
+  const mapPoint: QuadTexturePointMapper = (u: number, v: number) => {
+    let row = pointCache.get(u);
+    if (!row) {
+      row = new Map<number, QuadPoint>();
+      pointCache.set(u, row);
+    }
+    const cached = row.get(v);
+    if (cached) return cached;
+    const point = projectQuadGridPoint(
       p0,
       p1,
       p2,
@@ -625,8 +636,12 @@ export function buildQuadTextureMesh(
       perspectiveAmount,
       perspectiveAmount !== 0,
       perspectiveAmount !== 0,
-      authoredCompactness
+      authoredCompactness,
+      stability
     );
+    row.set(v, point);
+    return point;
+  };
   const subdivisions = chooseTextureMeshSubdivisions(mapPoint, repeatsX, repeatsY, maxError);
   const uBreaks = buildTextureAxisBreaks(repeatsX, subdivisions.x);
   const vBreaks = buildTextureAxisBreaks(repeatsY, subdivisions.y);
