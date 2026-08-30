@@ -1,5 +1,7 @@
 Original prompt: Давай временно переключимся с парсера к архитектуре приложения и придумаем способ автоматического управления загруженными сценами, чтобы не получалось так, что каждая открытая сцена остаётся в RAM. Возможно, разумно хранить несколько наиболее часто загружаемых сцен, а редко загружаемые из памяти выгружать. И вообще мониторить кол-во памяти занятое сценами, и регулировать кол-во сцен в кэше в зависимости от этого
 
+- 2026-08-30: Dynamic Box3D texture optimization: `QuadObject` now caches the full-face projective texture mesh only within one `SceneRenderer` frame. BSP fragments reuse the mesh and retain their individual Canvas clips. The debug profile now reports `textureMeshBuildCalls` and `textureMeshCacheHits`. In a 2s `box3d2` / `Folder_300` rotation run: 40 textured fragments, 15 mesh builds, 25 cache hits (62.5% repeated mesh builds avoided). Focused 54 tests and typecheck pass.
+
 - Playwright also panned the rotated prepared `cube` diagonally; its roof and side faces changed by ordinary parallax as one welded rigid body, with no seam break or inverse morph.
 
 - 2026-08-21: Box3D follow-up in progress. Scene now owns `box3dPerspective`; managed faces keep physical XYZ/P but bypass the second Quad camera-parallax pass. Added Canvas2D BSP fragment ordering/clipping and shared 3D raycast hit resolution. Focused Box/render tests and typecheck pass.

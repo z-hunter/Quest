@@ -4,7 +4,7 @@ import { isTauriRuntime } from '../platform/fileApi';
 import { SoundManager } from '../systems/SoundManager';
 import type { ConsoleLine, ConsoleLineType } from '../core/Console';
 import { normalizeGroupIdList } from '../utils/GroupIds';
-import type { Box3DRenderDiagnostics } from '../graphics/SceneRenderer';
+import type { Box3DRenderDiagnostics, Box3DRenderProfile } from '../graphics/SceneRenderer';
 
 export type QuestAppMode = 'game' | 'scene-editor' | 'sprite-editor';
 
@@ -47,7 +47,11 @@ export interface PerformanceSampleResult {
   };
 }
 
-export type { Box3DRenderDiagnostics, Box3DLayerDiagnostics } from '../graphics/SceneRenderer';
+export type {
+  Box3DRenderDiagnostics,
+  Box3DLayerDiagnostics,
+  Box3DRenderProfile,
+} from '../graphics/SceneRenderer';
 
 export interface QuestDebugApi {
   isAvailable: () => boolean;
@@ -104,6 +108,9 @@ export interface QuestDebugApi {
   // Renderer Diagnostics
   renderer: {
     getDiagnostics: () => Box3DRenderDiagnostics;
+    getBox3DProfile: () => Box3DRenderProfile;
+    setBox3DProfilingEnabled: (enabled: boolean) => void;
+    resetBox3DProfile: () => void;
   };
 }
 
@@ -752,6 +759,38 @@ export function createDebugApi(game: Game): QuestDebugApi {
     };
   };
 
+  const getBox3DProfile = (): Box3DRenderProfile =>
+    game.sceneManager.currentScene?.renderer.getBox3DProfile() || {
+      enabled: false,
+      frames: 0,
+      fragmentBuildCalls: 0,
+      fragmentBuildMs: 0,
+      fragmentRenderCalls: 0,
+      fragmentRenderMs: 0,
+      texturedFragments: 0,
+      texturedFragmentMs: 0,
+      textureMeshCells: 0,
+      textureMeshBuildMs: 0,
+      textureMeshBuildCalls: 0,
+      textureMeshCacheHits: 0,
+      textureTriangleCalls: 0,
+      textureTriangleMs: 0,
+      gridFragments: 0,
+      gridFragmentMs: 0,
+      gridPasses: 0,
+      gridPreparationMs: 0,
+      gridHomographyCalls: 0,
+      gridLineSegments: 0,
+    };
+
+  const setBox3DProfilingEnabled = (enabled: boolean): void => {
+    game.sceneManager.currentScene?.renderer.setBox3DProfilingEnabled(enabled);
+  };
+
+  const resetBox3DProfile = (): void => {
+    game.sceneManager.currentScene?.renderer.resetBox3DProfile();
+  };
+
   return {
     isAvailable: () => !isTauriRuntime(),
     modes: {
@@ -793,6 +832,9 @@ export function createDebugApi(game: Game): QuestDebugApi {
     },
     renderer: {
       getDiagnostics: getRendererDiagnostics,
+      getBox3DProfile,
+      setBox3DProfilingEnabled,
+      resetBox3DProfile,
     },
   };
 }

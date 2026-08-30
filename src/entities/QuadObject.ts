@@ -30,6 +30,8 @@ export interface QuadRenderOptions {
   skipFilters?: boolean;
   opacity?: number;
   blendMode?: GlobalCompositeOperation;
+  /** Identifies one SceneRenderer pass so BSP fragments can share a full-face mesh. */
+  textureMeshFrameId?: number;
 }
 
 export interface QuadSurfaceMetrics {
@@ -673,6 +675,13 @@ export function buildQuadTextureMesh(
   return cells;
 }
 
+type Box3DTextureProfile = {
+  textureMeshCells: number;
+  textureMeshBuildMs: number;
+  textureMeshBuildCalls?: number;
+  textureMeshCacheHits?: number;
+};
+
 function drawTexturedTriangle(
   ctx: CanvasRenderingContext2D,
   image: HTMLImageElement,
@@ -685,6 +694,11 @@ function drawTexturedTriangle(
   uv2: QuadPoint,
   pixelOverlap: number
 ): void {
+  const profile = (ctx as any).__box3dProfile as
+    | { textureTriangleCalls: number; textureTriangleMs: number }
+    | undefined;
+  const started = profile ? performance.now() : 0;
+  if (profile) profile.textureTriangleCalls++;
   const [q0, q1, q2] = expandTriangleForCoverage([p0, p1, p2], pixelOverlap);
   const sx0 = uv0.x * frame.w;
   const sy0 = uv0.y * frame.h;
@@ -715,6 +729,7 @@ function drawTexturedTriangle(
   ctx.transform(a, b, c, d, e, f);
   ctx.drawImage(image, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
   ctx.restore();
+  if (profile) profile.textureTriangleMs += performance.now() - started;
 }
 
 function drawAffineTexture(
@@ -929,6 +944,11 @@ export class QuadObject extends Entity {
   // Effects
   blur: number = 0;
   receive3DParallax: boolean = false;
+  private textureMeshCache?: {
+    frameId: number;
+    key: string;
+    mesh: QuadTextureMeshCell[];
+  };
 
   /**
    * List of properties to be serialized to/from JSON.
@@ -1032,18 +1052,52 @@ export class QuadObject extends Entity {
       return true;
     }
 
-    const mesh = buildQuadTextureMesh(
-      v0,
-      v1,
-      v2,
-      v3,
-      this.textureMode === 'tile' ? 'tile' : 'stretch',
+    const profile = (textureCtx as any).__box3dProfile as Box3DTextureProfile | undefined;
+    const mode = this.textureMode === 'tile' ? 'tile' : 'stretch';
+    const perspectiveAmount = this.perspective === false ? 0 : this.perspectiveAmount;
+    const maxError = 0.75 / screenScale;
+    const compactness = this.getAuthoredProjectiveCompactness();
+    const meshKey = [
+      screenScale,
+      mode,
       this.tileScaleX,
       this.tileScaleY,
-      this.perspective === false ? 0 : this.perspectiveAmount,
-      0.75 / screenScale,
-      this.getAuthoredProjectiveCompactness()
-    );
+      perspectiveAmount,
+      maxError,
+      compactness,
+      ...screenVerts.flatMap((point) => [point.x, point.y]),
+    ].join('|');
+    const frameId = options?.textureMeshFrameId;
+    let mesh =
+      frameId !== undefined &&
+      this.textureMeshCache?.frameId === frameId &&
+      this.textureMeshCache.key === meshKey
+        ? this.textureMeshCache.mesh
+        : undefined;
+
+    if (mesh) {
+      if (profile) profile.textureMeshCacheHits = (profile.textureMeshCacheHits || 0) + 1;
+    } else {
+      const meshStarted = profile ? performance.now() : 0;
+      mesh = buildQuadTextureMesh(
+        v0,
+        v1,
+        v2,
+        v3,
+        mode,
+        this.tileScaleX,
+        this.tileScaleY,
+        perspectiveAmount,
+        maxError,
+        compactness
+      );
+      if (frameId !== undefined) this.textureMeshCache = { frameId, key: meshKey, mesh };
+      if (profile) {
+        profile.textureMeshBuildCalls = (profile.textureMeshBuildCalls || 0) + 1;
+        profile.textureMeshCells += mesh.length;
+        profile.textureMeshBuildMs += performance.now() - meshStarted;
+      }
+    }
     for (const cell of mesh) {
       const [p00, p10, p11, p01] = cell.points;
       const uv00 = flipTexturePoint({ x: cell.u0, y: cell.v0 }, this.flipX, this.flipY);
@@ -1277,6 +1331,15 @@ export class QuadObject extends Entity {
 
     // 2. Draw Grid (Overlay)
     if (this.isGrid) {
+      const profile = (ctx as any).__box3dProfile as
+        | {
+            gridPasses: number;
+            gridPreparationMs: number;
+            gridHomographyCalls: number;
+            gridLineSegments: number;
+          }
+        | undefined;
+      if (profile) profile.gridPasses++;
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = this.gridColor;
       ctx.lineWidth = this.lineWidth;
@@ -1306,6 +1369,8 @@ export class QuadObject extends Entity {
       const amount = this.perspectiveAmount ?? 1.0;
       const usePerspective = basePerspective;
       const authoredCompactness = this.getAuthoredProjectiveCompactness();
+      const preparationStarted = profile ? performance.now() : 0;
+      if (profile) profile.gridHomographyCalls++;
       const gridTransform = createQuadHomography(v0, v1, v2, v3);
       const gridPoint = (u: number, v: number) =>
         projectQuadGridPoint(
@@ -1340,6 +1405,11 @@ export class QuadObject extends Entity {
         const bottom = gridPoint(rawT, 1);
         ctx.moveTo(top.x, top.y);
         ctx.lineTo(bottom.x, bottom.y);
+      }
+
+      if (profile) {
+        profile.gridPreparationMs += performance.now() - preparationStarted;
+        profile.gridLineSegments += this.gridLinesX + this.gridLinesY;
       }
 
       ctx.stroke();

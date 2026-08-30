@@ -34,6 +34,29 @@ export interface Box3DRenderDiagnostics {
   layers: Box3DLayerDiagnostics[];
 }
 
+export interface Box3DRenderProfile {
+  enabled: boolean;
+  frames: number;
+  fragmentBuildCalls: number;
+  fragmentBuildMs: number;
+  fragmentRenderCalls: number;
+  fragmentRenderMs: number;
+  texturedFragments: number;
+  texturedFragmentMs: number;
+  textureMeshCells: number;
+  textureMeshBuildMs: number;
+  textureMeshBuildCalls: number;
+  textureMeshCacheHits: number;
+  textureTriangleCalls: number;
+  textureTriangleMs: number;
+  gridFragments: number;
+  gridFragmentMs: number;
+  gridPasses: number;
+  gridPreparationMs: number;
+  gridHomographyCalls: number;
+  gridLineSegments: number;
+}
+
 const MAX_RETAINED_BITMAP_COMMANDS_PER_LAYER = 8;
 const MAX_RETAINED_BITMAP_VARIANTS_PER_LAYER = 4;
 
@@ -57,7 +80,30 @@ export class SceneRenderer {
   private box3dHits = 0;
   private box3dMisses = 0;
   private box3dLayerDiagnostics = new Map<number, Box3DLayerDiagnostics>();
+  private box3dRenderFrame = 0;
   game: IGame | null = null;
+  private box3dProfile: Box3DRenderProfile = {
+    enabled: false,
+    frames: 0,
+    fragmentBuildCalls: 0,
+    fragmentBuildMs: 0,
+    fragmentRenderCalls: 0,
+    fragmentRenderMs: 0,
+    texturedFragments: 0,
+    texturedFragmentMs: 0,
+    textureMeshCells: 0,
+    textureMeshBuildMs: 0,
+    textureMeshBuildCalls: 0,
+    textureMeshCacheHits: 0,
+    textureTriangleCalls: 0,
+    textureTriangleMs: 0,
+    gridFragments: 0,
+    gridFragmentMs: 0,
+    gridPasses: 0,
+    gridPreparationMs: 0,
+    gridHomographyCalls: 0,
+    gridLineSegments: 0,
+  };
 
   constructor(game: IGame) {
     this.game = game;
@@ -88,6 +134,49 @@ export class SceneRenderer {
       totalSurfaceEntityCommands,
       layers,
     };
+  }
+
+  setBox3DProfilingEnabled(enabled: boolean): void {
+    this.box3dProfile.enabled = enabled;
+  }
+
+  resetBox3DProfile(): void {
+    const enabled = this.box3dProfile.enabled;
+    this.box3dProfile = {
+      enabled,
+      frames: 0,
+      fragmentBuildCalls: 0,
+      fragmentBuildMs: 0,
+      fragmentRenderCalls: 0,
+      fragmentRenderMs: 0,
+      texturedFragments: 0,
+      texturedFragmentMs: 0,
+      textureMeshCells: 0,
+      textureMeshBuildMs: 0,
+      textureMeshBuildCalls: 0,
+      textureMeshCacheHits: 0,
+      textureTriangleCalls: 0,
+      textureTriangleMs: 0,
+      gridFragments: 0,
+      gridFragmentMs: 0,
+      gridPasses: 0,
+      gridPreparationMs: 0,
+      gridHomographyCalls: 0,
+      gridLineSegments: 0,
+    };
+  }
+
+  getBox3DProfile(): Box3DRenderProfile {
+    return { ...this.box3dProfile };
+  }
+
+  private buildRenderFragments(scene: Scene, faces: any[]): Box3DFragment[] {
+    if (!this.box3dProfile.enabled) return buildBox3DRenderFragments(scene, faces);
+    const started = performance.now();
+    const fragments = buildBox3DRenderFragments(scene, faces);
+    this.box3dProfile.fragmentBuildCalls++;
+    this.box3dProfile.fragmentBuildMs += performance.now() - started;
+    return fragments;
   }
 
   private getPooledCanvas(width: number, height: number): HTMLCanvasElement | null {
@@ -163,7 +252,7 @@ export class SceneRenderer {
       for (const face of staticFaces) {
         if (cached.sources.has(face.quad.name)) continue;
         const source = this.getPooledCanvas(ctx.canvas.width, ctx.canvas.height);
-        const sourceFragment = buildBox3DRenderFragments(scene, [face])[0];
+        const sourceFragment = this.buildRenderFragments(scene, [face])[0];
         if (!source || !sourceFragment) continue;
         const sourceCtx = source.getContext('2d');
         if (!sourceCtx) continue;
@@ -201,6 +290,8 @@ export class SceneRenderer {
   }
 
   render(ctx: CanvasRenderingContext2D, scene: Scene): void {
+    this.box3dRenderFrame++;
+    if (this.box3dProfile.enabled) this.box3dProfile.frames++;
     this.box3dLayerDiagnostics.clear();
     (scene.entities as any[])
       .filter((entity) => entity instanceof Box3DObject)
@@ -443,7 +534,7 @@ export class SceneRenderer {
       if (this.renderCachedBox3DLayer(ctx, scene, layer, faces, attachedFaces, halfW, halfH)) {
         continue;
       }
-      for (const fragment of buildBox3DRenderFragments(scene, [...faces, ...attachedFaces]))
+      for (const fragment of this.buildRenderFragments(scene, [...faces, ...attachedFaces]))
         this.renderBox3DFragment(ctx, fragment, scene, halfW, halfH);
     }
   }
@@ -457,8 +548,8 @@ export class SceneRenderer {
     halfW: number,
     halfH: number
   ): boolean {
-    const staticFragments = buildBox3DRenderFragments(scene, staticFaces);
-    const attachedFragments = buildBox3DRenderFragments(scene, attachedFaces);
+    const staticFragments = this.buildRenderFragments(scene, staticFaces);
+    const attachedFragments = this.buildRenderFragments(scene, attachedFaces);
     const dynamicFragments = new Map(
       attachedFragments
         .filter((fragment) => fragment.entity)
@@ -536,7 +627,7 @@ export class SceneRenderer {
       this.box3dHits++;
     } else {
       this.box3dMisses++;
-      const fragments = buildBox3DRenderFragments(scene, [...staticFaces, ...attachedFaces]);
+      const fragments = this.buildRenderFragments(scene, [...staticFaces, ...attachedFaces]);
       const entityFragmentCounts = new Map<string, number>();
       for (const fragment of fragments) {
         if (!fragment.entity) continue;
@@ -749,6 +840,12 @@ export class SceneRenderer {
     clipEntity = true
   ): void {
     const entity = fragment.entity || fragment.quad;
+    const profileStarted = this.box3dProfile.enabled ? performance.now() : 0;
+    if (this.box3dProfile.enabled) {
+      this.box3dProfile.fragmentRenderCalls++;
+      if (fragment.quad.spriteName) this.box3dProfile.texturedFragments++;
+      if (fragment.quad.isGrid) this.box3dProfile.gridFragments++;
+    }
     ctx.save();
     ctx.translate(halfW, halfH);
     ctx.scale(scene.camera.zoom, scene.camera.zoom);
@@ -772,8 +869,20 @@ export class SceneRenderer {
       const p = fragment.entity.parallax !== undefined ? fragment.entity.parallax : 1;
       ctx.translate(scene.camera.x * (1 - p), scene.camera.y * (1 - p));
     }
-    entity.render(ctx);
+    if (this.box3dProfile.enabled) (ctx as any).__box3dProfile = this.box3dProfile;
+    if (entity instanceof QuadObject) {
+      entity.render(ctx, { textureMeshFrameId: this.box3dRenderFrame });
+    } else {
+      entity.render(ctx);
+    }
+    if (this.box3dProfile.enabled) delete (ctx as any).__box3dProfile;
     ctx.restore();
+    if (this.box3dProfile.enabled) {
+      const elapsed = performance.now() - profileStarted;
+      this.box3dProfile.fragmentRenderMs += elapsed;
+      if (fragment.quad.spriteName) this.box3dProfile.texturedFragmentMs += elapsed;
+      if (fragment.quad.isGrid) this.box3dProfile.gridFragmentMs += elapsed;
+    }
   }
 
   private getQuadBlurBatchKey(entity: Entity): string | null {

@@ -129,10 +129,10 @@ The detailed subsystem contract is [`3dSys.md`](3dSys.md). Start with these inte
 | File | 3D responsibility |
 |------|-------------------|
 | `src/entities/Box3DObject.ts` | Eight-vertex frustum, `Z → Y → X` transform, shared Scene projection, face synchronization, cached BSP fragments, raycast and attached-surface anchors |
-| `src/entities/QuadObject.ts` | Managed-face metadata and the `box3dCameraProjected` path that prevents a second Quad parallax pass |
+| `src/entities/QuadObject.ts` | Managed-face metadata, per-frame reuse of full-face projective texture meshes across BSP fragments, and the `box3dCameraProjected` path that prevents a second Quad parallax pass |
 | `src/scene/Scene.ts` | Serializable `box3dPerspective` and `box3dOcclusionMode`; face sync before components and after Camera update |
 | `src/scene/SceneManager.ts` | `Box3D` JSON loading and restoration of missing numeric faces |
-| `src/graphics/SceneRenderer.ts` | Per-Layer Box3D batching, exact/fast occlusion, retained static bitmap layers, BSP drawing, alpha/open-face behavior and direct Quad render for unsplit faces |
+| `src/graphics/SceneRenderer.ts` | Per-Layer Box3D batching, exact/fast occlusion, retained static bitmap layers, BSP drawing, per-frame profiling and texture-mesh frame tokens, alpha/open-face behavior and direct Quad render for unsplit faces |
 | `src/scene/SceneInteraction.ts` | Runtime picking through the shared physical 3D raycast |
 | `src/systems/ThreeDParallaxSystem.ts` | Grid-to-physical-plane anchors and true-depth rendering of Entity attached to managed faces |
 | `src/tools/SceneEditor.ts` | Unified creation/deletion, vertex/axis overlay |

@@ -183,6 +183,9 @@ Returns a serializable snapshot of active Box3D layer rendering diagnostics, bit
 | Method | Signature | Description |
 | :--- | :--- | :--- |
 | `getDiagnostics()` | `() => Box3DRenderDiagnostics` | Returns Box3D bitmap caching diagnostics, fallback reasons, visible face counts, and command sequence per layer. |
+| `setBox3DProfilingEnabled(enabled)` | `(enabled: boolean) => void` | Enables or disables the cumulative detailed Box3D render profile. Disabled by default. |
+| `resetBox3DProfile()` | `() => void` | Clears the current profile counters and timings while retaining the enabled state. |
+| `getBox3DProfile()` | `() => Box3DRenderProfile` | Returns cumulative fragment, texture mesh, triangle and Grid timings/counters. |
 
 #### Diagnostic Return Shapes:
 ```ts
@@ -206,6 +209,29 @@ interface Box3DRenderDiagnostics {
   totalStaticBitmapCommands: number;
   totalSurfaceEntityCommands: number;
   layers: Box3DLayerDiagnostics[];
+}
+
+interface Box3DRenderProfile {
+  enabled: boolean;
+  frames: number;
+  fragmentBuildCalls: number;
+  fragmentBuildMs: number;
+  fragmentRenderCalls: number;
+  fragmentRenderMs: number;
+  texturedFragments: number;
+  texturedFragmentMs: number;
+  textureMeshBuildCalls: number;
+  textureMeshCacheHits: number; // BSP fragments that reused a full-face mesh this frame
+  textureMeshCells: number;
+  textureMeshBuildMs: number;
+  textureTriangleCalls: number;
+  textureTriangleMs: number;
+  gridFragments: number;
+  gridFragmentMs: number;
+  gridPasses: number;
+  gridPreparationMs: number;
+  gridHomographyCalls: number;
+  gridLineSegments: number;
 }
 ```
 
@@ -254,7 +280,19 @@ for (const layer of diagnostics.layers) {
 }
 ```
 
-### Example 4: Modifying Object Properties Without UI Selection
+### Example 4: Profiling Dynamic Box3D Rendering
+
+```ts
+const renderer = window.__QUEST_DEBUG__.api.renderer;
+renderer.setBox3DProfilingEnabled(true);
+renderer.resetBox3DProfile();
+
+// Animate or transform the scene here, then inspect aggregate work.
+const profile = renderer.getBox3DProfile();
+console.log(profile.textureMeshBuildCalls, profile.textureMeshCacheHits);
+```
+
+### Example 5: Modifying Object Properties Without UI Selection
 
 ```ts
 await page.evaluate(() => {
@@ -272,7 +310,7 @@ const heroProps = await page.evaluate(() => {
 expect(heroProps.x).toBe(420);
 ```
 
-### Example 5: Changing Settings & Sending In-Game Commands
+### Example 6: Changing Settings & Sending In-Game Commands
 
 ```ts
 // Disable CRT shader for clean automated screenshots

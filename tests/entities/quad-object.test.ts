@@ -583,6 +583,43 @@ describe('QuadObject', () => {
     expect((ctx.transform as any).mock.calls[0][5]).toBeCloseTo(0);
   });
 
+  it('reuses one projective texture mesh for repeated BSP fragments in a render frame', () => {
+    const fixture = createSceneFixture();
+    const quad = new QuadObject(fixture.game, 'cached_projective_quad');
+    quad.spriteName = 'floors/metal.json';
+    quad.image = { complete: true } as HTMLImageElement;
+    quad.animator = { getCurrentFrame: () => ({ x: 0, y: 0, w: 16, h: 16 }) } as any;
+    quad.vertices = [
+      { x: 0, y: 0, p: 1 },
+      { x: 160, y: 0, p: 1 },
+      { x: 100, y: 160, p: 1 },
+      { x: 20, y: 160, p: 1 },
+    ];
+    fixture.scene.addEntity(quad);
+
+    const ctx = createMockContext();
+    const profile = {
+      textureMeshCells: 0,
+      textureMeshBuildMs: 0,
+      textureMeshBuildCalls: 0,
+      textureMeshCacheHits: 0,
+    };
+    (ctx as any).__box3dProfile = profile;
+
+    quad.render(ctx, { textureMeshFrameId: 1 });
+    const builtCells = profile.textureMeshCells;
+    quad.render(ctx, { textureMeshFrameId: 1 });
+
+    expect(builtCells).toBeGreaterThan(0);
+    expect(profile.textureMeshCells).toBe(builtCells);
+    expect(profile.textureMeshBuildCalls).toBe(1);
+    expect(profile.textureMeshCacheHits).toBe(1);
+
+    quad.render(ctx, { textureMeshFrameId: 2 });
+    expect(profile.textureMeshCells).toBe(builtCells * 2);
+    expect(profile.textureMeshBuildCalls).toBe(2);
+  });
+
   it('composites a blurred or transparent texture mesh once after drawing its triangles into a layer', () => {
     const fixture = createSceneFixture();
     const quad = new QuadObject(fixture.game, 'layered_projective_quad');

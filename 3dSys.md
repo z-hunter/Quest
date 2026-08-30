@@ -281,6 +281,16 @@ Coplanar order детерминирован: scene order, затем Box ID, з�
 
 Когда движущийся Actor сам непрерывно разрезается BSP, topology-вариантов было бы бесконечно много. В этом случае включается `static face bitmaps → live BSP entities`: каждая неподвижная managed face один раз растрируется в отдельный bitmap, затем на каждом кадре готовый bitmap клипуется текущим BSP-fragment. Живыми остаются только fragments Entity. Так сохраняется точная окклюзия, но неподвижные, в том числе нетекстурированные, грани не перерисовываются и не мерцают.
 
+### 7.6 Per-frame texture mesh reuse
+
+Projective texture mesh принадлежит полной managed-face, а не BSP-fragment. Если одна face в текущем кадре встречается в нескольких fragments, `QuadObject` строит её mesh, UV-разбиение и диагонали только один раз. Каждый fragment по-прежнему устанавливает собственный Canvas clip и рисует ту же mesh, поэтому painter order, BSP-окклюзия и texture coverage не меняются.
+
+Кэш действует лишь в пределах одного вызова `SceneRenderer.render()`. Его ключ включает визуальные вершины face, scale контекста, texture mode, tile scale, perspective и compactness. Новый кадр всегда строит mesh заново: динамическое вращение Box3D и движение Camera не могут использовать устаревшие точки.
+
+### 7.7 Renderer profiling
+
+Debug API позволяет включить накопительный профиль Box3D: `api.renderer.setBox3DProfilingEnabled(true)`, `resetBox3DProfile()` и `getBox3DProfile()`. Профиль охватывает построение BSP-fragments, их Canvas2D render, texture mesh, отдельные texture triangles и Grid. Поля `textureMeshBuildCalls` и `textureMeshCacheHits` показывают соответственно число реальных построений полной mesh и число повторных использований для BSP-fragments.
+
 ## 8. Hit-test и mouse ray
 
 Point selection и runtime interaction используют общий `raycastBox3DFace()`.
