@@ -1,7 +1,7 @@
 # Box3D и общая 3D-система Scanline Engine
 
-> Статус: описание фактической реализации на 2026-08-23.  
-> Главный код: `src/entities/Box3DObject.ts`.  
+> Статус: описание фактической реализации на 2026-08-30.
+> Главные подсистемы: `src/entities/Box3DObject.ts`, `src/graphics/SceneRenderer.ts`, `src/tools/editor/EditorSelectionManager.ts`.
 > Этот документ объясняет архитектуру, математику, render pipeline и editor lifecycle. Пользовательские правила остаются в `GDD.md`.
 
 ## 1. Краткая модель
@@ -59,10 +59,13 @@ Scene
 | Lower base  | `bottomWidth`, `bottomDepth`                       |
 | Upper base  | `topWidth`, `topDepth`, `topOffsetX`, `topOffsetZ` |
 | Height      | `height`                                           |
+| Cutter      | `cutter`                                           |
+| Gizmo       | `axisMode`, `axisRotationX/Y/Z`                    |
+| Occlusion   | `occlusionMode`: `inherit` или `fast`              |
 
 Defaults находятся в `src/entities/Box3D.template.json`: размер `100 × 100 × 100`, Scale `1`, pivots в `(0,0,0)`, Rotation `20/30/0`.
 
-Перспектива не является свойством Box. Она хранится один раз в `Scene.box3dPerspective`, сериализуется со сценой и применяется ко всем Box одинаково.
+Перспектива и базовый режим occlusion не являются свойствами Box. Они хранятся один раз в `Scene.box3dPerspective` и `Scene.box3dOcclusionMode` (`exact` по умолчанию), сериализуются со сценой и применяются ко всем Box. Box может локально выбрать только `fast`; `inherit` использует режим сцены.
 
 ### 3.1 Восемь вершин
 
@@ -192,7 +195,7 @@ canvasY = viewportCenterY + (Y' - Camera.y) × Camera.zoom
 F + S × Z > EPSILON
 ```
 
-Если хотя бы одна из восьми вершин нарушает условие, весь Box временно исключается из render и point hit-test. Near-plane polygon clipping сейчас не реализован.
+Physical polygon каждой грани обрезается по этой plane. Пересекающая её грань становится временным fragment; полностью находящаяся позади камера грань исключается. Исходные managed Quad не меняются. В ортографическом режиме clipping не нужен.
 
 ## 6. Managed Quad: мост между 3D и 2D renderer
 
@@ -262,6 +265,8 @@ physical XYZ → projectBox3DPoint() → managed Quad XY → Canvas camera trans
 8. возвращает projected fragments со ссылкой на исходный Quad или Entity.
 
 Coplanar order детерминирован: scene order, затем Box ID, затем face index.
+
+`exact` строит этот BSP для каждой пересекающейся экранной группы. В `fast` BSP пропускается, а целые faces стабильно сортируются по среднему physical Z. Локальный `Box.occlusionMode = fast` переводит в быстрый путь только свою пересекающуюся группу; это осознанно менее точный, но дешёвый режим.
 
 Лимит `MAX_BSP_FRAGMENTS = 1200` защищает editor от взрывного дробления. После превышения один раз выводится warning, а batch переходит на стабильную сортировку целых faces по average physical Z. Такие fragments получают `depthFallback`; point hit-test использует тот же обратный render order, поэтому выбранная face совпадает с видимой в fallback. Это согласованный graceful fallback, но не точная замена depth buffer для сложных пересечений.
 
@@ -370,13 +375,21 @@ quad.spatial.parentNodeId = box.name
 - `Ctrl + middle drag` — Rotate Z и Move Z;
 - drag при выбранной face — перемещение всего Box в её physical plane.
 
-При выборе родителя editor показывает все восемь physical vertices двумя цветами и XYZ axes. Ось рисуется с учётом shell intersection: camera-side segment виден до точки входа, внутренняя и заслонённая часть скрыта.
+При выборе родителя editor показывает все восемь physical vertices двумя цветами и XYZ axes. `Axes: Object` использует наклон Box и настраиваемые `Axis rotate X/Y/Z`; `Axes: Camera` держит X горизонтальной, Y вертикальной, Z перпендикулярной экрану. Ось рисуется с учётом shell intersection: camera-side segment виден до точки входа, внутренняя и заслонённая часть скрыта.
+
+### 10.3 Compound Box3D
+
+Folder с хотя бы одним `Box3D` на любой глубине становится Compound Box3D; остальные descendants игнорируются. Folder хранит сериализуемое `compoundBox3D`: общий центр, накопленные значения контролов, три pivot, режим/наклон gizmo. Начальный центр и pivots — центр world AABB всех вершин входящих Box.
+
+Изменения запекаются в дочерние Box. Move сдвигает все Box, центр и pivots; Rotation поворачивает всю группу вокруг выбранного общего pivot; Scale изменяет размеры и расстояния относительно общего центра; Width/Depth/Height меняют только соответствующий размер каждого Box; Top Offset X/Z аддитивны. Новые Box участвуют лишь в последующих изменениях. Все жесты из 10.2 применяются к выбранной Compound Folder; Lock самой Folder блокирует mouse-transform, но Locked/Disabled дочерние Box не исключаются.
+
+Overlay подсвечивает faces всех членов, но рисует один общий набор осей. У Compound доступны те же независимые режимы `Axes: Object` и `Axes: Camera`; наклон настраивается только для object axes и не меняет геометрию группы.
 
 Point click уважает 3D occlusion; marquee включает скрытые вершины/faces по design.
 
 ## 11. Serialization, copy и lifecycle
 
-Box и шесть faces сериализуются как отдельные scene objects. Parent содержит только transform/frustum. Внешний вид каждой поверхности живёт в JSON соответствующего Quad.
+Box и шесть faces сериализуются как отдельные scene objects. Parent хранит transform/frustum, Cutter, состояние gizmo и occlusion override. Внешний вид каждой поверхности живёт в JSON соответствующего Quad. Folder опционально хранит `compoundBox3D`; старые Folder без этого поля остаются совместимыми.
 
 При загрузке `SceneManager`:
 
@@ -410,6 +423,8 @@ Copy/Duplicate/Prefab используют selection payload v3:
 9. Attached Entity должна входить в общий BSP, иначе она не будет корректно заслоняться.
 10. Изменение Camera или `3D Perspective` должно отражаться в том же render frame.
 11. Cutter изменяет только transient render/raycast fragments; authored Box и managed Quad не переписываются.
+12. Retained bitmap cache обязан воспроизводить точный порядок BSP-команд; attached surface Entity остаются live между bitmap-командами.
+13. `fast` — только rendering trade-off, а не точная замена BSP для сложных пересечений.
 
 ### 12.1 Live Cutter
 
@@ -438,24 +453,26 @@ Cutter без пересечения ничего не меняет. Если о
 
 ## 14. Карта кода
 
-| Файл                                                   | Ответственность                                                                   |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| `src/entities/Box3DObject.ts`                          | Geometry, projection, managed-face sync, surface anchors, BSP, raycast            |
-| `src/entities/Box3D.template.json`                     | Default serialized Box data и шесть face indices                                  |
-| `src/entities/EntityPrefabs.ts`                        | Импорт template как `DefaultBox3DData`                                            |
-| `src/entities/QuadObject.ts`                           | Managed metadata, no-double-parallax path, texture/Grid rendering и seam coverage |
-| `src/scene/Scene.ts`                                   | `box3dPerspective`, sync до/после Camera, serialization                           |
-| `src/scene/SceneManager.ts`                            | Loading Box, восстановление отсутствующих faces                                   |
-| `src/graphics/SceneRenderer.ts`                        | Layer split, Box batch, BSP fragments, clip/direct Quad render                    |
-| `src/scene/SceneInteraction.ts`                        | Runtime point picking через общий raycast                                         |
-| `src/systems/ThreeDParallaxSystem.ts`                  | Physical surface anchors и attached Entity                                        |
-| `src/tools/SceneEditor.ts`                             | Unified creation/deletion, selection overlay и оси                                |
-| `src/tools/editor/EditorTransformManager.ts`           | Click resolver и direct-manipulation gestures                                     |
-| `src/tools/editor/EditorSelectionManager.ts`           | Recursive copy/duplicate/prefab и reference remap                                 |
-| `src/components/editor/properties/Box3DProperties.tsx` | Transform 3D / Frustum UI                                                         |
-| `src/components/editor/properties/SceneProperties.tsx` | Scene `3D Perspective` UI                                                         |
-| `src/components/editor/properties/QuadProperties.tsx`  | Блокировка derived controls managed-face                                          |
-| `src/components/editor/HierarchyPanel.tsx`             | Создание и hierarchy labels `Face 0..5`                                           |
+| Файл                                                    | Ответственность                                                                   |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `src/entities/Box3DObject.ts`                           | Geometry, projection, managed-face sync, surface anchors, BSP, raycast            |
+| `src/entities/Box3D.template.json`                      | Default serialized Box data и шесть face indices                                  |
+| `src/entities/EntityPrefabs.ts`                         | Импорт template как `DefaultBox3DData`                                            |
+| `src/entities/QuadObject.ts`                            | Managed metadata, no-double-parallax path, texture/Grid rendering и seam coverage |
+| `src/scene/Scene.ts`                                    | `box3dPerspective`, sync до/после Camera, serialization                           |
+| `src/scene/SceneManager.ts`                             | Loading Box, восстановление отсутствующих faces                                   |
+| `src/graphics/SceneRenderer.ts`                         | Layer split, exact/fast occlusion, BSP, retained bitmap cache и diagnostics       |
+| `src/scene/SceneInteraction.ts`                         | Runtime point picking через общий raycast                                         |
+| `src/systems/ThreeDParallaxSystem.ts`                   | Physical surface anchors и attached Entity                                        |
+| `src/tools/SceneEditor.ts`                              | Unified creation/deletion, selection overlay и оси                                |
+| `src/tools/editor/EditorTransformManager.ts`            | Click resolver и direct-manipulation gestures                                     |
+| `src/tools/editor/EditorSelectionManager.ts`            | Compound membership/transforms/gizmo, copy/duplicate/prefab и reference remap     |
+| `src/entities/Folder.ts`                                | Folder serialization и `CompoundBox3DState`                                       |
+| `src/components/editor/properties/Box3DProperties.tsx`  | Transform 3D / Frustum / gizmo / occlusion UI                                     |
+| `src/components/editor/properties/FolderProperties.tsx` | Compound Box3D UI                                                                 |
+| `src/components/editor/properties/SceneProperties.tsx`  | Scene `3D Perspective` и occlusion UI                                             |
+| `src/components/editor/properties/QuadProperties.tsx`   | Блокировка derived controls managed-face                                          |
+| `src/components/editor/HierarchyPanel.tsx`              | Создание и hierarchy labels `Face 0..5`                                           |
 
 ## 15. Тесты
 
@@ -466,11 +483,13 @@ Cutter без пересечения ничего не меняет. Если о
 | `tests/systems/three-d-parallax-system.test.ts`   | Surface binding, physical anchor, Disabled inheritance, side/depth behavior                               |
 | `tests/editor/editor-selection-hierarchy.test.ts` | Полное copy/duplicate subtree и exact managed faces                                                       |
 | `tests/editor/editor-snapping-system.test.ts`     | Point selection, marquee policy, Ctrl-select parent и direct drag                                         |
+| `tests/graphics/scene-renderer.test.ts`           | Exact/fast ordering, retained bitmap cache и live surface Entity                                          |
+| `tests/editor/folder-properties.test.ts`          | Compound Folder panel, membership, pivots и gizmo modes                                                   |
 
 Минимальная проверка после изменения 3D-системы:
 
 ```powershell
-npm test -- --run tests/entities/box3d-object.test.ts tests/entities/quad-object.test.ts tests/systems/three-d-parallax-system.test.ts tests/editor/editor-selection-hierarchy.test.ts tests/editor/editor-snapping-system.test.ts
+npm test -- --run tests/entities/box3d-object.test.ts tests/entities/quad-object.test.ts tests/graphics/scene-renderer.test.ts tests/systems/three-d-parallax-system.test.ts tests/editor/editor-selection-hierarchy.test.ts tests/editor/editor-snapping-system.test.ts tests/editor/folder-properties.test.ts
 npm run typecheck
 npm run build
 ```

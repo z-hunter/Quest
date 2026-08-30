@@ -31,12 +31,12 @@
       "hidden": false,
       "parallax": 1,
       "cutter": false,
-      "x": 57.64527824578358,
-      "y": 8.565354957268625,
-      "z": -20.189098220867734,
-      "rotationX": 87.39504740891957,
-      "rotationY": 49.9577569199165,
-      "rotationZ": -178.19630689372445,
+      "x": 57.64430598480843,
+      "y": 2.814265778027462,
+      "z": -24.209827831256657,
+      "rotationX": -168.46481983145318,
+      "rotationY": 44.443326494561816,
+      "rotationZ": -176.07812506662898,
       "pivotX": {
         "x": 0,
         "y": 0,
@@ -56,6 +56,7 @@
       "axisRotationX": 0,
       "axisRotationY": 0,
       "axisRotationZ": 0,
+      "occlusionMode": "inherit",
       "uniformScale": 1,
       "scaleX": 1,
       "scaleY": 1,
@@ -86,30 +87,30 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 52.29387100705404,
-      "y": 8.672971020897394,
+      "x": 59.48196906470061,
+      "y": -47.86781835389101,
       "ignoreScaling": true,
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": 118.28821565507539,
-          "y": 14.305680041643186,
-          "p": 0.9381359802866368
+          "x": 134.70379098543575,
+          "y": -52.22070412693652,
+          "p": 1.0705518220976875
         },
         {
-          "x": 57.914688730262306,
-          "y": -57.50694543992594,
-          "p": 0.9375137700142033
+          "x": 66.77431282273068,
+          "y": -34.37648233870745,
+          "p": 1.222987303532356
         },
         {
-          "x": -13.853212734691157,
-          "y": 2.809956664327297,
-          "p": 0.9429977148590183
+          "x": -16.421255151809387,
+          "y": -45.13458654025422,
+          "p": 1.064863809087407
         },
         {
-          "x": 46.82579237756961,
-          "y": 75.08319281754504,
-          "p": 0.9436272280472473
+          "x": 52.87102760244541,
+          "y": -59.73950040966585,
+          "p": 0.947404862920645
         }
       ],
       "box3dFaceIndex": 0,
@@ -168,30 +169,30 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 71.35355403871866,
-      "y": 10.40077309253125,
+      "x": 61.86501990650778,
+      "y": 53.77656107096867,
       "ignoreScaling": true,
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": 64.62455126468284,
-          "y": 93.39930276807269,
-          "p": 1.1796771718388648
+          "x": 55.258090675633404,
+          "y": 30.717962400923604,
+          "p": 0.9105085417177702
         },
         {
-          "x": -11.23559394971482,
-          "y": 3.0465971148225,
-          "p": 1.178693482903365
+          "x": -10.7325833100197,
+          "y": 55.41298474693538,
+          "p": 1.0184755466202533
         },
         {
-          "x": 78.32099852328518,
-          "y": -72.23838947168241,
-          "p": 1.1701380348048733
+          "x": 69.13008308641606,
+          "y": 79.82460057065553,
+          "p": 1.1621929004052
         },
         {
-          "x": 153.70426031662143,
-          "y": 17.395581958912214,
-          "p": 1.1711074896453046
+          "x": 133.80448917400136,
+          "y": 49.15069656536013,
+          "p": 1.0236775737660844
         }
       ],
       "box3dFaceIndex": 1,
@@ -242,30 +243,30 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 21.59038423946162,
-      "y": 43.58476234119188,
+      "x": 20.24381995406243,
+      "y": -4.685784950515272,
       "ignoreScaling": true,
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": 46.82579237756961,
-          "y": 75.08319281754504,
-          "p": 0.9436272280472473
+          "x": 52.87102760244541,
+          "y": -59.73950040966585,
+          "p": 0.947404862920645
         },
         {
-          "x": -13.853212734691157,
-          "y": 2.809956664327297,
-          "p": 0.9429977148590183
+          "x": -16.421255151809387,
+          "y": -45.13458654025422,
+          "p": 1.064863809087407
         },
         {
-          "x": -11.23559394971482,
-          "y": 3.0465971148225,
-          "p": 1.178693482903365
+          "x": -10.7325833100197,
+          "y": 55.41298474693538,
+          "p": 1.0184755466202533
         },
         {
-          "x": 64.62455126468284,
-          "y": 93.39930276807269,
-          "p": 1.1796771718388648
+          "x": 55.258090675633404,
+          "y": 30.717962400923604,
+          "p": 0.9105085417177702
         }
       ],
       "box3dFaceIndex": 2,
@@ -302,7 +303,7 @@
       "name": "Box3D_761_face_3",
       "type": "Quad",
       "locked": false,
-      "disabled": false,
+      "disabled": true,
       "groupID": null,
       "customName": "",
       "textRedirects": {},
@@ -316,30 +317,30 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 27.786720142285375,
-      "y": -30.972195283114637,
+      "x": 27.18763936182941,
+      "y": 13.931629109657312,
       "ignoreScaling": true,
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": -13.853212734691157,
-          "y": 2.809956664327297,
-          "p": 0.9429977148590183
+          "x": -16.421255151809387,
+          "y": -45.13458654025422,
+          "p": 1.064863809087407
         },
         {
-          "x": 57.914688730262306,
-          "y": -57.50694543992594,
-          "p": 0.9375137700142033
+          "x": 66.77431282273068,
+          "y": -34.37648233870745,
+          "p": 1.222987303532356
         },
         {
-          "x": 78.32099852328518,
-          "y": -72.23838947168241,
-          "p": 1.1701380348048733
+          "x": 69.13008308641606,
+          "y": 79.82460057065553,
+          "p": 1.1621929004052
         },
         {
-          "x": -11.23559394971482,
-          "y": 3.0465971148225,
-          "p": 1.178693482903365
+          "x": -10.7325833100197,
+          "y": 55.41298474693538,
+          "p": 1.0184755466202533
         }
       ],
       "box3dFaceIndex": 3,
@@ -390,30 +391,30 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 102.05704080631108,
-      "y": -24.511018227763238,
+      "x": 101.10316901714596,
+      "y": 10.594527667592923,
       "ignoreScaling": true,
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": 57.914688730262306,
-          "y": -57.50694543992594,
-          "p": 0.9375137700142033
+          "x": 66.77431282273068,
+          "y": -34.37648233870745,
+          "p": 1.222987303532356
         },
         {
-          "x": 118.28821565507539,
-          "y": 14.305680041643186,
-          "p": 0.9381359802866368
+          "x": 134.70379098543575,
+          "y": -52.22070412693652,
+          "p": 1.0705518220976875
         },
         {
-          "x": 153.70426031662143,
-          "y": 17.395581958912214,
-          "p": 1.1711074896453046
+          "x": 133.80448917400136,
+          "y": 49.15069656536013,
+          "p": 1.0236775737660844
         },
         {
-          "x": 78.32099852328518,
-          "y": -72.23838947168241,
-          "p": 1.1701380348048733
+          "x": 69.13008308641606,
+          "y": 79.82460057065553,
+          "p": 1.1621929004052
         }
       ],
       "box3dFaceIndex": 4,
@@ -464,30 +465,30 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 95.86070490348732,
-      "y": 50.045939396543275,
+      "x": 94.15934960937898,
+      "y": -8.02288639257966,
       "ignoreScaling": true,
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": 118.28821565507539,
-          "y": 14.305680041643186,
-          "p": 0.9381359802866368
+          "x": 134.70379098543575,
+          "y": -52.22070412693652,
+          "p": 1.0705518220976875
         },
         {
-          "x": 46.82579237756961,
-          "y": 75.08319281754504,
-          "p": 0.9436272280472473
+          "x": 52.87102760244541,
+          "y": -59.73950040966585,
+          "p": 0.947404862920645
         },
         {
-          "x": 64.62455126468284,
-          "y": 93.39930276807269,
-          "p": 1.1796771718388648
+          "x": 55.258090675633404,
+          "y": 30.717962400923604,
+          "p": 0.9105085417177702
         },
         {
-          "x": 153.70426031662143,
-          "y": 17.395581958912214,
-          "p": 1.1711074896453046
+          "x": 133.80448917400136,
+          "y": 49.15069656536013,
+          "p": 1.0236775737660844
         }
       ],
       "box3dFaceIndex": 5,
@@ -536,12 +537,12 @@
       "hidden": false,
       "parallax": 1,
       "cutter": false,
-      "x": -76.01924869067642,
-      "y": -0.5029723534978453,
-      "z": -20.66997815713743,
-      "rotationX": -91.50745565573658,
-      "rotationY": 33.06487001139251,
-      "rotationZ": 1.439061222655554,
+      "x": -76.2011814581183,
+      "y": 6.269639797172609,
+      "z": -19.506908692148123,
+      "rotationX": 15.3987046133255,
+      "rotationY": 38.51171979843942,
+      "rotationZ": -0.6274942038324419,
       "pivotX": {
         "x": 0,
         "y": 0,
@@ -561,6 +562,7 @@
       "axisRotationX": 0,
       "axisRotationY": 0,
       "axisRotationZ": 0,
+      "occlusionMode": "inherit",
       "uniformScale": 1,
       "scaleX": 1,
       "scaleY": 1,
@@ -595,30 +597,30 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": -71.3443008224477,
-      "y": -0.3016063068474235,
+      "x": -81.83565545447779,
+      "y": -43.65077933704333,
       "ignoreScaling": true,
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": -85.27699647125812,
-          "y": 64.85353135172326,
-          "p": 0.9425140994817361
+          "x": -79.71604118721442,
+          "y": -56.666222722096215,
+          "p": 0.9420738716230884
         },
         {
-          "x": -6.295955071624755,
-          "y": 13.449392505771549,
-          "p": 0.9445456148350839
+          "x": -6.662087952009465,
+          "y": -46.69066781901556,
+          "p": 1.0451606492164582
         },
         {
-          "x": -57.63989524132677,
-          "y": -65.42839408634762,
-          "p": 0.940391261506173
+          "x": -83.11641737009663,
+          "y": -28.934607910498293,
+          "p": 1.2108736256235624
         },
         {
-          "x": -136.16435650558117,
-          "y": -14.080954998536889,
-          "p": 0.9383775580536196
+          "x": -157.84807530859064,
+          "y": -42.311618896563246,
+          "p": 1.0746365305443284
         }
       ],
       "box3dFaceIndex": 0,
@@ -669,30 +671,30 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": -87.90154273334518,
-      "y": 0.20684329087777442,
+      "x": -77.18755927952361,
+      "y": 56.719341511454815,
       "ignoreScaling": true,
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": -168.7894388617473,
-          "y": -17.016534018595898,
-          "p": 1.1715224676105083
+          "x": -149.69684197099704,
+          "y": 58.64984075991191,
+          "p": 1.0251232600965154
         },
         {
-          "x": -70.79031235180521,
-          "y": -81.16358430204266,
-          "p": 1.1746627821349152
+          "x": -77.8423504564774,
+          "y": 83.475175371759,
+          "p": 1.1483755448350748
         },
         {
-          "x": -6.657487827601507,
-          "y": 17.385968669554092,
-          "p": 1.1811519782605524
+          "x": -5.507719290767322,
+          "y": 51.822275426265065,
+          "p": 0.9982670350475361
         },
         {
-          "x": -105.36893189222668,
-          "y": 81.62152281459558,
-          "p": 1.177976918677274
+          "x": -75.7033253998527,
+          "y": 32.930074487883275,
+          "p": 0.9038051718442905
         }
       ],
       "box3dFaceIndex": 1,
@@ -743,30 +745,30 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": -108.3460007401151,
-      "y": -44.42236685138077,
+      "x": -117.12592127654042,
+      "y": 17.719697331152343,
       "ignoreScaling": true,
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": -136.16435650558117,
-          "y": -14.080954998536889,
-          "p": 0.9383775580536196
+          "x": -157.84807530859064,
+          "y": -42.311618896563246,
+          "p": 1.0746365305443284
         },
         {
-          "x": -57.63989524132677,
-          "y": -65.42839408634762,
-          "p": 0.940391261506173
+          "x": -83.11641737009663,
+          "y": -28.934607910498293,
+          "p": 1.2108736256235624
         },
         {
-          "x": -70.79031235180521,
-          "y": -81.16358430204266,
-          "p": 1.1746627821349152
+          "x": -77.8423504564774,
+          "y": 83.475175371759,
+          "p": 1.1483755448350748
         },
         {
-          "x": -168.7894388617473,
-          "y": -17.016534018595898,
-          "p": 1.1715224676105083
+          "x": -149.69684197099704,
+          "y": 58.64984075991191,
+          "p": 1.0251232600965154
         }
       ],
       "box3dFaceIndex": 2,
@@ -817,30 +819,30 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": -35.34591262308956,
-      "y": -28.93915430326616,
+      "x": -43.28214376733771,
+      "y": 14.918043767127553,
       "ignoreScaling": true,
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": -57.63989524132677,
-          "y": -65.42839408634762,
-          "p": 0.940391261506173
+          "x": -83.11641737009663,
+          "y": -28.934607910498293,
+          "p": 1.2108736256235624
         },
         {
-          "x": -6.295955071624755,
-          "y": 13.449392505771549,
-          "p": 0.9445456148350839
+          "x": -6.662087952009465,
+          "y": -46.69066781901556,
+          "p": 1.0451606492164582
         },
         {
-          "x": -6.657487827601507,
-          "y": 17.385968669554092,
-          "p": 1.1811519782605524
+          "x": -5.507719290767322,
+          "y": 51.822275426265065,
+          "p": 0.9982670350475361
         },
         {
-          "x": -70.79031235180521,
-          "y": -81.16358430204266,
-          "p": 1.1746627821349152
+          "x": -77.8423504564774,
+          "y": 83.475175371759,
+          "p": 1.1483755448350748
         }
       ],
       "box3dFaceIndex": 3,
@@ -891,30 +893,30 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": -50.899842815677765,
-      "y": 44.327603835411125,
+      "x": -41.897293457460975,
+      "y": -4.651135156740857,
       "ignoreScaling": true,
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": -6.295955071624755,
-          "y": 13.449392505771549,
-          "p": 0.9445456148350839
+          "x": -6.662087952009465,
+          "y": -46.69066781901556,
+          "p": 1.0451606492164582
         },
         {
-          "x": -85.27699647125812,
-          "y": 64.85353135172326,
-          "p": 0.9425140994817361
+          "x": -79.71604118721442,
+          "y": -56.666222722096215,
+          "p": 0.9420738716230884
         },
         {
-          "x": -105.36893189222668,
-          "y": 81.62152281459558,
-          "p": 1.177976918677274
+          "x": -75.7033253998527,
+          "y": 32.930074487883275,
+          "p": 0.9038051718442905
         },
         {
-          "x": -6.657487827601507,
-          "y": 17.385968669554092,
-          "p": 1.1811519782605524
+          "x": -5.507719290767322,
+          "y": 51.822275426265065,
+          "p": 0.9982670350475361
         }
       ],
       "box3dFaceIndex": 4,
@@ -965,30 +967,1698 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": -123.89993093270331,
-      "y": 28.844391287296514,
+      "x": -115.7410709666637,
+      "y": -1.8494815927160673,
       "ignoreScaling": true,
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": -85.27699647125812,
-          "y": 64.85353135172326,
-          "p": 0.9425140994817361
+          "x": -79.71604118721442,
+          "y": -56.666222722096215,
+          "p": 0.9420738716230884
         },
         {
-          "x": -136.16435650558117,
-          "y": -14.080954998536889,
-          "p": 0.9383775580536196
+          "x": -157.84807530859064,
+          "y": -42.311618896563246,
+          "p": 1.0746365305443284
         },
         {
-          "x": -168.7894388617473,
-          "y": -17.016534018595898,
-          "p": 1.1715224676105083
+          "x": -149.69684197099704,
+          "y": 58.64984075991191,
+          "p": 1.0251232600965154
         },
         {
-          "x": -105.36893189222668,
-          "y": 81.62152281459558,
-          "p": 1.177976918677274
+          "x": -75.7033253998527,
+          "y": 32.930074487883275,
+          "p": 0.9038051718442905
+        }
+      ],
+      "box3dFaceIndex": 5,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#1a1a1a",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#413e3e",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "miles",
+      "type": "Actor",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Actor"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow",
+          "offsetX": -70,
+          "offsetY": -25,
+          "triggerId": "#f"
+        },
+        {
+          "type": "Inventory",
+          "capacity": 10,
+          "groups": [],
+          "protected": true,
+          "items": [],
+          "relation": "in"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow2",
+          "offsetX": -12,
+          "offsetY": -14,
+          "triggerId": "#F2"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_761_face_1",
+        "relation": "on"
+      },
+      "parallax": 1.0471000505563721,
+      "x": 51.486410440479226,
+      "y": 57.94950192149803,
+      "width": 25.16,
+      "height": 60.18000000000001,
+      "baseWidth": 148,
+      "baseHeight": 354,
+      "spriteName": "miles2_ds-idle-down.json",
+      "color": "#00ffff",
+      "scale": 0.17,
+      "refScale": 0.34,
+      "modelScale": 0.34,
+      "depthSortMode": "y",
+      "ignoreScaling": false,
+      "animationSpeed": 53,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "flipX": false,
+      "flipY": false,
+      "isPlayer": true,
+      "speed": 0.24,
+      "perceptionRadius": 600,
+      "direction": "down",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles2_ds-idle-up.json",
+          "down": "miles2_ds-idle-down.json",
+          "left": "miles2_ds-idle-left.json",
+          "right": ""
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles2_ds-wlk-up.json",
+          "down": "miles2_ds-walk-down.json",
+          "left": "miles2_ds-walk-left.json",
+          "right": ""
+        }
+      },
+      "colliderWidth": 88,
+      "colliderHeight": 4
+    },
+    {
+      "name": "Static_581",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": -1,
+      "visible": true,
+      "hidden": false,
+      "parallax": 0.2,
+      "x": -164,
+      "y": 545,
+      "width": 1264.0000000000002,
+      "height": 847.9999999999997,
+      "baseWidth": 1264.0000000000002,
+      "baseHeight": 847.9999999999997,
+      "spriteName": "window-view",
+      "color": "#AAAAAA",
+      "scale": 1,
+      "refScale": 1,
+      "modelScale": 1,
+      "depthSortMode": "y",
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 1,
+      "brightness": 0.7,
+      "saturation": 1,
+      "contrast": 1.2,
+      "hueShift": -105,
+      "flipX": false,
+      "flipY": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Static_66",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_815_face_0",
+        "relation": "in"
+      },
+      "parallax": 1.1057564982413977,
+      "x": -91.0452892819256,
+      "y": -39.70866605807423,
+      "width": 43.2,
+      "height": 45,
+      "baseWidth": 432,
+      "baseHeight": 450,
+      "spriteName": "office-plant",
+      "color": "#AAAAAA",
+      "scale": 0.1,
+      "refScale": 0.2,
+      "modelScale": 0.2,
+      "depthSortMode": "y",
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "flipX": false,
+      "flipY": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_752",
+      "type": "Box3D",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "folder": "f_mt73rtgd_4",
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "cutter": false,
+      "x": -126.6229759411458,
+      "y": 90.9269422144397,
+      "z": -29.691043683685464,
+      "rotationX": 21.742566265520455,
+      "rotationY": 21.229553607102027,
+      "rotationZ": 0.37124963529493654,
+      "pivotX": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivotY": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivotZ": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "axisMode": "object",
+      "axisRotationX": 0,
+      "axisRotationY": 0,
+      "axisRotationZ": 0,
+      "occlusionMode": "inherit",
+      "uniformScale": 1,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1,
+      "bottomWidth": 100,
+      "bottomDepth": 100,
+      "topWidth": 100,
+      "topDepth": 100,
+      "height": 100,
+      "topOffsetX": 0,
+      "topOffsetZ": 0
+    },
+    {
+      "name": "Box3D_752_face_0",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_752",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": -138.95649672335438,
+      "y": 50.793113446663725,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -151.74872238046012,
+          "y": 19.85390924502343,
+          "p": 0.9801521670117554
+        },
+        {
+          "x": -64.02433532827246,
+          "y": 35.61433247893412,
+          "p": 1.0391901353950028
+        },
+        {
+          "x": -120.4675979838079,
+          "y": 84.72974730600362,
+          "p": 1.2315184057934003
+        },
+        {
+          "x": -219.58533120087705,
+          "y": 62.974464756693735,
+          "p": 1.1494680099817827
+        }
+      ],
+      "box3dFaceIndex": 0,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#1a1a1a",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#707070",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_752_face_1",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_752",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": -130.28656122451542,
+      "y": 142.54197443224515,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -205.0369496833187,
+          "y": 157.90288660575837,
+          "p": 1.0699285481647045
+        },
+        {
+          "x": -112.26943212315261,
+          "y": 184.32946345857835,
+          "p": 1.1406671713080994
+        },
+        {
+          "x": -60.58044432034582,
+          "y": 123.7320724896811,
+          "p": 0.9737458657266093
+        },
+        {
+          "x": -143.25941877124458,
+          "y": 104.20347517496279,
+          "p": 0.9217236050739012
+        }
+      ],
+      "box3dFaceIndex": 1,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#1a1a1a",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#707070",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_752_face_2",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_752",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": -164.33982774778906,
+      "y": 122.48414053175853,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -219.58533120087705,
+          "y": 62.974464756693735,
+          "p": 1.1494680099817827
+        },
+        {
+          "x": -120.4675979838079,
+          "y": 84.72974730600362,
+          "p": 1.2315184057934003
+        },
+        {
+          "x": -112.26943212315261,
+          "y": 184.32946345857835,
+          "p": 1.1406671713080994
+        },
+        {
+          "x": -205.0369496833187,
+          "y": 157.90288660575837,
+          "p": 1.0699285481647045
+        }
+      ],
+      "box3dFaceIndex": 2,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#171b1c",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#413e3e",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_752_face_3",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_752",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": -89.3354524388947,
+      "y": 107.1014039332993,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -120.4675979838079,
+          "y": 84.72974730600362,
+          "p": 1.2315184057934003
+        },
+        {
+          "x": -64.02433532827246,
+          "y": 35.61433247893412,
+          "p": 1.0391901353950028
+        },
+        {
+          "x": -60.58044432034582,
+          "y": 123.7320724896811,
+          "p": 0.9737458657266093
+        },
+        {
+          "x": -112.26943212315261,
+          "y": 184.32946345857835,
+          "p": 1.1406671713080994
+        }
+      ],
+      "box3dFaceIndex": 3,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#1a1a1a",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#413e3e",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_752_face_4",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_752",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": -104.90323020008074,
+      "y": 70.85094734715037,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -64.02433532827246,
+          "y": 35.61433247893412,
+          "p": 1.0391901353950028
+        },
+        {
+          "x": -151.74872238046012,
+          "y": 19.85390924502343,
+          "p": 0.9801521670117554
+        },
+        {
+          "x": -143.25941877124458,
+          "y": 104.20347517496279,
+          "p": 0.9217236050739012
+        },
+        {
+          "x": -60.58044432034582,
+          "y": 123.7320724896811,
+          "p": 0.9737458657266093
+        }
+      ],
+      "box3dFaceIndex": 4,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#171b1c",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#413e3e",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_752_face_5",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_752",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": -179.9076055089751,
+      "y": 86.23368394560958,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -151.74872238046012,
+          "y": 19.85390924502343,
+          "p": 0.9801521670117554
+        },
+        {
+          "x": -219.58533120087705,
+          "y": 62.974464756693735,
+          "p": 1.1494680099817827
+        },
+        {
+          "x": -205.0369496833187,
+          "y": 157.90288660575837,
+          "p": 1.0699285481647045
+        },
+        {
+          "x": -143.25941877124458,
+          "y": 104.20347517496279,
+          "p": 0.9217236050739012
+        }
+      ],
+      "box3dFaceIndex": 5,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#1a1a1a",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#413e3e",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_472",
+      "type": "Box3D",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "folder": "f_mt73rtgd_4",
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "cutter": false,
+      "x": -26.293267460054476,
+      "y": 96.91614628265127,
+      "z": -25.968479896811957,
+      "rotationX": 21.742566265520455,
+      "rotationY": 21.229553607102027,
+      "rotationZ": 0.37124963529493654,
+      "pivotX": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivotY": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivotZ": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "axisMode": "object",
+      "axisRotationX": 0,
+      "axisRotationY": 0,
+      "axisRotationZ": 0,
+      "occlusionMode": "inherit",
+      "uniformScale": 1,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1,
+      "bottomWidth": 100,
+      "bottomDepth": 100,
+      "topWidth": 100,
+      "topDepth": 100,
+      "height": 100,
+      "topOffsetX": 0,
+      "topOffsetZ": 0
+    },
+    {
+      "name": "Box3D_472_face_0",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_472",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": -28.3825753972025,
+      "y": 56.96096062550547,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -53.07421876231281,
+          "y": 25.562352571238534,
+          "p": 0.9739838646677593
+        },
+        {
+          "x": 39.96893552970055,
+          "y": 41.55920388361681,
+          "p": 1.0322590048015086
+        },
+        {
+          "x": 3.0658887116343734,
+          "y": 91.37844409036366,
+          "p": 1.2217963054164067
+        },
+        {
+          "x": -103.49090706783213,
+          "y": 69.34384195680289,
+          "p": 1.1409937740700864
+        }
+      ],
+      "box3dFaceIndex": 0,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#1a1a1a",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#707070",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_472_face_1",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_472",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": -27.11562789437661,
+      "y": 147.6933982811453,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -97.02061355969063,
+          "y": 163.18280195767963,
+          "p": 1.0625827679455864
+        },
+        {
+          "x": 2.1574716485606653,
+          "y": 189.76256369549893,
+          "p": 1.1323217326063153
+        },
+        {
+          "x": 36.88313794886149,
+          "y": 128.75395763339492,
+          "p": 0.9676576818367097
+        },
+        {
+          "x": -50.48250761523796,
+          "y": 109.07426983800775,
+          "p": 0.9162667424664921
+        }
+      ],
+      "box3dFaceIndex": 1,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#1a1a1a",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#707070",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_472_face_2",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_472",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": -48.82204006683193,
+      "y": 128.41691292508628,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -103.49090706783213,
+          "y": 69.34384195680289,
+          "p": 1.1409937740700864
+        },
+        {
+          "x": 3.0658887116343734,
+          "y": 91.37844409036366,
+          "p": 1.2217963054164067
+        },
+        {
+          "x": 2.1574716485606653,
+          "y": 189.76256369549893,
+          "p": 1.1323217326063153
+        },
+        {
+          "x": -97.02061355969063,
+          "y": 163.18280195767963,
+          "p": 1.0625827679455864
+        }
+      ],
+      "box3dFaceIndex": 2,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#171b1c",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#413e3e",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_472_face_3",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_472",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 20.51885845968927,
+      "y": 112.86354232571858,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": 3.0658887116343734,
+          "y": 91.37844409036366,
+          "p": 1.2217963054164067
+        },
+        {
+          "x": 39.96893552970055,
+          "y": 41.55920388361681,
+          "p": 1.0322590048015086
+        },
+        {
+          "x": 36.88313794886149,
+          "y": 128.75395763339492,
+          "p": 0.9676576818367097
+        },
+        {
+          "x": 2.1574716485606653,
+          "y": 189.76256369549893,
+          "p": 1.1323217326063153
+        }
+      ],
+      "box3dFaceIndex": 3,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#1a1a1a",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#413e3e",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_472_face_4",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_472",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": -6.676163224747182,
+      "y": 76.2374459815645,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": 39.96893552970055,
+          "y": 41.55920388361681,
+          "p": 1.0322590048015086
+        },
+        {
+          "x": -53.07421876231281,
+          "y": 25.562352571238534,
+          "p": 0.9739838646677593
+        },
+        {
+          "x": -50.48250761523796,
+          "y": 109.07426983800775,
+          "p": 0.9162667424664921
+        },
+        {
+          "x": 36.88313794886149,
+          "y": 128.75395763339492,
+          "p": 0.9676576818367097
+        }
+      ],
+      "box3dFaceIndex": 4,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#171b1c",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#413e3e",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_472_face_5",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_472",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": -76.01706175126839,
+      "y": 91.7908165809322,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -53.07421876231281,
+          "y": 25.562352571238534,
+          "p": 0.9739838646677593
+        },
+        {
+          "x": -103.49090706783213,
+          "y": 69.34384195680289,
+          "p": 1.1409937740700864
+        },
+        {
+          "x": -97.02061355969063,
+          "y": 163.18280195767963,
+          "p": 1.0625827679455864
+        },
+        {
+          "x": -50.48250761523796,
+          "y": 109.07426983800775,
+          "p": 0.9162667424664921
+        }
+      ],
+      "box3dFaceIndex": 5,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#1a1a1a",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#413e3e",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_511",
+      "type": "Box3D",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "folder": "f_mt73rtgd_4",
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "cutter": false,
+      "x": 66.02844680063494,
+      "y": 95.99613499598502,
+      "z": 19.998965859890177,
+      "rotationX": 16.468304662144934,
+      "rotationY": 45.92302094378545,
+      "rotationZ": 0.37124963529493654,
+      "pivotX": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivotY": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivotZ": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "axisMode": "object",
+      "axisRotationX": 0,
+      "axisRotationY": 0,
+      "axisRotationZ": 0,
+      "occlusionMode": "inherit",
+      "uniformScale": 1,
+      "scaleX": 1,
+      "scaleY": 1,
+      "scaleZ": 1,
+      "bottomWidth": 100,
+      "bottomDepth": 100,
+      "topWidth": 100,
+      "topDepth": 100,
+      "height": 100,
+      "topOffsetX": 0,
+      "topOffsetZ": 0
+    },
+    {
+      "name": "Box3D_511_face_0",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_511",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 66.06003660506647,
+      "y": 49.16794291571807,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": 59.78609297567504,
+          "y": 24.627288599495795,
+          "p": 0.8871179466206649
+        },
+        {
+          "x": 135.86928501437743,
+          "y": 48.361367034030785,
+          "p": 0.9920754848522864
+        },
+        {
+          "x": 72.98135169558707,
+          "y": 76.74010936196649,
+          "p": 1.1208242978771665
+        },
+        {
+          "x": -4.396583265373615,
+          "y": 46.943006667379215,
+          "p": 0.9886713006185714
+        }
+      ],
+      "box3dFaceIndex": 0,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#1a1a1a",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#707070",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_511_face_1",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_511",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 62.47679200790346,
+      "y": 137.69643506405006,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -4.614206322688485,
+          "y": 134.953444068528,
+          "p": 0.9421188849405484
+        },
+        {
+          "x": 68.63160731187754,
+          "y": 174.3100134777282,
+          "p": 1.0613692642103882
+        },
+        {
+          "x": 129.02474582858548,
+          "y": 136.5935218681342,
+          "p": 0.9452095377081497
+        },
+        {
+          "x": 56.86502121383929,
+          "y": 104.92876084180986,
+          "p": 0.8494556616024138
+        }
+      ],
+      "box3dFaceIndex": 1,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#1a1a1a",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#707070",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_511_face_2",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_511",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 33.15054235485062,
+      "y": 108.2366433939005,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -4.396583265373615,
+          "y": 46.943006667379215,
+          "p": 0.9886713006185714
+        },
+        {
+          "x": 72.98135169558707,
+          "y": 76.74010936196649,
+          "p": 1.1208242978771665
+        },
+        {
+          "x": 68.63160731187754,
+          "y": 174.3100134777282,
+          "p": 1.0613692642103882
+        },
+        {
+          "x": -4.614206322688485,
+          "y": 134.953444068528,
+          "p": 0.9421188849405484
+        }
+      ],
+      "box3dFaceIndex": 2,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#171b1c",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#413e3e",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_511_face_3",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_511",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 101.62674746260687,
+      "y": 109.00125293546492,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": 72.98135169558707,
+          "y": 76.74010936196649,
+          "p": 1.1208242978771665
+        },
+        {
+          "x": 135.86928501437743,
+          "y": 48.361367034030785,
+          "p": 0.9920754848522864
+        },
+        {
+          "x": 129.02474582858548,
+          "y": 136.5935218681342,
+          "p": 0.9452095377081497
+        },
+        {
+          "x": 68.63160731187754,
+          "y": 174.3100134777282,
+          "p": 1.0613692642103882
+        }
+      ],
+      "box3dFaceIndex": 3,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#1a1a1a",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#413e3e",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_511_face_4",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_511",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 95.38628625811931,
+      "y": 78.62773458586766,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": 135.86928501437743,
+          "y": 48.361367034030785,
+          "p": 0.9920754848522864
+        },
+        {
+          "x": 59.78609297567504,
+          "y": 24.627288599495795,
+          "p": 0.8871179466206649
+        },
+        {
+          "x": 56.86502121383929,
+          "y": 104.92876084180986,
+          "p": 0.8494556616024138
+        },
+        {
+          "x": 129.02474582858548,
+          "y": 136.5935218681342,
+          "p": 0.9452095377081497
+        }
+      ],
+      "box3dFaceIndex": 4,
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#171b1c",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 4,
+      "lineWidth": 0,
+      "gridColor": "#413e3e",
+      "filled": true,
+      "checkerboard": true,
+      "secondColor": "#3d3d3d",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Box3D_511_face_5",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Box3D_511",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 26.910081150363055,
+      "y": 77.86312504430322,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": 59.78609297567504,
+          "y": 24.627288599495795,
+          "p": 0.8871179466206649
+        },
+        {
+          "x": -4.396583265373615,
+          "y": 46.943006667379215,
+          "p": 0.9886713006185714
+        },
+        {
+          "x": -4.614206322688485,
+          "y": 134.953444068528,
+          "p": 0.9421188849405484
+        },
+        {
+          "x": 56.86502121383929,
+          "y": 104.92876084180986,
+          "p": 0.8494556616024138
         }
       ],
       "box3dFaceIndex": 5,
@@ -1036,8 +2706,8 @@
         "x": -9.225919573107909,
         "y": 4.828140085832828,
         "z": -20.950794524653425,
-        "rotationX": -108.0168776371308,
-        "rotationY": 4.010050251256274,
+        "rotationX": -2.320675105485236,
+        "rotationY": 9.708542713567823,
         "rotationZ": 0,
         "uniformScale": 1,
         "scaleX": 1,
@@ -1082,6 +2752,7 @@
   "camDeadzoneX": 50,
   "camDeadzoneY": 30,
   "box3dPerspective": 1,
+  "box3dOcclusionMode": "exact",
   "soundEnv": {
     "audioMaxDistance": 10000,
     "reverbMaxDist": 1750,
