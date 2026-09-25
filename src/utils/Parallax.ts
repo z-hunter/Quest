@@ -1,4 +1,4 @@
-import { getGameDesignResolution } from '../core/Resolution';
+import { getGameDesignWidth } from '../core/Resolution';
 
 export interface Camera2D {
   x: number;
@@ -19,7 +19,7 @@ export interface Parallax3DPoint {
 }
 
 export function getParallaxFocalLength(): number {
-  return getGameDesignResolution().width / 2;
+  return getGameDesignWidth() / 2;
 }
 
 /** Reconstructs a virtual-camera point from authored coordinates and effective P. */

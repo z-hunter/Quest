@@ -8,7 +8,7 @@ SHALL WE MAKE A GAME?
 
 - **Hybrid Controls**: Point-n-Click for navigation + Text Parser for actions. No more "scroll and click everything" pixel hunting.
 - **AI Game Master**: An AI (LLM) acts as the bridge between the player and the game engine. It parses natural language commands, generates descriptions, and drives dynamic conversations with NPCs.
-- **Retro Aesthetics**: Pixel art style, CRT shader effects, and a command-line interface.
+- **Retro Aesthetics**: Pixel art style, SVS CRT effects, and a command-line interface.
 - **Integrated Editor**: Built-in tools for editing scenes, defining sprites and game logic (polygonal walkboxes, triggers).
 
 ## Installation and Run (Windows)
@@ -67,6 +67,20 @@ npm run tauri:build
 - `src/` - Source code (React, TypeScript).
 - `public/` - Static assets (sprites, sounds, scenes).
 - `GDD.md` - Game Design Document (Russian).
+
+## Display modes
+
+Quest uses the external [`scanline-virtual-screen`](https://github.com/z-hunter/Scanline-Virtual-Screen)
+module (pinned to `v2.0.2`) for the display pass. The default source mode is
+`quest-420x300`; the editor also exposes `quest-800x600` and `quest-1024x768`.
+Changing a mode resizes the source buffer and active world viewport, so camera,
+parallax, and Box3D calculations use the selected dimensions.
+
+Display and CRT values are persisted together in `settings.screenProfile`.
+Existing `crt` settings are migrated once on load (`crt.enabled` becomes
+`screenProfile.crt.crtEmulation`) while editor and audio settings are retained.
+The debug API still accepts `crt.*` aliases, but `getSettings()` returns only
+the canonical profile.
 
 ## License
 

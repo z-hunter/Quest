@@ -1,5 +1,5 @@
 import type { IGame } from '../core/IGame';
-import { GAME_DESIGN_WIDTH } from '../core/Resolution';
+import { getGameDesignWidth } from '../core/Resolution';
 import type { Entity } from './Entity';
 import { QuadObject, type QuadVertex } from './QuadObject';
 import { SceneObject } from './SceneObject';
@@ -515,7 +515,7 @@ export function projectBox3DPoint(
   v: Box3DPoint,
   camera: { x: number; y: number },
   perspective: number,
-  focal = GAME_DESIGN_WIDTH
+  focal = getGameDesignWidth()
 ): QuadVertex {
   const p = perspective === 0 ? 1 : focal / (focal + perspective * v.z);
   return {
@@ -1107,7 +1107,7 @@ function signedDistance(plane: Plane, point: Box3DPoint): number {
   return dot(plane.normal, point) + plane.d;
 }
 export function getBox3DProjectionFocal(camera: { zoom?: number }): number {
-  return GAME_DESIGN_WIDTH / Math.max(Number(camera.zoom) || 1, EPSILON);
+  return getGameDesignWidth() / Math.max(Number(camera.zoom) || 1, EPSILON);
 }
 function cameraPoint(
   camera: { x: number; y: number },

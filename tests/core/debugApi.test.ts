@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createDebugApi } from '../../src/debug/debugApi';
 import { useEditorStore } from '../../src/store/editorStore';
+import { createDefaultQuestSettings } from '../../src/core/displaySettings';
 
 describe('Quest Playwright Debug API', () => {
   let mockGame: any;
@@ -137,18 +138,20 @@ describe('Quest Playwright Debug API', () => {
         }),
       },
       settings: {
-        crt: {
-          enabled: true,
-          curvature: 0.1,
-          scanlineIntensity: 0.3,
+        ...createDefaultQuestSettings(),
+        screenProfile: {
+          ...createDefaultQuestSettings().screenProfile,
+          crt: {
+            ...createDefaultQuestSettings().screenProfile.crt,
+            curvature: 0.1,
+            scanlineIntensity: 0.3,
+          },
         },
-        editor: {
-          uiScale: 1.0,
-        },
-        audio: {
-          attachedVolume: 0.75,
-        },
+        audio: { attachedVolume: 0.75 },
       },
+      setScreenProfile: vi.fn((profile: any) => {
+        mockGame.settings.screenProfile = profile;
+      }),
       console: {
         buffer: [
           { text: 'Game started', type: 'info', timestamp: 1000 },
@@ -339,7 +342,7 @@ describe('Quest Playwright Debug API', () => {
       const api = createDebugApi(mockGame);
 
       const settings = api.settings.getSettings();
-      expect(settings.crt.enabled).toBe(true);
+      expect(settings.screenProfile.crt.crtEmulation).toBe(true);
       expect(settings.audio.attachedVolume).toBe(0.75);
 
       expect(api.settings.getSetting('crt.scanlineIntensity')).toBe(0.3);
@@ -354,14 +357,15 @@ describe('Quest Playwright Debug API', () => {
       expect(mockGame.saveSettings).toHaveBeenCalled();
 
       api.settings.setSetting('crt.enabled', false);
-      expect(mockGame.settings.crt.enabled).toBe(false);
+      expect(mockGame.settings.screenProfile.crt.crtEmulation).toBe(false);
 
       api.settings.setSettings({
         audio: { attachedVolume: 0.9 },
         crt: { curvature: 0.25 },
       });
       expect(mockGame.settings.audio.attachedVolume).toBe(0.9);
-      expect(mockGame.settings.crt.curvature).toBe(0.25);
+      expect(mockGame.settings.screenProfile.crt.curvature).toBe(0.25);
+      expect(mockGame.settings.crt).toBeUndefined();
     });
   });
 

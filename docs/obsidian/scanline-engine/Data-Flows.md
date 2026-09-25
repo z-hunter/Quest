@@ -26,8 +26,8 @@ timestamp → Game.loop
               → ScriptRegistry.update
           → Game.render
               → SceneManager.render(ctx)
-              → CRTFilter / editor overlay
-              → React/Canvas UI
+              → VirtualScreenRenderer (SVS)
+              → editor overlay / React/Canvas UI
 ```
 
 ## Команда игрока

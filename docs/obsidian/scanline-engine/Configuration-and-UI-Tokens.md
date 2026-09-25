@@ -4,27 +4,22 @@
 
 ## Persisted Game settings
 
-`src/core/Game.ts` хранит настройки в `localStorage` под ключом `quest_settings`. При старте значения merge-ятся с defaults; `saveSettings` сериализует весь объект.
+`src/core/Game.ts` хранит настройки в `localStorage` под ключом `quest_settings`. Канонический persisted display-источник — `screenProfile`; `saveSettings` сериализует весь объект. Профиль нормализуется через SVS с разрешёнными Quest modes.
 
 ```ts
 settings = {
-  crt: {
-    enabled: true,
-    curvature: 0.16,
-    scanlineCount: 200,
-    scanlineIntensity: 0.4,
-    aberration: 0.2,
-    vignette: 0.9,
-    phosphor: 1.0,
-    bezelGlow: true,
-    bloom: 0.05
+  screenProfile: {
+    schemaVersion: 1,
+    virtualScreen: { modeId: 'quest-420x300' },
+    terminal: { /* SVS terminal defaults */ },
+    crt: { crtEmulation: true, /* SVS CRT defaults */ }
   },
   editor: { uiScale: 1.0, viewportZoom: 'fit' },
   audio: { attachedVolume: 1.0 }
 }
 ```
 
-`SettingsProperties.tsx` редактирует UI Scale, viewport zoom (`fit|1|1.5|2`), attached volume (clamped `0..10`) и CRT sliders/toggles. `GameCanvas`, editor panels и `vetool.tsx` читают те же settings.
+`SettingsProperties.tsx` редактирует три display modes, UI Scale, viewport zoom (`fit|1|1.5|2`), attached volume (clamped `0..10`) и SVS CRT controls. Legacy `crt`/`crt.enabled` мигрируется один раз; старый `aberration` намеренно не переносится, поскольку SVS хранит output-pixel значение. `GameCanvas`, editor panels и `vetool.tsx` читают те же settings.
 
 ## Resolution и rendering
 

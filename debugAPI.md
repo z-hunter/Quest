@@ -87,9 +87,9 @@ Controls in-game graphics, audio, and editor settings without opening the F9 mod
 | Method | Signature | Description |
 | :--- | :--- | :--- |
 | `getSettings()` | `() => Record<string, any>` | Returns a copy of `game.settings`. |
-| `getSetting(path)` | `(path: string) => any` | Dot-notation getter (e.g. `'crt.enabled'`, `'editor.uiScale'`, `'audio.attachedVolume'`). |
-| `setSetting(path, value)` | `(path: string, value: unknown) => void` | Dot-notation setter with automatic side-effects and persistence. |
-| `setSettings(partial)` | `(partialSettings: Record<string, any>) => void` | Deep merge update for multiple settings. |
+| `getSetting(path)` | `(path: string) => any` | Dot-notation getter (e.g. `'screenProfile.virtualScreen.modeId'`, `'crt.enabled'`, `'editor.uiScale'`). |
+| `setSetting(path, value)` | `(path: string, value: unknown) => void` | Dot-notation setter with automatic side-effects and persistence. `crt.enabled` and same-name `crt.*` paths are computed aliases to `screenProfile.crt`. |
+| `setSettings(partial)` | `(partialSettings: Record<string, any>) => void` | Deep merge update for canonical settings; a legacy top-level `crt` patch is translated to `screenProfile.crt`. |
 | `saveSettings()` | `() => void` | Persists current settings to `localStorage`. |
 | `loadSettings()` | `() => void` | Reloads settings from `localStorage`. |
 
@@ -313,9 +313,17 @@ expect(heroProps.x).toBe(420);
 ### Example 6: Changing Settings & Sending In-Game Commands
 
 ```ts
-// Disable CRT shader for clean automated screenshots
+// Disable CRT emulation for clean automated screenshots.
+// The legacy alias remains supported for scripts.
 await page.evaluate(() => {
   window.__QUEST_DEBUG__.api.settings.setSetting('crt.enabled', false);
+});
+
+await page.evaluate(() => {
+  window.__QUEST_DEBUG__.api.settings.setSetting(
+    'screenProfile.virtualScreen.modeId',
+    'quest-800x600'
+  );
 });
 
 // Send gameplay action and retrieve output

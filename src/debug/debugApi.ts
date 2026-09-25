@@ -514,15 +514,26 @@ export function createDebugApi(game: Game): QuestDebugApi {
     return JSON.parse(JSON.stringify(game.settings || {}));
   };
 
+  const resolveSettingsPath = (path: string): string | null => {
+    if (!path.startsWith('crt.')) return path;
+    const key = path.slice('crt.'.length);
+    if (key === 'enabled') return 'screenProfile.crt.crtEmulation';
+    if (key in (game.settings.screenProfile?.crt || {})) return `screenProfile.crt.${key}`;
+    return null;
+  };
+
   const getSetting = (path: string): any => {
-    return getNestedValue(game.settings as any, path);
+    const resolvedPath = resolveSettingsPath(path);
+    return resolvedPath ? getNestedValue(game.settings as any, resolvedPath) : undefined;
   };
 
   const setSetting = (path: string, value: unknown): void => {
     if (!game.settings) return;
+    const resolvedPath = resolveSettingsPath(path);
+    if (!resolvedPath) return;
 
     let finalValue: any = value;
-    const lastKey = path.split('.').pop() || '';
+    const lastKey = resolvedPath.split('.').pop() || '';
     if (NUMERIC_PROPERTIES.has(lastKey) && typeof value === 'string') {
       const num = parseFloat(value);
       if (!Number.isNaN(num)) {
@@ -530,7 +541,11 @@ export function createDebugApi(game: Game): QuestDebugApi {
       }
     }
 
-    setNestedValue(game.settings as any, path, finalValue);
+    setNestedValue(game.settings as any, resolvedPath, finalValue);
+
+    if (resolvedPath.startsWith('screenProfile')) {
+      game.setScreenProfile(game.settings.screenProfile);
+    }
 
     if (path.startsWith('audio') || path === 'audio.attachedVolume') {
       const vol = game.settings?.audio?.attachedVolume;
@@ -561,7 +576,24 @@ export function createDebugApi(game: Game): QuestDebugApi {
       }
     };
 
-    applyDeep(game.settings as any, partialSettings);
+    const canonicalPatch = { ...partialSettings };
+    if (canonicalPatch.crt && typeof canonicalPatch.crt === 'object') {
+      const legacyCrt = canonicalPatch.crt as Record<string, unknown>;
+      const screenProfile =
+        canonicalPatch.screenProfile && typeof canonicalPatch.screenProfile === 'object'
+          ? (canonicalPatch.screenProfile as Record<string, any>)
+          : {};
+      const crt =
+        screenProfile.crt && typeof screenProfile.crt === 'object' ? screenProfile.crt : {};
+      for (const [key, value] of Object.entries(legacyCrt)) {
+        crt[key === 'enabled' ? 'crtEmulation' : key] = value;
+      }
+      canonicalPatch.screenProfile = { ...screenProfile, crt };
+      delete canonicalPatch.crt;
+    }
+
+    applyDeep(game.settings as any, canonicalPatch);
+    if (canonicalPatch.screenProfile) game.setScreenProfile(game.settings.screenProfile);
 
     if (game.settings.audio?.attachedVolume !== undefined) {
       SoundManager.getInstance().setAttachedVolume(game.settings.audio.attachedVolume);

@@ -25,6 +25,7 @@
     "@tauri-apps/api": "2.11.1",
     "onnxruntime-web": "^1.27.0",
     "react": "^19.2.0",
+    "scanline-virtual-screen": "git+https://github.com/z-hunter/Scanline-Virtual-Screen.git#v2.0.2",
     "react-dom": "^19.2.0",
     "zustand": "^5.0.9"
   },

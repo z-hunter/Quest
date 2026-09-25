@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Game } from '../core/Game';
 import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../core/Resolution';
+import { getQuestScreenMode } from '../core/displaySettings';
+import { useEditorStore } from '../store/editorStore';
 
 interface GameCanvasProps {
   onGameInit: (game: Game) => void;
@@ -21,6 +23,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
     height: GAME_DESIGN_HEIGHT,
     scale: 1,
   });
+  const objectVersion = useEditorStore((state) => state.objectVersion);
 
   useEffect(() => {
     if (
@@ -61,14 +64,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
         const { clientWidth, clientHeight } = shellRef.current;
         if (clientWidth <= 0 || clientHeight <= 0) return;
 
-        const fitScale = Math.min(
-          clientWidth / GAME_DESIGN_WIDTH,
-          clientHeight / GAME_DESIGN_HEIGHT
+        const mode = getQuestScreenMode(
+          gameRef.current.settings.screenProfile.virtualScreen.modeId
         );
+        const designWidth = mode.width ?? GAME_DESIGN_WIDTH;
+        const designHeight = mode.height ?? GAME_DESIGN_HEIGHT;
+        const fitScale = Math.min(clientWidth / designWidth, clientHeight / designHeight);
         const requestedScale = zoomMode === 'fit' ? fitScale : Number.parseFloat(zoomMode);
         const appliedScale = zoomMode === 'fit' ? fitScale : Math.min(fitScale, requestedScale);
-        const width = Math.max(1, Math.round(GAME_DESIGN_WIDTH * appliedScale));
-        const height = Math.max(1, Math.round(GAME_DESIGN_HEIGHT * appliedScale));
+        const width = Math.max(1, Math.round(designWidth * appliedScale));
+        const height = Math.max(1, Math.round(designHeight * appliedScale));
         setViewportSize({ width, height, scale: appliedScale });
         const offsetX = Math.max(0, Math.round((clientWidth - width) / 2));
         const offsetY = Math.max(0, Math.round((clientHeight - height) / 2));
@@ -87,17 +92,19 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
 
         const dpr = window.devicePixelRatio || 1;
 
-        // Set RENDERER canvas size directly to computed width/height * dpr for sharp rendering in 1:1 sync with layout
-        canvasRef.current.width = Math.max(1, Math.round(width * dpr));
-        canvasRef.current.height = Math.max(1, Math.round(height * dpr));
+        const pixelWidth = Math.max(1, Math.round(width * dpr));
+        const pixelHeight = Math.max(1, Math.round(height * dpr));
 
-        if (editorOverlayCanvasRef.current) {
-          editorOverlayCanvasRef.current.width = Math.max(1, Math.round(width * dpr));
-          editorOverlayCanvasRef.current.height = Math.max(1, Math.round(height * dpr));
+        // Keep every post-SVS canvas in sync before the next game frame.
+        gameRef.current.resize(pixelWidth, pixelHeight);
+        if (uiCanvasRef.current) {
+          uiCanvasRef.current.width = pixelWidth;
+          uiCanvasRef.current.height = pixelHeight;
         }
-
-        // Notify game of resize
-        gameRef.current.resize(canvasRef.current.width, canvasRef.current.height);
+        if (editorOverlayCanvasRef.current) {
+          editorOverlayCanvasRef.current.width = pixelWidth;
+          editorOverlayCanvasRef.current.height = pixelHeight;
+        }
       }
     };
 
@@ -138,7 +145,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
       window.cancelAnimationFrame(raf2);
       window.clearTimeout(t);
     };
-  }, [zoomMode]);
+  }, [objectVersion, zoomMode]);
 
   useEffect(() => {
     if (gameRef.current?.settings.editor) {

@@ -3,7 +3,7 @@ import { SceneObject } from '../entities/SceneObject';
 import { Triggerbox } from '../entities/Triggerbox';
 import { Actor } from '../entities/Actor';
 import { ComponentSystem } from '../systems/ComponentSystem';
-import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../core/Resolution';
+import { getGameDesignResolution } from '../core/Resolution';
 import { getSceneTextLayerAccessState } from './SceneTextLayer';
 import { isManagedBox3DFace, raycastBox3DFace } from '../entities/Box3DObject';
 
@@ -11,9 +11,10 @@ export type HoverCursor = 'eye' | 'hand' | 'back';
 
 function getScreenSize(scene: Scene): { width: number; height: number } {
   const canvas = scene.game?.canvas;
+  const fallback = getGameDesignResolution();
   return {
-    width: canvas?.width || GAME_DESIGN_WIDTH,
-    height: canvas?.height || GAME_DESIGN_HEIGHT,
+    width: canvas?.width || fallback.width,
+    height: canvas?.height || fallback.height,
   };
 }
 
