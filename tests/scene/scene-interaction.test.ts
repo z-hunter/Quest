@@ -1,9 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { Entity } from '../../src/entities/Entity';
 import { QuadObject } from '../../src/entities/QuadObject';
-import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../../src/core/Resolution';
+import {
+  GAME_DESIGN_HEIGHT,
+  GAME_DESIGN_WIDTH,
+  setGameDesignResolution,
+} from '../../src/core/Resolution';
 import { handleSceneClick } from '../../src/scene/SceneInteraction';
 import { createSceneFixture } from '../fixtures/sceneFactory';
+
+afterEach(() => setGameDesignResolution(GAME_DESIGN_WIDTH, GAME_DESIGN_HEIGHT));
 
 describe('Scene interaction text layer', () => {
   it('shows the triggerbox title on click when it has TA', () => {
@@ -20,10 +26,9 @@ describe('Scene interaction text layer', () => {
     );
   });
 
-  it('uses the actual canvas size for screen-to-world click mapping', () => {
+  it('uses the active source resolution for screen-to-world click mapping', () => {
     const fixture = createSceneFixture();
-    fixture.game.canvas.width = 640;
-    fixture.game.canvas.height = 360;
+    setGameDesignResolution(640, 360);
     fixture.addTriggerbox('tb_center', {
       title: 'Center Trigger',
       description: 'Centered hotspot.',
@@ -85,8 +90,7 @@ describe('Scene interaction text layer', () => {
 
   it('hits parallax entities at their rendered screen position', () => {
     const fixture = createSceneFixture();
-    fixture.game.canvas.width = 800;
-    fixture.game.canvas.height = 600;
+    setGameDesignResolution(800, 600);
     fixture.scene.camera.x = 200;
     fixture.scene.camera.y = 100;
 
@@ -202,8 +206,7 @@ describe('Scene interaction text layer', () => {
 
   it('click-to-move uses route planning around blocking colliders', () => {
     const fixture = createSceneFixture();
-    fixture.game.canvas.width = 640;
-    fixture.game.canvas.height = 360;
+    setGameDesignResolution(640, 360);
     const player = fixture.addPlayer('Hero', -80, 0);
     player.colliderWidth = 4;
     player.colliderHeight = 4;

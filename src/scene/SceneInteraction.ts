@@ -9,13 +9,8 @@ import { isManagedBox3DFace, raycastBox3DFace } from '../entities/Box3DObject';
 
 export type HoverCursor = 'eye' | 'hand' | 'back';
 
-function getScreenSize(scene: Scene): { width: number; height: number } {
-  const canvas = scene.game?.canvas;
-  const fallback = getGameDesignResolution();
-  return {
-    width: canvas?.width || fallback.width,
-    height: canvas?.height || fallback.height,
-  };
+function getScreenSize(_scene: Scene): { width: number; height: number } {
+  return getGameDesignResolution();
 }
 
 function toWorld(scene: Scene, x: number, y: number): { x: number; y: number } {
