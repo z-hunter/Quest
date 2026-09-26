@@ -415,8 +415,10 @@ export class Game implements IGame {
 
     if (this.uiCtx && this.spriteEditor.active) this.spriteEditor.render(this.uiCtx);
 
-    const editorCtx = this.editorOverlayCtx ?? this.uiCtx;
-    const editorCanvas = this.editorOverlayCanvas ?? this.canvas;
+    const overlayCtx = this.editorOverlayCtx;
+    const overlayCanvas = this.editorOverlayCanvas;
+    const editorCtx = overlayCtx && overlayCanvas ? overlayCtx : this.uiCtx;
+    const editorCanvas = overlayCtx && overlayCanvas ? overlayCanvas : this.canvas;
     if (editorCtx && !this.spriteEditor.active && this.editor.enabled) {
       editorCtx.setTransform(
         editorCanvas.width / this.bufferCanvas.width,

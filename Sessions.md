@@ -1,3 +1,9 @@
+# Disclaimer
+
+**ATTENTION**!
+**THIS DOCUMENT MAY NOT REFLECT THE CURRENT STATE OF THE PROJECT**.
+**This is a historical timeline, not the definitive source for the current architecture**.
+
 ## Session Entry - 2026-04-15 18:16 Europe/Warsaw
 
 # Session Summary
@@ -2848,8 +2854,6 @@ The small local model used was unable to produce an adequate output in  the test
 1. Verify and test the tool with real MP4 animation assets in a web browser at `/vetool.html`.
 2. Integrate a link/button inside Scanline Sprite Editor (F5) to open the Video Export Tool in a new tab if desired.
 
-
-
 ## Session Entry - 2026-06-30 23:45 +02:00
 
 ### Session Goals
@@ -2873,7 +2877,7 @@ The small local model used was unable to produce an adequate output in  the test
 #### 2. Двусторонняя интеграция Sprite Editor и VETOOL
 
 - **Переход из Sprite Editor (F6):** В Sprite Editor добавлены горячая клавиша `F6` и пункт меню `F6 VETOOL` для перехода на страницу `/vetool.html`. Для браузерной версии (вне Tauri) добавлена поддержка `Ctrl+F6` для открытия VETOOL в новой вкладке.
-- **Возврат из VETOOL по F5:** 
+- **Возврат из VETOOL по F5:**
   - На главной странице (`App.tsx`) реализовано чтение хэша URL (`#sprite-editor`) на mount и событии `hashchange` с переключением в режим редактора спрайтов.
   - Устранена критическая ошибка рендеринга (White Screen of Death) при загрузке страницы: рендер боковых панелей и меню редактора теперь откладывается до полной инициализации синглтона `Game`.
   - В VETOOL обработчик клавиш переведен на фазу перехвата (`useCapture = true`) с вызовом `e.stopPropagation()` для надежной блокировки дефолтной перезагрузки страницы браузером при нажатии `F5`.
@@ -2906,7 +2910,6 @@ The small local model used was unable to produce an adequate output in  the test
 - `9967220` — `feat(vetool): remove redundant F7/F9 loop set buttons, support F-key style hotkeys inside standard e-btn`
 - `2d7304d` — `feat(vetool): darken e-btn hotkeys for better contrast, flash buttons on hotkey press`
 
-
 ## Session Entry - 2026-07-02 20:48 +02:00
 
 ### Session Goal
@@ -2922,8 +2925,8 @@ The small local model used was unable to produce an adequate output in  the test
 
 **Логика handleExit в ComponentSystem.ts:**
 
-- 	ransferActorToScene(activator, targetSceneId, { targetEntryId, activateScene: activator === currentScene.player })
-- Пустой 	argetSceneId → локальная телепортация внутри текущей сцены (scene.id как fallback)
+- ransferActorToScene(activator, targetSceneId, { targetEntryId, activateScene: activator === currentScene.player })
+- Пустой  argetSceneId → локальная телепортация внутри текущей сцены (scene.id как fallback)
 - Флаг ctivateScene = true только если активатор это scene.player; NPC переносится молча
 
 **Передача activator из handleSceneClick:**
@@ -2932,37 +2935,40 @@ The small local model used was unable to produce an adequate output in  the test
 
 **Кнопка Check в редакторе (SectionComponents.tsx):**
 
-- Проверяет 	argetSceneId → targetEntryId с поддержкой незагруженных сцен (sceneRegistry)
+- Проверяет  argetSceneId → targetEntryId с поддержкой незагруженных сцен (sceneRegistry)
 - Нормализует ID сцены: обрезает .json, понимает пустой ID как текущую сцену
-- Ищет Entry-объект по 
-ame во всех объектах: entities, 	riggerboxes (и Quad через entities)
+- Ищет Entry-объект по
+ame во всех объектах: entities,  riggerboxes (и Quad через entities)
 
 **ParserWorldModelBuilder.ts:**
 
 - Добавлено поле exit в ParserEntityContext: { targetSceneId, targetEntryId, targetSceneTitle }
-- 	argetSceneTitle берётся из загруженной сцены или из sceneRegistry.descriptor.title
-- Пустой 	argetSceneId раскрывается до currentScene.id для корректного отображения в LLM-контексте
+- argetSceneTitle берётся из загруженной сцены или из sceneRegistry.descriptor.title
+- Пустой  argetSceneId раскрывается до currentScene.id для корректного отображения в LLM-контексте
 
-**Тесты (	ests/scene/scene-transition.test.ts):**
+**Тесты ( ests/scene/scene-transition.test.ts):**
 
 - Создан новый тестовый файл с 4 сценариями: обычный переход, локальный (пустой targetSceneId), Exit на Entity, Exit на Quad с parallax
 - В тестах actor корректно назначен как scene.player (isPlayer = true), что соответствует семантике — ctivateScene срабатывает только для player
 
 ### Architecture/Runtime Decisions
 
-- **ctivateScene: actor === currentScene.player** вместо ctivateScene: true — ключевое решение: NPC должен переноситься в фон без переключения камеры/сцены. Параметр передаётся в 	ransferActorToScene в ComponentSystem.handleExit и в ActorCommandExecutor.goToScene использовался аналогичный паттерн.
-- **Entry — это имя объекта, а не свойство компонента** — Entry может быть на Triggerbox, Entity или Quad; идентифицируется по 
+- **ctivateScene: actor === currentScene.player** вместо ctivateScene: true — ключевое решение: NPC должен переноситься в фон без переключения камеры/сцены. Параметр передаётся в  ransferActorToScene в ComponentSystem.handleExit и в ActorCommandExecutor.goToScene использовался аналогичный паттерн.
+- **Entry — это имя объекта, а не свойство компонента** — Entry может быть на Triggerbox, Entity или Quad; идентифицируется по
 ame объекта.
-- **SceneManager scene keys без .json** — ID сцен хранятся без расширения; входной 	argetSceneId нужно нормализовать перед любым lookup.
+- **SceneManager scene keys без .json** — ID сцен хранятся без расширения; входной  argetSceneId нужно нормализовать перед любым lookup.
 - **Два источника данных о сценах**: sceneManager.scenes (загруженные) и sceneManager.sceneRegistry (все), оба нужно проверять.
 
 ### Tests Run
 
-- 
+-
+
 pm run typecheck — чисто (исправлены 2 ошибки Actor | null vs Actor | undefined через ?? undefined)
-- 
+-
+
 px vitest run tests/scene/scene-transition.test.ts — 4/4 pass
-- 
+-
+
 px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, не связаны с этой сессией)
 
 ### Files Changed
@@ -2971,7 +2977,7 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 - src/scene/SceneInteraction.ts — передача scene.player ?? undefined в ctivateSceneObject при кликах
 - src/components/editor/properties/SectionComponents.tsx — UI чекбоксов Collider/Portal, кнопка Check
 - src/mechanics/ParserWorldModelBuilder.ts — поле exit в entity context, нормализация targetSceneId
-- 	ests/scene/scene-transition.test.ts — новый тестовый файл (4 теста)
+- ests/scene/scene-transition.test.ts — новый тестовый файл (4 теста)
 - GDD.md — обновлено описание компонента Exit с полной спецификацией
 
 ### Remaining Work / Next Steps
@@ -2979,7 +2985,6 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 - Pre-existing 4 фейла в puppet-master.test.ts требуют отдельного разбора
 - Collider-режим для NPC не тестируется автоматически — потенциальная зона для дополнительных тестов
 - Поддержка GO TO <exit-object> через parser (Portal + автоподход) — описана в GDD как планируемая функциональность
-
 
 ## Session Entry - 2026-07-02 21:21 +02:00
 
@@ -3345,11 +3350,13 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 ## Session Entry - 2026-07-07 00:35 Europe/Warsaw
 
 ### Session Goals
+
 - Implement a Small Language Model (SLM) offline inference system and dataset logging (Shadow Mode) for the NPC Puppet Master.
 - Add diagnostic console commands for Shadow Mode configuration.
 - Audit and update `tech-spec.md` to match the current state of the engine.
 
 ### What Was Implemented
+
 - **Phase 1 (Shadow Mode)**: Created `ShadowLogger.ts` which records successful LLM plans in `logs/slm_shadow_dataset.jsonl` as a Gold Standard dataset, ignoring failures, loops, and strategy reflections. Bypasses file writing in testing environments.
 - **Phase 2 (SLM Stack)**: Created `SlmVocabulary.ts`, `SlmInputAdapter.ts`, `SlmOutputAdapter.ts`, and `SlmInferenceEngine.ts` to tokenize context, perform client-side WASM inference via `onnxruntime-web`, and decode/validate model plans.
 - **Phase 3 (Hybrid Routing)**: Integrated SLM inference directly into `NpcPuppetMaster.ts`. Routine requests resolve instantly in <5ms; complex cases (e.g. SAY, COMMAND, validation failures) safely escalate back to LLM.
@@ -3358,22 +3365,27 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 - **Durable Memory**: Updated `.agent/context.md` and `.agent/current_task.md` with SLM/Shadow Mode facts and completion state.
 
 ### Important Architecture or Runtime Decisions
+
 - **Scope Gating**: The SLM is trained solely on Puppet Master (NPC) actions, completely separate from player parsing.
 - **Strict Validation**: Decoded plan steps are validated before execution, forcing LLM escalation on any invalid model outputs.
 - **Diagnostics Controls**: Allows disabling logging via console (`#SLMLOG-OFF`) during debugging and robustness test phases to avoid contaminating training logs.
 
 ### Parser / Mechanics / Scene Changes
+
 - No scenes were modified. Hybrid routing hooks and logging callbacks are wired inside `NpcPuppetMaster.ts`.
 - Integrated `#SLMLOG` commands into `Console.ts`.
 
 ### Tests and Validation
+
 - Created `tests/npc/slm-adapters.test.ts` providing unit coverage for vocabulary mappings, adapters, and model fallback.
 - Ran TypeScript verification and confirmed Vitest suite passes.
 
 ### Commit
+
 - Staged all changes and initiated commit. Modified files include `NpcPuppetMaster.ts`, `fileApi.ts`, `Console.ts`, `tech-spec.md`, and new files under `src/mechanics/slm/` and `tests/npc/slm-adapters.test.ts`.
 
 ### Remaining Work / Next Steps
+
 - Accumulate shadow logs in production until the training threshold is reached.
 - Train the model using the PyTorch template defined in the documentation and place the output `slm_routine_v1.onnx` file in `public/models/`.
 - Commit remaining workspace files (`.agent/context.md`, `.agent/current_task.md`, `Sessions.md`) after the initial pre-commit tasks complete.
@@ -4219,7 +4231,6 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 
 - Session changes committed and linted during the session.
 
-
 ## Session Entry - 2026-07-26 22:57 +02:00
 
 ### Session Goals
@@ -4366,7 +4377,6 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 - A browser-test helper directory `.codex-game-test` was created during validation and hit a Windows ACL issue. It does not affect gameplay, but it may need elevated cleanup later.
 - The wrap-up intentionally did not normalize or rewrite the user's scene files.
 
-
 ## Session Entry - 2026-07-30 14:28 +02:00
 
 # Session Summary
@@ -4378,26 +4388,31 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 ## What Was Implemented
 
 ### 1. Переработка интерфейса FileBrowser
+
 - Убрана кнопка "Cancel" из подвала окна, а кнопка подтверждения ("Load" / "Save") перенесена на одну линию с полем ввода имени файла. Это сэкономило вертикальное пространство.
 - Кнопка закрытия окна ("X") перенесена в правый верхний угол и стилизована под стандарты `PropertiesPanel` (используется класс `e-btn`).
 - Выровнено по вертикали поле `FilterInput` и кнопка "LOAD", путём обнуления нежелательного нижнего отступа `margin-bottom: 5px` у поля ввода.
 - Удалён неиспользуемый CSS-класс `.file-browser-actions`.
 
 ### 2. Улучшение работы поля ввода (FilterInput)
+
 - Кнопка очистки текста (крестик внутри поля) теперь отображается на основе значения `filename`, а не `filterText`. Таким образом, она появляется даже тогда, когда файл выбран мышью из списка, что позволяет быстро сбросить выбор.
 - Добавлены атрибуты `aria-label` и `aria-pressed` для кнопок переключения режима просмотра (Сетка/Список), что улучшает доступность (a11y).
 
 ### 3. Нормализация URL и исправление путей
+
 - Логика формирования путей для миниатюр объединена в единой функции `getNormalizedUrl`. Это решило проблемы с дублированием путей (например, если текущая папка была корнем `public`).
 
 ### 4. Кэширование и фиксы миниатюр (SpriteThumbnail)
+
 - Внедрён модульный кэш `spriteThumbnailCache` (Map) на уровне файла. Ранее разрешённые пути к картинкам спрайтов кэшируются, благодаря чему при перерисовках или навигации эскизы появляются мгновенно без повторных сетевых запросов.
 - Исправлено "протекание" состояний (state bleed) при смене пути, но сохранении того же имени файла (например, в другой папке). Миниатюры теперь корректно сбрасывают `imgSrc` в `null` при промахе кэша, а в списке рендерятся с ключом `key={getNormalizedUrl(item.name)}`.
 
 ### 5. Поддержка эскизов для Префабов
+
 - Добавлен новый компонент `PrefabThumbnail`.
 - Файловый браузер теперь автоматически включает режим отображения изображений (`isImageBrowser`) при навигации в папки с `prefabs`.
-- `PrefabThumbnail` загружает JSON префаба, извлекает `spriteName` из первого объекта и передаёт его на отрисовку в `SpriteThumbnail`. 
+- `PrefabThumbnail` загружает JSON префаба, извлекает `spriteName` из первого объекта и передаёт его на отрисовку в `SpriteThumbnail`.
 - Добавлена автокоррекция расширения: если `spriteName` в префабе указан без `.json` (как в `battery_aaa.json`), расширение добавляется автоматически, что устраняет ошибку 404 (Not Found).
 
 ## Important Architecture / Runtime Decisions
@@ -4406,21 +4421,25 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 - **Интеграция PrefabThumbnail со SpriteThumbnail:** Вместо дублирования логики получения картинки из JSON спрайта, `PrefabThumbnail` занимается только извлечением имени спрайта из префаба, а отрисовку делегирует `SpriteThumbnail`.
 
 ## Parser / Mechanics / Scene / Subscene / Inventory Changes
+
 Изменений в ядре движка или механиках не было. Все доработки касались исключительно UI-компонента `FileBrowser`.
 
 ## Tests Run
+
 - Визуальное тестирование через интерфейс редактора в процессе внесения изменений (проверка выравнивания, работы кэша, навигации по папке префабов).
 
 ## Commits Created During the Session
+
 - Коммиты в рамках сессии пока не создавались (изменения локальны).
 
 ## Remaining Work / Next Recommended Steps
+
 - Закоммитить изменения в `FileBrowser.tsx` и `index.css`.
 - Проверить наличие других префабов с нестандартной структурой (где нужный спрайт может лежать не в первом элементе массива).
 
 ## Risks, Caveats, Open Questions
-- В текущей реализации эскизов для префабов берётся спрайт строго из *первого* элемента. Если в префабе первый объект является пустым контейнером без спрайта, эскиз отображаться не будет, даже если спрайт есть у дочерних объектов. Это можно будет улучшить в будущем.
 
+- В текущей реализации эскизов для префабов берётся спрайт строго из *первого* элемента. Если в префабе первый объект является пустым контейнером без спрайта, эскиз отображаться не будет, даже если спрайт есть у дочерних объектов. Это можно будет улучшить в будущем.
 
 ## Session Entry - 2026-08-13 04:13 +03:00
 
@@ -4728,38 +4747,46 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 ## What Was Implemented
 
 ### 1. Непрерывные Sinc-интегрированные сканлайны Фурье (Continuous Sinc-Fourier Scanlines)
+
 - Полностью устранено ступенчатое чередование толщины сканлайнов (3-4-3-4 px) при нецелочисленном разрешении экрана и искривлении.
 - Реализовано аналитическое интегрирование прямоугольного окна физического пикселя $w = \text{fwidth}(pos)$ по гармоникам Фурье ($\text{sinc1} = \frac{\sin(\pi w)}{\pi w}$, $\text{sinc2} = \frac{\sin(2\pi w)}{2\pi w}$) в сочетании с фазовым субпиксельным дизерингом Тимоти Лоттеса.
 
 ### 2. Beam Spot Modulation (Динамическая модуляция электронного пучка)
+
 - Реализовано физически точное поведение кинескопа: на ярких участках электронный луч расширяется, сокращая межстрочные промежутки, тогда как в тенях и тёмных полутонах сохраняется чёткая строчная структура.
 - Добавлен настраиваемый слайдер `Beam Modulation` (`0.0 – 1.0`).
 - Реализовано динамическое скрытие зависимых слайдеров в интерфейсе (`Beam Modulation` и `Scanline Intensity`) и полный zero-cost bypass на GPU при `Scanline Count = 0`.
 
 ### 3. Переупорядочивание рассеивания света (Screen Glow Pipeline Reordering)
+
 - Рассеивание света передней стеклянной панели экрана (`Screen Glow`) перенесено **после** сканлайнов, эмулируя физическое рассеивание внутри толстого свинцового стекла поверх люминофорного растра.
 - Использован режим Screen Blend со снижением насыщенности на 35% и увеличенным радиусом `0.18`.
 
 ### 4. 60 Hz AC Hum Bar (Сетевая наводка / Ground Loop Ripple)
+
 - Реализована мягкая аналоговая волна помехи питания 60 Гц, медленно плывущая снизу вверх по экрану.
 - Для видимости как на светлых, так и на абсолютно чёрных участках сцены скомбинированы модуляция видеоусиления (`color *= 1.0 + wave * gain`) и модуляция пьедестала уровня чёрного (`color += wave * offset`).
 - Добавлен отключаемый слайдер `60 Hz Hum Bar` (`0.0 – 1.0`).
 
 ### 5. High-Voltage Anode Breathing (Raster Bloom / «Дыхание» кинескопа)
+
 - Смоделирована просадка высоковольтного анодного напряжения (25 кВ) при вспышках и ярких кадрах с экспоненциальной RC-фильтрацией ($\sim 80\text{ms}$).
 - Разделена статическая геометрия колбы/бейзеля и динамический электронный растр: пластиковая рамка и кривизна стекла остаются 100% неподвижными, а растр при затемнении формирует аккуратную кайму ($\sim 1.3\%$), расширяясь и заползая на 2–3px под бейзель при ярких вспышках.
 - Добавлен слайдер `HV Breathing` (`0.0 – 1.0`).
 
 ### 6. Anti-Moiré 2D Pixel Reconstruction (Непрерывная интеграция пиксельной сетки)
+
 - Перенесён аппарат непрерывного интегрирования бокс-фильтра на всё 2D-изображение виртуального экрана $320 \times 200$.
 - Внутри тела ретро-пикселя цвет сохраняет 100% чёткость `Nearest-Neighbor`, а субпиксельные границы между пикселями аналитически интерполируются ровно на ширину 1 физического субпикселя дисплея.
 - Устранён муар и мерцание при любом масштабе и сильном `Curvature`.
 - Добавлен чекбокс-переключатель `Anti-Moiré Pixels` в настройках.
 
 ### 7. Синхронизация бэкбуфера WebGL при переключении режимов Игра/Редактор
+
 - Устранено падение разрешения и мыльное масштабирование canvas при переходе Game $\leftrightarrow$ Editor из-за 1-кадровой задержки `clientWidth`/`clientHeight` в DOM. Физический размер буфера теперь задаётся напрямую из геометрии `Math.round(width * dpr)` и `Math.round(height * dpr)`.
 
 ### 8. Исправление перетаскивания слайдеров в панели настроек
+
 - Устранена блокировка перетаскивания ползунка `Bloom` и других слайдеров параметров CRT: значения нормализованы к точным шагам `step="0.05"`, исключая ошибку `stepMismatch` браузера из-за чисел с плавающей запятой или пустых строк.
 
 ## Important Problems and Resolutions
@@ -4864,3 +4891,55 @@ BSP fragment  -> own clip + reuse mesh
 - Профильные headless-времена пригодны для сравнения относительной работы, но не являются абсолютным пользовательским FPS-бенчмарком.
 - Parser, mechanics, gameplay и scene data в этой сессии не изменялись.
 
+## Session Entry - 2026-09-26 18:21 Europe/Bucharest
+
+## Session Goals
+
+- Завершить миграцию Quest и Scanline Term на внешний `scanline-virtual-screen`.
+- Устранить замыливание низкоразрешённого source canvas без смешения независимых настроек SVS.
+- Проверить и исправить координатную пару editor context/canvas.
+- Удалить случайно попавшие в Quest извлечённые файлы локального SVS package.
+- Подготовить устойчивую память и документацию для следующих сессий.
+
+## What Was Implemented
+
+- В Quest сохранены три source-режима: `quest-420x300` (default), `quest-800x600`, `quest-1024x768`.
+- `Game.settings.screenProfile` остаётся единственным canonical persisted display/CRT profile; legacy `crt` мигрирует в него, а Debug API сохраняет вычисляемые `crt.*` aliases.
+- Исправлена координатная модель редактора: source geometry/hit-testing использует active `bufferCanvas`, а output/UI/editor overlays используют CSS viewport × DPR.
+- В SVS добавлен независимый persisted `pixelSmoothing`: он управляет `LINEAR`/`NEAREST` sampling и при CRT on, и при CRT off; `antiAliasedPixels` остаётся отдельным anti-moiré параметром. `pixelSmoothing=false` сохраняет резкую пиксельную картинку.
+- Quest и Scanline Term закреплены на одном проверенном SVS commit `24efd0a8105a9b7d9d68f9bbf59139589fec9125`.
+- Удалены 29 tracked `.tmp-svs` package-extraction файлов из Quest; локальная копия сохранена и каталог добавлен в `.gitignore`.
+- Исправлен editor rendering fallback в `src/core/Game.ts`: `editorOverlayCtx` и `editorOverlayCanvas` выбираются как пара; при отсутствии пары используется `uiCtx` вместе с `this.canvas`.
+
+## Architecture / Runtime Decisions
+
+- Quest владеет screen-mode catalogue и canonical profile; SVS владеет display pipeline, sampling и CRT lifecycle.
+- `antiAliasedPixels` не должен автоматически выключать или включать pixel smoothing. Для этого используется отдельный `pixelSmoothing`, default `true` для совместимости.
+- При `crtEmulation=false` SVS получает pass-through profile, но source sampling всё равно определяется `pixelSmoothing`.
+- Parser, mechanics, gameplay, scene data, subscene и inventory contracts в этой сессии не менялись.
+
+## Validation
+
+- SVS: 47 тестов, build, lint и `git diff --check` прошли.
+- Scanline Term: 164 теста, build и lint прошли; lint оставил два существующих React Fast Refresh warning.
+- Quest: `npm install`, forced Vite optimize, typecheck и focused display/editor tests (7 тестов) прошли.
+- Quest editor fallback: `npm run typecheck` и focused `game-display`/editor tests (17 тестов) прошли; `git diff --check` прошел.
+- Cleanup commit Quest: `e8f79af chore: remove extracted SVS package artifacts`, опубликован в `origin/dev`.
+
+## Commits / Working Tree
+
+- SVS final commit: `24efd0a fix: apply pixel smoothing with CRT enabled`.
+- Quest cleanup commit: `e8f79af`.
+- Current Quest working tree intentionally contains an uncommitted `src/core/Game.ts` fallback fix.
+- Current Scanline Term working tree contains uncommitted dependency pin changes and the pre-existing `docs/quest-svs-migration-agent-prompt.md` edit; do not silently commit them as part of wrap-up.
+
+## Remaining Work / Risks
+
+- Review and commit the Quest `Game.ts` fix when the user accepts the current working tree state.
+- Commit or otherwise hand off the Scanline Term dependency pin separately.
+- Old Quest history commit `fa03fd2` still contains the removed `.tmp-svs` artifacts; current tree is clean and history was intentionally not rewritten.
+- Full browser Playwright smoke was not repeated in this wrap-up; earlier validation used focused tests and build/typecheck paths.
+
+## Durable Project Facts
+
+- SVS changes must be made and committed in its own repository first, then consumers pin the exact tested commit; avoid copying SVS package source into Quest or Term.
