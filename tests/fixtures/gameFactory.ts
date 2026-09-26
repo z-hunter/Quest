@@ -472,9 +472,9 @@ export function createTestGame(): TestGameHarness {
       isDown: () => false,
     },
     isMouseOverUI: false,
-    canvas: {} as HTMLCanvasElement,
+    canvas: { width: 420, height: 300 } as HTMLCanvasElement,
     ctx: null,
-    bufferCanvas: {} as HTMLCanvasElement,
+    bufferCanvas: { width: 420, height: 300 } as HTMLCanvasElement,
   };
 
   sceneManager.game = game;

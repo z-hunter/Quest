@@ -1,0 +1,67 @@
+{
+  "name": "scanline-virtual-screen",
+  "version": "2.1.0",
+  "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/z-hunter/Scanline-Virtual-Screen.git"
+  },
+  "bugs": {
+    "url": "https://github.com/z-hunter/Scanline-Virtual-Screen/issues"
+  },
+  "homepage": "https://github.com/z-hunter/Scanline-Virtual-Screen#readme",
+  "type": "module",
+  "files": [
+    "dist",
+    "src/presets",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node -e \"const fs=require('fs');fs.mkdirSync('dist/react',{recursive:true});fs.copyFileSync('src/react/styles.css','dist/react/styles.css')\"",
+    "prepare": "npm run build",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "exports": {
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./terminal": {
+      "types": "./dist/terminal/index.d.ts",
+      "import": "./dist/terminal/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js"
+    },
+    "./react/styles.css": "./dist/react/styles.css",
+    "./presets/*": "./src/presets/*"
+  },
+  "peerDependencies": {
+    "@xterm/xterm": "^6.0.0",
+    "react": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@xterm/xterm": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@xterm/xterm": "6.0.0",
+    "@types/react": "19.2.5",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0",
+    "happy-dom": "20.10.6"
+  }
+}

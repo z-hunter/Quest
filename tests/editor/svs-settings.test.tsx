@@ -72,6 +72,8 @@ describe('SVS controlled settings integration', () => {
       );
     });
 
+    expect(element.textContent).toContain('Final image');
+    expect(element.textContent).toContain('Raster');
     const toggle = element.querySelector('input[type="checkbox"]') as HTMLInputElement;
     act(() => {
       toggle.click();

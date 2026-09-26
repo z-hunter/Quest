@@ -90,8 +90,8 @@ export class EditorTransformManager {
   // Helper: Screen -> World
   getMousePos(e: MouseEvent): { x: number; y: number } {
     const rect = this.editor.game.canvas.getBoundingClientRect();
-    const scaleX = this.editor.game.canvas.width / rect.width;
-    const scaleY = this.editor.game.canvas.height / rect.height;
+    const scaleX = this.editor.game.bufferCanvas.width / rect.width;
+    const scaleY = this.editor.game.bufferCanvas.height / rect.height;
     return {
       x: (e.clientX - rect.left) * scaleX,
       y: (e.clientY - rect.top) * scaleY,
@@ -187,8 +187,8 @@ export class EditorTransformManager {
 
     const camera = scene.camera;
     const world = {
-      x: (pos.x - this.editor.game.canvas.width / 2) / camera.zoom + camera.x,
-      y: (pos.y - this.editor.game.canvas.height / 2) / camera.zoom + camera.y,
+      x: (pos.x - this.editor.game.bufferCanvas.width / 2) / camera.zoom + camera.x,
+      y: (pos.y - this.editor.game.bufferCanvas.height / 2) / camera.zoom + camera.y,
     };
     this.editor.saveUndoState();
     this.box3dDrag = {
@@ -221,8 +221,8 @@ export class EditorTransformManager {
     const { box, folder } = drag;
     const camera = scene.camera;
     const world = {
-      x: (pos.x - this.editor.game.canvas.width / 2) / camera.zoom + camera.x,
-      y: (pos.y - this.editor.game.canvas.height / 2) / camera.zoom + camera.y,
+      x: (pos.x - this.editor.game.bufferCanvas.width / 2) / camera.zoom + camera.x,
+      y: (pos.y - this.editor.game.bufferCanvas.height / 2) / camera.zoom + camera.y,
     };
     const dx = world.x - drag.lastWorld.x;
     const dy = world.y - drag.lastWorld.y;
@@ -473,7 +473,7 @@ export class EditorTransformManager {
     // Right Click Panning
     if (e.button === 2) {
       this.isPanning = true;
-      this.lastPanPos = { x: e.clientX, y: e.clientY };
+      this.lastPanPos = this.getMousePos(e);
 
       if (editor.game.sceneManager.currentScene) {
         editor.game.sceneManager.currentScene.suspendEditorCameraFollow();
@@ -492,8 +492,8 @@ export class EditorTransformManager {
       const camY = scene.camera ? scene.camera.y : 0;
       const zoom = scene.camera ? scene.camera.zoom : 1.0;
 
-      const halfW = editor.game.canvas.width / 2;
-      const halfH = editor.game.canvas.height / 2;
+      const halfW = editor.game.bufferCanvas.width / 2;
+      const halfH = editor.game.bufferCanvas.height / 2;
       const hitObject = this.findHitSelectable(pos, scene, camX, camY, zoom, halfW, halfH);
 
       if (this.tryStartBox3DDrag(e, pos, scene, hitObject)) return;
@@ -792,9 +792,9 @@ export class EditorTransformManager {
 
     // PANNING
     if (this.isPanning && editor.game.sceneManager.currentScene) {
-      const dx = e.clientX - this.lastPanPos.x;
-      const dy = e.clientY - this.lastPanPos.y;
-      this.lastPanPos = { x: e.clientX, y: e.clientY };
+      const dx = this.lastMousePos.x - this.lastPanPos.x;
+      const dy = this.lastMousePos.y - this.lastPanPos.y;
+      this.lastPanPos = this.lastMousePos;
 
       const s = editor.game.sceneManager.currentScene;
       s.camera.x -= dx / s.camera.zoom;
@@ -827,8 +827,8 @@ export class EditorTransformManager {
       const camX = scene.camera ? scene.camera.x : 0;
       const camY = scene.camera ? scene.camera.y : 0;
       const zoom = scene.camera ? scene.camera.zoom : 1.0;
-      const halfW = editor.game.canvas.width / 2;
-      const halfH = editor.game.canvas.height / 2;
+      const halfW = editor.game.bufferCanvas.width / 2;
+      const halfH = editor.game.bufferCanvas.height / 2;
       const store = useEditorStore.getState();
       if (editor.selectionManager.hasMultiSelection()) {
         if (editor.selectionManager.hasPreparedAssemblyInSelection()) return;
@@ -1343,8 +1343,8 @@ export class EditorTransformManager {
         const camX = scene.camera ? scene.camera.x : 0;
         const camY = scene.camera ? scene.camera.y : 0;
         const zoom = scene.camera ? scene.camera.zoom : 1.0;
-        const halfW = editor.game.canvas.width / 2;
-        const halfH = editor.game.canvas.height / 2;
+        const halfW = editor.game.bufferCanvas.width / 2;
+        const halfH = editor.game.bufferCanvas.height / 2;
 
         const rect = {
           l: Math.min(this.boxSelectStart.x, this.boxSelectCurrent.x),
@@ -1429,8 +1429,8 @@ export class EditorTransformManager {
       const camY = scene && scene.camera ? scene.camera.y : 0;
       const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
-      const halfW = this.editor.game.canvas.width / 2;
-      const halfH = this.editor.game.canvas.height / 2;
+      const halfW = this.editor.game.bufferCanvas.width / 2;
+      const halfH = this.editor.game.bufferCanvas.height / 2;
 
       const worldX = (x - halfW) / zoom + camX;
       const worldY = (y - halfH) / zoom + camY;

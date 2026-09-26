@@ -19,6 +19,22 @@ describe('Editor quad snapping', () => {
     vi.restoreAllMocks();
   });
 
+  it('maps pointer coordinates to the virtual source canvas', () => {
+    const manager = new EditorTransformManager({
+      game: {
+        canvas: {
+          getBoundingClientRect: () => ({ left: 10, top: 20, width: 1200, height: 900 }),
+        },
+        bufferCanvas: { width: 420, height: 300 },
+      },
+    } as any);
+
+    expect(manager.getMousePos({ clientX: 610, clientY: 470 } as MouseEvent)).toEqual({
+      x: 210,
+      y: 150,
+    });
+  });
+
   it('adopts the target quad vertex parallax when Alt-snapping to a vertex', () => {
     const fixture = createSceneFixture();
     const source = addQuad(fixture, 'source');
@@ -434,6 +450,7 @@ describe('Editor parallax entity hit testing', () => {
     const { Box3DObject } = await import('../../src/entities/Box3DObject');
     const fixture = createSceneFixture();
     Object.assign(fixture.game.canvas, { width: 800, height: 600 });
+    Object.assign(fixture.game.bufferCanvas, { width: 800, height: 600 });
     const box = new Box3DObject(fixture.game, 'box');
     box.rotationX = 0;
     box.rotationY = 0;
@@ -482,6 +499,7 @@ describe('Editor parallax entity hit testing', () => {
     const { Box3DObject } = await import('../../src/entities/Box3DObject');
     const fixture = createSceneFixture();
     Object.assign(fixture.game.canvas, { width: 800, height: 600 });
+    Object.assign(fixture.game.bufferCanvas, { width: 800, height: 600 });
     const folder = new Folder(fixture.game, 'Group');
     folder.folderId = 'group';
     fixture.scene.addFolder(folder);

@@ -88,6 +88,7 @@ describe('Scene editor camera autoCenter preservation and suspension', () => {
       width: 800,
       height: 600,
     };
+    (fixture.game as any).bufferCanvas = { width: 800, height: 600 };
     (fixture.game as any).sceneManager = { currentScene: fixture.scene };
     (fixture.game as any).editor = editor;
 

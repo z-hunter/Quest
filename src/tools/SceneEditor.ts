@@ -398,7 +398,12 @@ export class SceneEditor {
           // Spacebar: Select Scene if mouse is over canvas
           const mx = this.lastMousePos.x;
           const my = this.lastMousePos.y;
-          if (mx >= 0 && mx <= this.game.canvas.width && my >= 0 && my <= this.game.canvas.height) {
+          if (
+            mx >= 0 &&
+            mx <= this.game.bufferCanvas.width &&
+            my >= 0 &&
+            my <= this.game.bufferCanvas.height
+          ) {
             e.preventDefault();
             this.selectObject('SCENE');
           }
@@ -508,7 +513,12 @@ export class SceneEditor {
     for (const pos of candidates) {
       const mx = pos.x;
       const my = pos.y;
-      if (mx >= 0 && mx <= this.game.canvas.width && my >= 0 && my <= this.game.canvas.height) {
+      if (
+        mx >= 0 &&
+        mx <= this.game.bufferCanvas.width &&
+        my >= 0 &&
+        my <= this.game.bufferCanvas.height
+      ) {
         return this.convertScreenToWorld(mx, my);
       }
     }
@@ -533,8 +543,8 @@ export class SceneEditor {
     const camY = scene && scene.camera ? scene.camera.y : 0;
     const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
-    const halfW = this.game.canvas.width / 2;
-    const halfH = this.game.canvas.height / 2;
+    const halfW = this.game.bufferCanvas.width / 2;
+    const halfH = this.game.bufferCanvas.height / 2;
 
     return {
       x: (screenX - halfW) / zoom + camX,
@@ -1065,8 +1075,8 @@ export class SceneEditor {
   getMousePos(e: MouseEvent): { x: number; y: number } {
     const rect = this.game.canvas.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left) * (this.game.canvas.width / rect.width),
-      y: (e.clientY - rect.top) * (this.game.canvas.height / rect.height),
+      x: (e.clientX - rect.left) * (this.game.bufferCanvas.width / rect.width),
+      y: (e.clientY - rect.top) * (this.game.bufferCanvas.height / rect.height),
     };
   }
 
@@ -1200,8 +1210,8 @@ export class SceneEditor {
       camY = scene.camera.y;
     }
 
-    const halfW = this.game.canvas.width / 2;
-    const halfH = this.game.canvas.height / 2;
+    const halfW = this.game.bufferCanvas.width / 2;
+    const halfH = this.game.bufferCanvas.height / 2;
 
     // Render current polygon (World Space)
     if (this.transformManager.currentPolygon && this.transformManager.currentPolygon.length > 0) {
@@ -1536,7 +1546,7 @@ export class SceneEditor {
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, horizonScreenY);
-      ctx.lineTo(this.game.canvas.width, horizonScreenY);
+      ctx.lineTo(this.game.bufferCanvas.width, horizonScreenY);
       ctx.stroke();
       ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
       ctx.fillText(`Horizon(${horizonWorldY})`, 5, horizonScreenY - 2);
@@ -1548,7 +1558,7 @@ export class SceneEditor {
       ctx.strokeStyle = 'rgba(255, 0, 255, 0.5)'; // Magenta, semi-transparent
       ctx.beginPath();
       ctx.moveTo(0, frontScreenY);
-      ctx.lineTo(this.game.canvas.width, frontScreenY);
+      ctx.lineTo(this.game.bufferCanvas.width, frontScreenY);
       ctx.stroke();
       ctx.fillStyle = 'rgba(255, 0, 255, 0.8)';
       ctx.fillText(`Front(${frontWorldY})`, 5, frontScreenY - 2);

@@ -541,10 +541,14 @@ export function createDebugApi(game: Game): QuestDebugApi {
       }
     }
 
-    setNestedValue(game.settings as any, resolvedPath, finalValue);
-
     if (resolvedPath.startsWith('screenProfile')) {
-      game.setScreenProfile(game.settings.screenProfile);
+      const draftSettings = {
+        screenProfile: structuredClone(game.settings.screenProfile),
+      };
+      setNestedValue(draftSettings, resolvedPath, finalValue);
+      game.setScreenProfile(draftSettings.screenProfile);
+    } else {
+      setNestedValue(game.settings as any, resolvedPath, finalValue);
     }
 
     if (path.startsWith('audio') || path === 'audio.attachedVolume') {
@@ -592,8 +596,14 @@ export function createDebugApi(game: Game): QuestDebugApi {
       delete canonicalPatch.crt;
     }
 
+    const screenProfilePatch = canonicalPatch.screenProfile;
+    delete canonicalPatch.screenProfile;
     applyDeep(game.settings as any, canonicalPatch);
-    if (canonicalPatch.screenProfile) game.setScreenProfile(game.settings.screenProfile);
+    if (screenProfilePatch) {
+      const screenProfile = structuredClone(game.settings.screenProfile);
+      applyDeep(screenProfile, screenProfilePatch);
+      game.setScreenProfile(screenProfile);
+    }
 
     if (game.settings.audio?.attachedVolume !== undefined) {
       SoundManager.getInstance().setAttachedVolume(game.settings.audio.attachedVolume);

@@ -413,25 +413,21 @@ export class Game implements IGame {
       );
     }
 
-    if (this.uiCtx) {
-      if (this.spriteEditor.active) {
-        this.spriteEditor.render(this.uiCtx);
-      } else if (!this.editorOverlayCtx) {
-        this.editor.render(this.uiCtx);
-      }
-    }
+    if (this.uiCtx && this.spriteEditor.active) this.spriteEditor.render(this.uiCtx);
 
-    if (
-      this.editorOverlayCtx &&
-      this.editorOverlayCanvas &&
-      !this.spriteEditor.active &&
-      this.editor.enabled
-    ) {
-      const scaleX = this.editorOverlayCanvas.width / this.canvas.width;
-      const scaleY = this.editorOverlayCanvas.height / this.canvas.height;
-      this.editorOverlayCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
-      this.editor.render(this.editorOverlayCtx);
-      this.editorOverlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+    const editorCtx = this.editorOverlayCtx ?? this.uiCtx;
+    const editorCanvas = this.editorOverlayCanvas ?? this.canvas;
+    if (editorCtx && !this.spriteEditor.active && this.editor.enabled) {
+      editorCtx.setTransform(
+        editorCanvas.width / this.bufferCanvas.width,
+        0,
+        0,
+        editorCanvas.height / this.bufferCanvas.height,
+        0,
+        0
+      );
+      this.editor.render(editorCtx);
+      editorCtx.setTransform(1, 0, 0, 1, 0, 0);
     }
   }
 

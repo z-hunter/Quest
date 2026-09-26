@@ -64,9 +64,13 @@ function legacyModeId(loaded: Record<string, unknown>): string {
   ];
   const value = candidates.find((candidate): candidate is string => typeof candidate === 'string');
   if (!value) return DEFAULT_QUEST_SCREEN_MODE.id;
+  const normalized = value.trim().toLowerCase();
+  const prefixed = normalized.startsWith('quest-') ? normalized : `quest-${normalized}`;
   return (
-    QUEST_SCREEN_MODES.find((mode) => mode.id === value || mode.id.endsWith(value))?.id ??
-    DEFAULT_QUEST_SCREEN_MODE.id
+    QUEST_SCREEN_MODES.find((mode) => {
+      const modeId = mode.id.toLowerCase();
+      return modeId === normalized || modeId === prefixed;
+    })?.id ?? DEFAULT_QUEST_SCREEN_MODE.id
   );
 }
 

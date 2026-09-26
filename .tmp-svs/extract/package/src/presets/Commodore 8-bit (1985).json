@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "virtualScreen": {
+    "modeId": "640x480"
+  },
+  "terminal": {
+    "colorProfile": "commodore-64",
+    "fontFamily": "Commodore 128",
+    "fallbackFont": "Nouveau IBM Stretch",
+    "fontSize": 13,
+    "cellWidthAdjustment": 0,
+    "cellHeightAdjustment": 3,
+    "cursorStyle": "block"
+  },
+  "crt": {
+    "aberration": 2.75,
+    "aberrationFalloff": 2,
+    "ambientGlassLight": 0,
+    "antiAliasedPixels": true,
+    "backgroundDesaturation": 0.5,
+    "beamModulation": 0.5,
+    "bezelGlow": true,
+    "bezelGlowMode": "reflection",
+    "bezelHighlight": 0.15000000000000002,
+    "bezelThickness": 5,
+    "bloom": 0.2,
+    "bloomAlgorithm": "soft",
+    "breathing": 0.05,
+    "channelSwitchEffect": true,
+    "colorMode": "color",
+    "crtEmulation": true,
+    "curvature": 0.06,
+    "glow": 0.6000000000000001,
+    "humBar": 0.1,
+    "imageBrightness": 1,
+    "imageContrast": 1.05,
+    "imperfectSignal": 0.1,
+    "maskStrength": 0.1,
+    "maskType": "shadow",
+    "persistence": 1,
+    "persistenceIntensity": 2.15,
+    "phosphor": 1,
+    "reflexBar": 0.1,
+    "reflexBarEnabled": false,
+    "reflexBarHeight": 0.6,
+    "reflexBarPosY": 0.03,
+    "reflexBarWidth": 0.99,
+    "scanlineCount": 320,
+    "scanlineIntensity": 0.7000000000000001,
+    "showBezel": false,
+    "vignette": 0.8500000000000001
+  }
+}

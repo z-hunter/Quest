@@ -13,6 +13,7 @@ export const SettingsProperties: React.FC = () => {
     usePropertiesContext<QuestSettings>();
   const isDesktopRuntime = React.useMemo(() => isTauriRuntime(), []);
   const settings = obj;
+  const svsScale = settings.editor.uiScale || 1.0;
 
   const updateScreenProfile = (profile: ScreenProfile): void => {
     game.setScreenProfile(profile);
@@ -110,12 +111,14 @@ export const SettingsProperties: React.FC = () => {
         </label>
       </div>
 
-      <DisplaySettingsSection
-        value={settings.screenProfile}
-        modes={QUEST_SCREEN_MODES}
-        onChange={updateScreenProfile}
-      />
-      <CRTSettingsSection value={settings.screenProfile} onChange={updateScreenProfile} />
+      <div className="quest-svs-settings" style={{ zoom: svsScale }}>
+        <DisplaySettingsSection
+          value={settings.screenProfile}
+          modes={QUEST_SCREEN_MODES}
+          onChange={updateScreenProfile}
+        />
+        <CRTSettingsSection value={settings.screenProfile} onChange={updateScreenProfile} />
+      </div>
 
       <div className="e-row ui-divider-neutral" style={{ marginTop: '20px', paddingTop: '10px' }}>
         <button
