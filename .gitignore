@@ -45,6 +45,7 @@ coverage/
 .cache/
 
 # Temporary, scratch & backup files
+.tmp-svs/
 *.tmp
 *.temp
 temp_*.txt
