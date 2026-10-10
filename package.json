@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "predev": "npm run ensure:svs",
+    "prebuild": "npm run ensure:svs",
+    "dev": "vite --force",
     "build": "tsc -b && vite build",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
@@ -12,6 +14,7 @@
     "test": "vitest run",
     "slm:pipeline": "python scripts/slm/pipeline.py all",
     "check:anthropic": "node scripts/check-anthropic.mjs",
+    "ensure:svs": "node scripts/ensure-svs.mjs",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "prepare": "husky",
     "format": "prettier --write .",
@@ -26,7 +29,7 @@
     "onnxruntime-web": "^1.27.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "scanline-virtual-screen": "github:z-hunter/Scanline-Virtual-Screen#165e9e217f83ca218bff7387d788453a5117b757",
+    "scanline-virtual-screen": "github:z-hunter/Scanline-Virtual-Screen#993147a37eb33a9df2633d429431e0a35bc1c122",
     "zustand": "^5.0.9"
   },
   "devDependencies": {
