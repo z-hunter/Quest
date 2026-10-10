@@ -920,7 +920,7 @@ export function raycastBox3DFace(
   screenY: number,
   candidates?: any[]
 ): QuadObject | null {
-  const canvas = scene.game?.canvas;
+  const canvas = scene.game?.bufferCanvas;
   const halfW = (canvas?.width || 640) / 2,
     halfH = (canvas?.height || 360) / 2;
   const projectedX = (screenX - halfW) / scene.camera.zoom + scene.camera.x;
@@ -982,7 +982,7 @@ export function intersectBox3DFaceAtScreen(
   screenY: number,
   requireInside = true
 ): Box3DPoint | null {
-  const canvas = scene.game?.canvas;
+  const canvas = scene.game?.bufferCanvas;
   const halfW = (canvas?.width || 640) / 2,
     halfH = (canvas?.height || 360) / 2;
   const projectedX = (screenX - halfW) / scene.camera.zoom + scene.camera.x;

@@ -449,7 +449,7 @@ describe('Editor parallax entity hit testing', () => {
   it('selects a managed face parent on Ctrl-click and drags a selected Box3D', async () => {
     const { Box3DObject } = await import('../../src/entities/Box3DObject');
     const fixture = createSceneFixture();
-    Object.assign(fixture.game.canvas, { width: 800, height: 600 });
+    Object.assign(fixture.game.canvas, { width: 1600, height: 1200 });
     Object.assign(fixture.game.bufferCanvas, { width: 800, height: 600 });
     const box = new Box3DObject(fixture.game, 'box');
     box.rotationX = 0;

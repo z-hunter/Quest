@@ -477,6 +477,30 @@ describe('Box3DObject', () => {
     expect(raycastBox3DFace(scene, 320, 180)).toBeInstanceOf(QuadObject);
   });
 
+  it('raycasts in source coordinates when the SVS output canvas has a different size', () => {
+    const game: any = {
+      editor: null,
+      canvas: { width: 1280, height: 720 },
+      bufferCanvas: { width: 640, height: 360 },
+    };
+    const box = new Box3DObject(game, 'box');
+    const faces = Array.from({ length: 6 }, (_, index) => {
+      const face = new QuadObject(game, `box_face_${index}`);
+      face.box3dFaceIndex = index;
+      face.spatial = { parentNodeId: box.name, relation: 'in' };
+      return face;
+    });
+    const scene: any = {
+      game,
+      entities: [box, ...faces],
+      camera: { x: 0, y: 0, zoom: 1 },
+      box3dPerspective: 1,
+    };
+    box.syncFaces(scene);
+
+    expect(raycastBox3DFace(scene, 320, 180)).toBeInstanceOf(QuadObject);
+  });
+
   it('uses whole-face depth sorting in fast occlusion mode', () => {
     const game: any = { editor: null, canvas: { width: 640, height: 360 } };
     const entities: any[] = [];
