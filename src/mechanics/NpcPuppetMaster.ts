@@ -440,6 +440,7 @@ export class NpcPuppetMaster {
     this.loopStates.clear();
     this.patternLoopStates.clear();
     this.actionHistories.clear();
+    this.transitionHistories.clear();
     this.pendingPlanContinuations.clear();
     this.pendingIncomingGives.clear();
     this.objectiveConfirmationRetryCounts.clear();

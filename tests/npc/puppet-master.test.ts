@@ -5994,6 +5994,12 @@ describe('NpcPuppetMaster', () => {
   it('round-trips durable action history and safe continuation state for SaveState', () => {
     const fixture = createSceneFixture();
     const pm = new NpcPuppetMaster(fixture.game, new MockProvider(''));
+    pm.recordExitTransition({
+      npcId: 'guard',
+      sourceSceneId: 'old_room',
+      destinationSceneId: 'old_hall',
+      exitId: 'old_exit',
+    });
     pm.importSaveState({
       actionHistories: {
         [`${fixture.scene.id}:guard`]: [
