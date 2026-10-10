@@ -122,8 +122,8 @@ export async function appendProjectFile(path: string, content: string): Promise<
     try {
       const fsName = 'fs';
       const pathName = 'path';
-      const fs = await import(fsName);
-      const pathModule = await import(pathName);
+      const fs = await import(/* @vite-ignore */ fsName);
+      const pathModule = await import(/* @vite-ignore */ pathName);
       const targetPath = pathModule.resolve(gProcess.cwd(), path);
       const dir = pathModule.dirname(targetPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
