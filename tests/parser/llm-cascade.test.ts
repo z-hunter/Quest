@@ -1380,13 +1380,14 @@ describe('AnthropicProvider', () => {
     expect(parsedBody.messages).toEqual([{ role: 'user', content: 'dynamic turn' }]);
   });
 
-  it('does not retry an aborted request', async () => {
+  it('retries an aborted request when no tokens were received', async () => {
     const mockFetch = vi.fn().mockRejectedValue(new DOMException('aborted', 'AbortError'));
     const provider = new AnthropicProvider({ fetchImpl: mockFetch, maxAttempts: 2 });
 
     const response = await provider.sendMessage('system', []);
 
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(response.reason).toBe('timeout');
+    expect(response.attempts).toBe(2);
   });
 });

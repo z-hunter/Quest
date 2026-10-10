@@ -653,6 +653,15 @@ export class Game implements IGame {
     }
   }
 
+  recordNpcExitTransition(args: {
+    npcId: string;
+    sourceSceneId: string;
+    destinationSceneId: string;
+    exitId: string;
+  }): void {
+    this.npcPuppetMaster?.recordExitTransition(args);
+  }
+
   emitActorAction(
     actor: Actor,
     action: import('./IGame').ObservedActorActionCode,

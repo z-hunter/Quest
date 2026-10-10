@@ -130,6 +130,12 @@ export interface IGame {
     payload?: Record<string, unknown>
   ): void;
   wakeNpc?(actor: Actor, reason?: string): void;
+  recordNpcExitTransition?(args: {
+    npcId: string;
+    sourceSceneId: string;
+    destinationSceneId: string;
+    exitId: string;
+  }): void;
   openFileBrowser(
     mode: 'load' | 'save',
     dir: string,

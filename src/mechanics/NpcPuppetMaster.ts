@@ -182,8 +182,17 @@ type NpcActionHistoryRecord = {
   summary: string;
 };
 
+type NpcTransitionHistoryRecord = {
+  timestamp: number;
+  sourceSceneId: string;
+  destinationSceneId: string;
+  exitId: string;
+  kind: 'scene_transfer' | 'local_teleport';
+};
+
 export type NpcPuppetMasterSaveState = {
   actionHistories: Record<string, NpcActionHistoryRecord[]>;
+  transitionHistories?: Record<string, NpcTransitionHistoryRecord[]>;
   continuations: Array<{
     stateKey: string;
     state: 'needs_replan';
@@ -238,6 +247,7 @@ const PM_TAIL_APPROACH_REPLAN_LIMIT = 2;
 const PM_PATTERN_LOOP_WINDOW = 6;
 const PM_PATTERN_LOOP_UNIQUE_LIMIT = 3;
 const PM_ACTION_HISTORY_LIMIT = 20;
+const PM_TRANSITION_HISTORY_LIMIT = 6;
 const ANTHROPIC_HAIKU_45_MIN_CACHE_TOKENS = 4096;
 
 export class NpcPuppetMaster {
@@ -254,6 +264,7 @@ export class NpcPuppetMaster {
   private loopStates = new Map<string, NpcLoopState>();
   private patternLoopStates = new Map<string, NpcPatternLoopState>();
   private actionHistories = new Map<string, NpcActionHistoryRecord[]>();
+  private transitionHistories = new Map<string, NpcTransitionHistoryRecord[]>();
   private pendingPlanContinuations = new Map<string, PendingPlanContinuation>();
   private pendingContinuationTimeouts = new Map<string, any>();
   // A recipient must not autonomously act on an offered item while its giver
@@ -328,6 +339,12 @@ export class NpcPuppetMaster {
           records.map((record) => ({ ...record })),
         ])
       ),
+      transitionHistories: Object.fromEntries(
+        [...this.transitionHistories.entries()].map(([key, records]) => [
+          key,
+          records.map((record) => ({ ...record })),
+        ])
+      ),
       continuations: [...continuationKeys].map((stateKey) => ({
         stateKey,
         state: 'needs_replan' as const,
@@ -372,6 +389,24 @@ export class NpcPuppetMaster {
             ];
           })
           .slice(-PM_ACTION_HISTORY_LIMIT)
+          .map((record) => ({ ...record }))
+      );
+    }
+    for (const [npcId, records] of Object.entries(state?.transitionHistories || {})) {
+      if (!Array.isArray(records) || !npcId.trim()) continue;
+      this.transitionHistories.set(
+        npcId,
+        records
+          .filter(
+            (record: any): record is NpcTransitionHistoryRecord =>
+              record &&
+              typeof record.timestamp === 'number' &&
+              typeof record.sourceSceneId === 'string' &&
+              typeof record.destinationSceneId === 'string' &&
+              typeof record.exitId === 'string' &&
+              (record.kind === 'scene_transfer' || record.kind === 'local_teleport')
+          )
+          .slice(-PM_TRANSITION_HISTORY_LIMIT)
           .map((record) => ({ ...record }))
       );
     }
@@ -433,6 +468,29 @@ export class NpcPuppetMaster {
 
   getLastDebugInfo(): NpcPuppetMasterDebugInfo | null {
     return this.lastDebugInfo;
+  }
+
+  recordExitTransition(args: {
+    npcId: string;
+    sourceSceneId: string;
+    destinationSceneId: string;
+    exitId: string;
+  }): void {
+    const npcId = args.npcId.trim();
+    const sourceSceneId = args.sourceSceneId.trim();
+    const destinationSceneId = args.destinationSceneId.trim();
+    const exitId = args.exitId.trim();
+    if (!npcId || !sourceSceneId || !destinationSceneId || !exitId) return;
+
+    const records = this.transitionHistories.get(npcId) || [];
+    records.push({
+      timestamp: Date.now(),
+      sourceSceneId,
+      destinationSceneId,
+      exitId,
+      kind: sourceSceneId === destinationSceneId ? 'local_teleport' : 'scene_transfer',
+    });
+    this.transitionHistories.set(npcId, records.slice(-PM_TRANSITION_HISTORY_LIMIT));
   }
 
   getContinuationState(sceneId: string, npcId: string): NpcContinuationStateSnapshot {
@@ -2714,8 +2772,9 @@ export class NpcPuppetMaster {
           '3. To run an entity command like "turn_tv_on", use: {"type":"COMMAND","commandId":"turn_tv_on","arguments":{}}.',
           '4. currentSceneId is the authoritative current location for each NPC. Memory, actionHistory, and prior TRAVERSE_EXIT results are historical and must not override currentSceneId.',
           '5. CURRENT OBJECTIVES persist across scenes. Keep the parent goal and, after a confirmed blocker, use OBJECTIVE_ADD before dependent actions to add the concrete next prerequisite and its dependency chain. OBJECTIVE_MARK_COMPLETED updates planning state only; it never performs a task, transfers an item, or changes the world. Mark a leaf objective when current state or authoritative actionHistory makes its completion reasonably clear. Runtime keeps physical changes authoritative and rejects only structural contradictions, especially completing a parent with active subtasks. A [JUST COMPLETED] objective and [JUST ARRIVED] memory entry are informational runtime context and will be removed after this turn. Use OBJECTIVE_REMOVE for obsolete objectives. MEMORY_ADD/MEMORY_REMOVE maintain factual memory.',
-          '6. Static catalog membership is not current presence. Target only this NPC dynamic entities or inventory; plan_rejected_missing_items means the item is not currently available, not merely route-blocked.',
-          '7. Any newly accepted, promised, volunteered, or self-chosen future work MUST be represented by OBJECTIVE_ADD in the same plan before dependent action or speech, unless an active objective already covers it. This includes work undertaken to help another NPC.',
+          '6. transitionHistory records recent Exit activations, including local teleports. Do not repeat a route that forms a cycle without new evidence, a world change relevant to the objective, or a materially different destination.',
+          '7. Static catalog membership is not current presence. Target only this NPC dynamic entities or inventory; plan_rejected_missing_items means the item is not currently available, not merely route-blocked.',
+          '8. Any newly accepted, promised, volunteered, or self-chosen future work MUST be represented by OBJECTIVE_ADD in the same plan before dependent action or speech, unless an active objective already covers it. This includes work undertaken to help another NPC.',
           `Return strictly valid JSON: {"kind":"pm_response","plans":[{"npcId":"${firstNpcId}","steps":[...]}]}`,
         ].join('\n'),
       },
@@ -2767,6 +2826,7 @@ export class NpcPuppetMaster {
                 )
             : undefined,
           actionHistory: this.getPromptActionHistory(npc.id, npcTrigger),
+          transitionHistory: this.getPromptTransitionHistory(npc.id),
           newEvents: newEvents.length
             ? newEvents.map((event) => this.compactPromptEvent(event))
             : undefined,
@@ -3903,6 +3963,21 @@ export class NpcPuppetMaster {
         commandId: record.commandId,
         worldChanged: record.worldChanged,
         summary: record.summary,
+      })
+    );
+  }
+
+  private getPromptTransitionHistory(npcId: string): Array<Record<string, unknown>> | undefined {
+    const records = this.transitionHistories.get(npcId);
+    if (!records?.length) return undefined;
+    const now = Date.now();
+    return records.map((record) =>
+      this.compactPromptRecord({
+        ageMs: Math.max(0, now - record.timestamp),
+        sourceSceneId: record.sourceSceneId,
+        destinationSceneId: record.destinationSceneId,
+        exitId: record.exitId,
+        kind: record.kind,
       })
     );
   }

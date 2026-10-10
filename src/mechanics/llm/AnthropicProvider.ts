@@ -12,7 +12,7 @@ import { fetchLlm } from '../../platform/llmApi';
 const DEFAULT_PROXY_URL = '/api/llm';
 const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 const DEFAULT_MAX_TOKENS = 1024;
-const DEFAULT_TIMEOUT_MS = 10000;
+const DEFAULT_TIMEOUT_MS = 20000;
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 15000;
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -205,7 +205,7 @@ export class AnthropicProvider implements ILlmProvider {
         }
         const errorName = error instanceof Error ? error.name : '';
         const isAbort = errorName === 'AbortError';
-        if (!isAbort && attempt < this.maxAttempts && !deltaEmitted) {
+        if (attempt < this.maxAttempts && !deltaEmitted) {
           await delay(retryDelayMs(attempt));
           continue;
         }

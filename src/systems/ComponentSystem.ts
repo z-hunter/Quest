@@ -635,6 +635,14 @@ export class ComponentSystem {
           targetId: exitObject.name,
         });
       }
+      if (ComponentSystem.getNpcComponent(activator)) {
+        scene.game?.recordNpcExitTransition?.({
+          npcId: activator.name,
+          sourceSceneId: scene.id,
+          destinationSceneId: targetSceneId,
+          exitId: exitObject.name,
+        });
+      }
       sceneManager.transferActorToScene(activator, targetSceneId, {
         targetEntryId: exit.targetEntryId?.trim() || null,
         activateScene: activator === sceneManager.currentScene?.player,

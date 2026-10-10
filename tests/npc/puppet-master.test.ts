@@ -1538,6 +1538,8 @@ describe('NpcPuppetMaster', () => {
   it('projects Exit affordances and lets a reachable NPC traverse the Exit', () => {
     const fixture = createGameSemanticFixture('start');
     fixture.addPlayer('Hero', 0, 0);
+    const pm = new NpcPuppetMaster(fixture.game, new MockProvider(''));
+    fixture.game.npcPuppetMaster = pm;
     const npc = new Actor(fixture.game as any, 20, 20);
     npc.name = 'guard';
     npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
@@ -1587,6 +1589,14 @@ describe('NpcPuppetMaster', () => {
     expect(outcomes[0]).toEqual(expect.objectContaining({ status: 'ok', code: 'exit_traversed' }));
     expect(targetScene.entities).toContain(npc);
     expect(fixture.game.sceneManager.currentScene).toBe(fixture.scene);
+    expect(pm.exportSaveState().transitionHistories?.[npc.name]).toEqual([
+      expect.objectContaining({
+        sourceSceneId: fixture.scene.id,
+        destinationSceneId: targetScene.id,
+        exitId: door.name,
+        kind: 'scene_transfer',
+      }),
+    ]);
 
     const completion = new ActorPlanExecutor(fixture.game).executePlan({
       npcId: npc.name,
@@ -6011,6 +6021,7 @@ describe('NpcPuppetMaster', () => {
           },
         ],
       },
+      transitionHistories: {},
       continuations: [
         {
           stateKey: `${fixture.scene.id}:guard`,
@@ -6019,6 +6030,34 @@ describe('NpcPuppetMaster', () => {
         },
       ],
     });
+  });
+
+  it('keeps the last six Exit transitions per NPC in SaveState and the PM prompt', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    for (let index = 0; index < 7; index += 1) {
+      pm.recordExitTransition({
+        npcId: npc.name,
+        sourceSceneId: index === 6 ? 'room' : index % 2 === 0 ? 'room' : 'hall',
+        destinationSceneId: index === 6 ? 'room' : index % 2 === 0 ? 'hall' : 'room',
+        exitId: `exit_${index}`,
+      });
+    }
+
+    await pm.processNpc(fixture.scene, npc.name);
+
+    const saved = pm.exportSaveState();
+    expect(saved.transitionHistories?.[npc.name]).toHaveLength(6);
+    expect(saved.transitionHistories?.[npc.name]?.[0]).toMatchObject({ exitId: 'exit_1' });
+    expect(saved.transitionHistories?.[npc.name]?.at(-1)).toMatchObject({
+      kind: 'local_teleport',
+    });
+    expect(getDynamicPmText(provider.calls[0])).toContain('"transitionHistory"');
+    expect(getDynamicPmText(provider.calls[0])).toContain('"exitId": "exit_6"');
   });
 
   it('stops move completion polling immediately when cleared, stopped, or removed from scene without infinite timer loop', async () => {
