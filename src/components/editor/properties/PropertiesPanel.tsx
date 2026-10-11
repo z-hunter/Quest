@@ -1089,7 +1089,11 @@ export const PropertiesPanel: React.FC = () => {
 
           {/* Section 6: Lock/Disabled/Misc */}
           {!isSettings && !isScene && !isWalkbox && (
-            <SectionMisc isTriggerbox={isTriggerbox} isQuad={selectedObjectType === 'Quad'} />
+            <SectionMisc
+              isTriggerbox={isTriggerbox}
+              isQuad={selectedObjectType === 'Quad'}
+              isBox3D={selectedObjectType === 'Box3D'}
+            />
           )}
 
           {/* Scene: Camera + Scaling */}
