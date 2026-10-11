@@ -1,5 +1,16 @@
 import type { LlmProviderContent, LlmProviderMessage } from './llm/ILlmProvider';
 import type { SceneLogEntry } from '../scene/SceneLog';
+import type { NpcObjective, NpcObjectiveDraft } from './npcState';
+
+export type { NpcObjective, NpcObjectiveDraft } from './npcState';
+
+export type NpcObjectiveCompletionEvidence = {
+  actionType: 'TAKE' | 'GIVE' | 'PUT' | 'COMMAND' | 'OPEN' | 'CLOSE' | 'LOOK' | 'EXAMINE';
+  code?: string;
+  targetId?: string;
+  itemId?: string;
+  commandId?: string;
+};
 
 export type NpcPlanStep =
   | {
@@ -39,6 +50,11 @@ export type NpcPlanStep =
       targetId: string;
     }
   | {
+      type: 'GIVE';
+      itemId: string;
+      targetId: string;
+    }
+  | {
       type: 'PUT';
       itemId: string;
       targetId?: string | null;
@@ -50,17 +66,39 @@ export type NpcPlanStep =
       arguments?: Record<string, string | null>;
     }
   | {
-      type: 'USE';
-      itemId: string;
-      targetId: string;
-    }
-  | {
       type: 'WAIT';
       ms: number;
     }
   | {
       type: 'THINK_STRATEGY';
       reason?: string;
+    }
+  | {
+      type: 'MEMORY_ADD';
+      memory: string;
+    }
+  | {
+      type: 'MEMORY_REMOVE';
+      memory: string;
+    }
+  | {
+      type: 'OBJECTIVE_ADD';
+      parentId?: string | null;
+      objective: NpcObjectiveDraft;
+    }
+  | {
+      type: 'OBJECTIVE_UPDATE';
+      objectiveId: string;
+      text: string;
+    }
+  | {
+      type: 'OBJECTIVE_REMOVE';
+      objectiveId: string;
+    }
+  | {
+      type: 'OBJECTIVE_MARK_COMPLETED';
+      objectiveId: string;
+      evidence?: NpcObjectiveCompletionEvidence;
     }
   | {
       type: 'MEMORY_SET';
@@ -95,6 +133,20 @@ export type NpcPlan = {
   interruptOn?: NpcPlanInterruptCondition[];
 };
 
+export type NpcContinuationState =
+  | 'idle'
+  | 'awaiting_barrier'
+  | 'executing_tail'
+  | 'needs_replan'
+  | 'interrupted'
+  | 'completed';
+
+export type NpcContinuationStateSnapshot = {
+  state: NpcContinuationState;
+  changedAt: number;
+  reason?: string;
+};
+
 export type NpcPuppetMasterResponse = {
   kind: 'pm_response';
   reasoning?: string;
@@ -103,15 +155,24 @@ export type NpcPuppetMasterResponse = {
 
 export type NpcActorContext = {
   id: string;
-  title: string;
+  title?: string;
   lore?: string;
-  objectives?: string[];
-  memory?: string;
+  objectives?: NpcObjective[];
+  memory?: string[];
+  transientMemory?: string[];
   inventory?: {
     available: boolean;
     itemIds: string[];
+    items?: Array<{
+      id: string;
+      title: string;
+      containerId: string;
+      relation: string;
+      groupIds?: string[];
+      states?: Array<{ id: string; value: string | number | boolean }>;
+    }>;
   };
-  actors: Array<{ id: string; title: string; lastSeenSceneId?: string }>;
+  actors: Array<{ id: string; title?: string; lastSeenSceneId?: string }>;
   visibleItemIds: string[];
   knownEntities: Array<{
     id: string;
@@ -157,6 +218,7 @@ export type NpcActorContext = {
       id: string;
       label: string;
       available?: boolean;
+      executable?: boolean;
       requires?: Array<{
         entityId: string;
         scope: string;
@@ -164,6 +226,18 @@ export type NpcActorContext = {
         via?: string;
       }>;
       effects?: Array<{ type: string; stateId?: string; value?: string | number | boolean }>;
+      preconditions?: Array<{
+        type: 'entity_available' | 'contained_group_entity' | 'numeric_state';
+        satisfied: boolean;
+        entityId?: string;
+        containerId?: string;
+        groupId?: string;
+        itemId?: string;
+        stateId?: string;
+        operator?: 'gt' | 'gte' | 'lt' | 'lte' | 'eq';
+        expectedValue?: number;
+        actualValue?: number;
+      }>;
     }>;
     exit?: {
       targetSceneId: string;
@@ -265,7 +339,7 @@ export type NpcPuppetMasterStrategyDebugInfo = {
   extractedJson?: string;
   error?: string;
   memoryUpdated: boolean;
-  objectivesUpdated?: string[];
+  objectivesUpdated?: NpcObjective[];
   waitMs: number;
   fallback: boolean;
   durationMs?: number;

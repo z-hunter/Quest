@@ -1,5 +1,8 @@
 import type { ActorData } from './Actor';
 import type { EntityData } from './Entity';
+import Box3DTemplate from './Box3D.template.json';
+
+export const DefaultBox3DData = Box3DTemplate;
 
 export const DefaultEntityData: EntityData = {
   type: 'Static',
@@ -12,6 +15,7 @@ export const DefaultEntityData: EntityData = {
   scale: 1.0,
   modelScale: 1.0,
   layer: 0,
+  depthSortMode: 'y',
   spriteName: null,
   animationSpeed: 150,
 };
@@ -33,6 +37,7 @@ export const DefaultActorData: ActorData = {
 export const DefaultQuadData: any = {
   ...DefaultEntityData,
   type: 'Quad',
+  ignoreScaling: true,
   name: 'New Quad',
   width: 100,
   height: 100,
@@ -48,7 +53,14 @@ export const DefaultQuadData: any = {
   gridLines: 5,
   lineWidth: 1.0,
   gridColor: '#ffffff',
+  perspective: true,
+  perspectiveAmount: 1.0,
+  textureMode: 'stretch',
+  tileScaleX: 1.0,
+  tileScaleY: 1.0,
   filled: true,
+  checkerboard: false,
+  secondColor: '#000000',
   blur: 0,
   opacity: 1.0,
   blendMode: 'source-over',

@@ -1,4 +1,5 @@
 import type { ILlmProvider, LlmProviderContent, LlmProviderMessage } from './llm/ILlmProvider';
+import { extractJson, parseJson } from './llm/llmJson';
 import { ShadowLogger } from './slm/ShadowLogger';
 import { SlmInferenceEngine } from './slm/SlmInferenceEngine';
 import { ActorPlanExecutor } from './ActorPlanExecutor';
@@ -6,6 +7,7 @@ import { NpcWorldModelBuilder } from './NpcWorldModelBuilder';
 import type { IGame } from '../core/IGame';
 import type { Scene } from '../scene/Scene';
 import { Actor } from '../entities/Actor';
+import { Entity } from '../entities/Entity';
 import type { ActorMoveResult } from '../entities/Actor';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
@@ -17,27 +19,41 @@ import type {
   NpcPuppetMasterDebugInfo,
   NpcPuppetMasterStrategyDebugInfo,
   NpcPuppetMasterResponse,
+  NpcContinuationState,
+  NpcContinuationStateSnapshot,
   NpcStaticPrefixDebugInfo,
   NpcWorldModel,
 } from './npcTypes';
+import { assertNpcPlan } from '../contracts/runtimeSchemas';
+import {
+  findNpcObjective,
+  normalizeNpcObjectiveDraft,
+  normalizeNpcObjectives,
+  type NpcObjective,
+} from './npcState';
+import type { NpcObjectiveCompletionEvidence } from './npcTypes';
 
 const SYSTEM_PROMPT_URL = '/text/system/npc-pm-system.md';
 const FALLBACK_SYSTEM_PROMPT = [
   'You are the Puppet Master for NPCs in a retro adventure game.',
   'Respond with exactly one JSON object and no extra text.',
   'Return {"kind":"pm_response","plans":[...]}.',
-  'You may include a short top-level "reasoning" string for diagnostics; it never changes runtime behavior.',
+  'You may include a short top-level "reasoning" string for diagnostics; it never changes runtime behavior. Omit it for a plan consisting solely of SAY or one obvious MOVE_TO, unless explaining a genuinely appropriate silence.',
   'Each plan must target a real NPC id from context.',
   'The scene-static catalog describes authored identity and affordances only; catalog membership never proves current physical presence. Inventory items can leave with another actor while the catalog remains cached.',
   'Current presence is confirmed only by this NPC visible dynamic entities or visible inventory. knownEntities and lastSeenSceneId are historical knowledge.',
+  'Speech is scene-local by default: an NPC hears and receives dialogue events only from its currentSceneId. Do not speak to or expect a reply from an actor absent from visible dynamic entities in this scene. Cross-scene communication requires an explicit future mechanic such as a radio; never assume it.',
   'Never target hidden, unknown, unseen, or merely remembered entities. If an item is absent from visible dynamic entities and visible inventory, inspect a visible known anchor instead of acting on the item directly.',
   'plan_rejected_missing_items means the item lacked valid current presence or scope, not that it exists nearby behind a blocked route.',
   'Observed action entries in newEvents/recentEvents are passive context. They do not require a reply or plan unless they materially affect this NPC, its objectives, or the current situation.',
-  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, and USE.',
+  'For direct player speech received by a visible listening NPC, return a plan with a concise SAY response whenever the speech addresses, questions, accuses, greets, or otherwise materially concerns that NPC. Return an empty plans array only when silence is genuinely appropriate; then reasoning MUST explicitly state why this NPC should not respond. Never say in reasoning that the NPC should answer and then return no plan.',
+  'Whenever an NPC decides, promises, volunteers, accepts responsibility, or otherwise commits to future work not already covered by an active objective, the same plan MUST first add a concrete OBJECTIVE_ADD. This is mandatory for work the NPC chose to do for another NPC as well as its own work; never leave a commitment only in dialogue, action history, or memory.',
+  'Reliable steps are SAY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, and COMMAND.',
   'For an entity with exit metadata, MOVE_TO it first when needed, then use TRAVERSE_EXIT. Never treat MOVE_TO alone as crossing an exit.',
   'TRAVERSE_EXIT is always the final physical step of a plan because scene transfer discards the remaining tail.',
-  'Prefer COMMAND when a visible entity lists a suitable authored command; use USE only as fallback.',
-  'Use THINK_STRATEGY only after repeatCount is 2 or more, or after terminal no-progress watchdog results such as repeated_without_progress, pattern_without_progress, or pattern_loop_sleep; do not use it for ordinary uncertainty or missing prerequisites while concrete supported actions remain.',
+  'Use COMMAND only for an authored command listed on a visible entity; never invent a generic use action.',
+  'For a listed command, available means its direct affordance is present; execute it only when executable is true. Read preconditions and inventory entries by stable id, containerId, relation, groups, and states; items with similar titles or groups are distinct instances. inventory.itemIds lists only the Actor main inventory; inventory.items is a recursive container map. TAKE on an accessible nested inventory item extracts it into the Actor main inventory, and PUT can then place a main-inventory item into a listed target relation.',
+  'Use THINK_STRATEGY after repeatCount is 2 or more, after terminal no-progress watchdog results such as repeated_without_progress, pattern_without_progress, or pattern_loop_sleep, OR on wait_elapsed when an active objective exists but no concrete supported next step is appropriate. Do not use it for ordinary uncertainty or missing prerequisites while concrete supported actions remain.',
   'Hidden entities absent from context are unknown; inspect known anchors with LOOK or EXAMINE.',
   'EXAMINE is the deeper discovery mode: it may reveal both lookable and examinable contents. LOOK may reveal lookable contents but never examinable contents.',
   'An ok LOOK or EXAMINE means the anchor was inspected, not that any hidden item was found.',
@@ -48,29 +64,34 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Do not claim actions succeeded before a successful action_completed result.',
   'actionHistory is authoritative runtime history: do not repeat targets marked inspected with nothing new found unless conditions changed.',
   'Before speaking or planning, correct memory to match authoritative actionHistory when they conflict.',
+  'CURRENT OBJECTIVES and MEMORY are your durable working state for the NEXT PM turn. On EVERY call, silently audit every objective (including every subtask) and every memory note against current context and authoritative actionHistory before choosing the plan. This is primarily for your own benefit: stale memories and obsolete, completed, or misleading objectives make your next plans worse and obstruct goal completion. Make the necessary MEMORY_REMOVE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, OBJECTIVE_UPDATE, OBJECTIVE_ADD, or MEMORY_ADD operations in the same plan when the audit finds a change; do not emit no-op cognition steps when nothing needs changing. Whenever the NPC commits to future work, whether for itself or voluntarily for another NPC, add a concrete OBJECTIVE_ADD in that same plan unless an active objective already covers the commitment; never leave it only in dialogue, actionHistory, or memory. Add concrete new prerequisites, update changed plans, remove obsolete objectives and stale memory, and mark a leaf objective completed when current state or authoritative history supports it. OBJECTIVE_MARK_COMPLETED only records planning state; it never performs a physical task or changes world ownership. A marked objective appears once as [JUST COMPLETED] next turn and is then removed automatically, so do not write [COMPLETED] into objective text. A [JUST ARRIVED] memory note is temporary runtime context and will be removed after this turn. Always retain the parent goal until its active subtasks are resolved or it is impossible, and add an immediate concrete subgoal before dependent physical steps. MEMORY is factual only: add confirmed facts and remove stale facts.',
+  'A wait_elapsed trigger is a mandatory cognitive wake-up, not permission to idle. If any active objective or subtask exists, including [PENDING CONFIRMATION], the response MUST contain a non-empty plan: first groom OBJECTIVES and MEMORY, then either emit the needed cognition updates, continue with a concrete supported step, or use THINK_STRATEGY when no concrete step is appropriate. Empty plans after wait_elapsed are allowed only when no active objectives remain and no response or action is needed.',
+  'When you add a blocker objective, MUST include the first concrete non-state step toward it in the same plan (for example OPEN, EXAMINE, MOVE_TO, WAIT, or COMMAND). Do not return only OBJECTIVE_ADD plus SAY.',
+  'Use OBJECTIVE_MARK_COMPLETED for a leaf task once the current state or authoritative actionHistory makes it reasonably clear that the task is done. Runtime keeps physical world changes authoritative and rejects only structural contradictions, such as completing a parent with active subtasks.',
   'Prefer a well-structured multi-step plan over a short plan when the steps are one coherent procedure and runtime interruptOn conditions can stop the chain to save LLM calls.',
   'Use short plans when the next step depends on an unknown result that cannot be expressed with interruptOn.',
   'inventory.available false means the Actor has no inventory, not that it is full.',
   'Do not store attempted actions as successful facts in memory.',
-  'Plan-level memory is committed only after the physical plan completes and discarded after failure or interruption.',
   'Do not record a proposed trade or floor drop as a completed ownership transfer without runtime confirmation.',
+  'A proposal, agreement, or a GIVE in the current response is not a completed transfer. Only item_given, refreshed inventory ownership, or authoritative actionHistory confirms it; recipients must not claim receipt or act on the item before then.',
   'Runtime may insert MOVE_TO before an explicit TAKE when the item has a route_available approach.',
-  'If a plan is rejected for missing items, leading SAY and MEMORY_SET steps may already have executed once; replace unavailable references and do not repeat the same speech or physical plan.',
+  'If a plan is rejected for missing items, leading SAY and memory operations may already have executed once; replace unavailable references and do not repeat the same speech or physical plan.',
   'A player offer does not make an item reachable; negotiate or ask them to transfer it instead of using an unavailable item.',
   'Do not repeat an action when worldChanged is false and repeatCount is 2 or more.',
   'Repeated MOVE_TO failures include moveAttemptsRemaining. Retry the same target only while it is above zero; at zero, stop until conditions change.',
   'Only current visible dynamic entities can be inspected (LOOK, EXAMINE); their supported relations are in, on, under, behind unless explicitly stated otherwise.',
-  'Assume a dynamic entity approach is already_reachable only if interaction is reachable or held. Never infer presence or reachability from the static catalog.',
+  'Dynamic entities are currently present. Omitted dynamic fields mean visibility visible, interaction reachable, and approach already_reachable; explicit fields override those defaults. Never infer presence or reachability from the static catalog.',
 ].join('\n');
 
 const STRATEGY_SYSTEM_PROMPT = [
   'You are the internal strategy analyst for one NPC in a retro adventure game.',
   'Return exactly one JSON object and no extra text.',
-  'Return {"kind":"npc_strategy_response","npcId":"...","memory":"optional compact memory","objectives":["optional updated objectives"],"waitMs":30000}.',
-  'Do not role-play speech. Do not produce SAY, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, USE, or any physical action.',
-  'Analyze the current situation, confirmed facts, actionHistory, recent outcomes, inventory, visible entities, commands, objectives, and memory.',
-  'Write compact memory only with confirmed facts and useful conclusions. Remove noisy or speculative details.',
-  'Revise objectives if the current goal is impossible, blocked, already satisfied, or needs a different strategy.',
+  'Return {"kind":"npc_strategy_response","npcId":"...","updates":[memory/objective update steps],"waitMs":30000}.',
+  'Do not role-play speech. Do not produce SAY, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, or any physical action.',
+  'updates may contain only MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, or OBJECTIVE_REMOVE. OBJECTIVE_MARK_COMPLETED only records a task already confirmed complete by runtime; it never performs that task.',
+  "On every strategy call, audit every objective (including subtasks) and every memory note against the current situation, confirmed facts, actionHistory, recent outcomes, inventory, visible entities, and commands before deciding updates. This keeps the NPC's own future planning reliable: stale memory and obsolete, completed, or misleading objectives obstruct goal completion.",
+  'Write compact memory only with confirmed facts and useful conclusions. Remove noisy, obsolete, disproven, or speculative details.',
+  'Revise objectives if any current goal is impossible, blocked, already satisfied, obsolete, or needs a different strategy. Return only the necessary updates; do not add no-op updates when the audit finds nothing to change.',
   'Choose waitMs between 1000 and 60000. Use 30000 unless a different rest interval is clearly better.',
 ].join('\n');
 
@@ -130,6 +151,12 @@ type PendingNpcBatch = {
   completionResolvers: Array<() => void>;
 };
 
+type ScheduleSceneOptions = {
+  // Player input is allowed to break through an autonomous rate limit. NPC
+  // dialogue is not: otherwise every SAY resets its listeners' budgets.
+  resetRateBudget?: boolean;
+};
+
 type NpcLoopState = {
   repeatKey: string;
   count: number;
@@ -143,28 +170,56 @@ type NpcPatternLoopState = {
 };
 
 type NpcActionHistoryRecord = {
-  signature: string;
+  sceneId: string;
+  timestamp: number;
+  actionType?: NpcPlanExecutionOutcome['actionType'];
+  code?: string;
+  status: NpcPlanExecutionOutcome['status'];
+  targetId?: string;
+  itemId?: string;
+  commandId?: string;
+  worldChanged: boolean;
   summary: string;
-  count: number;
-  updatedAt: number;
+};
+
+type NpcTransitionHistoryRecord = {
+  timestamp: number;
+  sourceSceneId: string;
+  destinationSceneId: string;
+  exitId: string;
+  kind: 'scene_transfer' | 'local_teleport';
+};
+
+export type NpcPuppetMasterSaveState = {
+  actionHistories: Record<string, NpcActionHistoryRecord[]>;
+  transitionHistories?: Record<string, NpcTransitionHistoryRecord[]>;
+  continuations: Array<{
+    stateKey: string;
+    state: 'needs_replan';
+    reason: 'save_restore';
+  }>;
 };
 
 type NpcStrategyResponse = {
   kind: 'npc_strategy_response';
   npcId: string;
-  memory?: string;
-  objectives?: string[];
+  updates?: NpcPlanStep[];
   waitMs?: number;
 };
 
 type PendingPlanContinuation = {
+  state: 'awaiting_barrier';
   npcId: string;
+  sourceSceneId: string;
   barrierStep: NpcPlanStep;
   steps: NpcPlanStep[];
   memory?: string;
   interruptOn: NpcPlanInterruptCondition[];
   completedSteps: NpcPlanExecutionOutcome[];
   trackCompletion: boolean;
+  inventoryItemIds?: string[];
+  observableItemIds?: string[];
+  tailApproachAttempts?: number;
 };
 
 const PM_BATCH_DEBOUNCE_MS = (globalThis as any).process?.env?.NODE_ENV === 'test' ? 150 : 400;
@@ -175,10 +230,24 @@ const PM_LOOP_COOLDOWN_MS = 10_000;
 const PM_RATE_WINDOW_MS = 10_000;
 const PM_MAX_NPC_CALLS_PER_WINDOW = 6;
 const PM_MAX_SCENE_CALLS_PER_WINDOW = 12;
-const PM_MEMORY_CONTINUATION_LIMIT = 3;
+// State-only PM turns (for example OBJECTIVE_ADD + SAY) need one follow-up
+// wake so the NPC can choose a concrete action. They must still be bounded:
+// an unreliable provider must not be able to keep an NPC in an LLM-only loop.
+const PM_STATE_ONLY_CONTINUATION_LIMIT = 3;
+const PM_EMPTY_OBJECTIVE_RECOVERY_LIMIT = 1;
+// A conversational-only reply is visible to the player. Give it a short
+// beat before resuming autonomous goal pursuit instead of immediately making
+// another provider request in the same turn.
+const PM_SAY_ONLY_CONTINUATION_DELAY_MS = 2_000;
+// Runtime barriers normally resolve immediately through ActorPlanExecutor's
+// action-completion callback. Keep a recovery path nevertheless: a dropped
+// host callback must not leave an NPC immune to all later scene events.
+const PM_PENDING_CONTINUATION_TIMEOUT_MS = 15_000;
+const PM_TAIL_APPROACH_REPLAN_LIMIT = 2;
 const PM_PATTERN_LOOP_WINDOW = 6;
 const PM_PATTERN_LOOP_UNIQUE_LIMIT = 3;
-const PM_ACTION_HISTORY_LIMIT = 10;
+const PM_ACTION_HISTORY_LIMIT = 20;
+const PM_TRANSITION_HISTORY_LIMIT = 6;
 const ANTHROPIC_HAIKU_45_MIN_CACHE_TOKENS = 4096;
 
 export class NpcPuppetMaster {
@@ -195,8 +264,24 @@ export class NpcPuppetMaster {
   private loopStates = new Map<string, NpcLoopState>();
   private patternLoopStates = new Map<string, NpcPatternLoopState>();
   private actionHistories = new Map<string, NpcActionHistoryRecord[]>();
+  private transitionHistories = new Map<string, NpcTransitionHistoryRecord[]>();
   private pendingPlanContinuations = new Map<string, PendingPlanContinuation>();
-  private memoryContinuationCounts = new Map<string, number>();
+  private pendingContinuationTimeouts = new Map<string, any>();
+  // A recipient must not autonomously act on an offered item while its giver
+  // is still walking or waiting for the authoritative GIVE result.
+  private pendingIncomingGives = new Map<
+    string,
+    { sceneId: string; giverNpcId: string; recipientNpcId: string; itemId: string }
+  >();
+  // Events that arrive while a runtime barrier is outstanding belong to the
+  // next PM turn, not to a replacement plan.  Keeping them by continuation
+  // key makes the hand-off explicit and prevents timer based requeue loops.
+  private deferredContinuationTriggers = new Map<string, NpcIndividualTrigger[]>();
+  private continuationStates = new Map<string, NpcContinuationStateSnapshot>();
+  private restoredContinuationStates = new Map<string, 'needs_replan'>();
+  private stateOnlyContinuationCounts = new Map<string, number>();
+  private objectiveConfirmationRetryCounts = new Map<string, number>();
+  private emptyObjectiveRecoveryCounts = new Map<string, number>();
   private npcCallTimes = new Map<string, number[]>();
   private sceneCallTimes = new Map<string, number[]>();
 
@@ -210,22 +295,27 @@ export class NpcPuppetMaster {
         this.scheduleNpcWait(npcId, ms);
       },
       (npcId, result) => {
-        const scene = game.sceneManager.currentScene;
+        const scene = this.getNpcScene(npcId);
         if (scene) {
           this.scheduleNpc(scene, npcId, { type: 'move_completed', result });
         }
       },
-      (npcId, result) => {
-        const scene = game.sceneManager.currentScene;
+      (npcId, result, fromExecutor) => {
+        const scene = this.getNpcScene(npcId);
         if (scene) {
-          this.scheduleNpc(scene, npcId, {
-            type: 'action_completed',
-            result: this.recordActionProgress(scene, npcId, result),
-          });
+          this.scheduleNpc(
+            scene,
+            npcId,
+            {
+              type: 'action_completed',
+              result: this.recordActionProgress(scene, npcId, result),
+            },
+            fromExecutor === true
+          );
         }
       },
       (npcId, reason) => {
-        const scene = game.sceneManager.currentScene;
+        const scene = this.getNpcScene(npcId);
         if (scene) {
           void this.processNpcStrategy(scene, npcId, reason);
         }
@@ -235,6 +325,105 @@ export class NpcPuppetMaster {
 
   setProvider(provider: ILlmProvider): void {
     this.provider = provider;
+  }
+
+  exportSaveState(): NpcPuppetMasterSaveState {
+    const continuationKeys = new Set([
+      ...this.pendingPlanContinuations.keys(),
+      ...this.restoredContinuationStates.keys(),
+    ]);
+    return {
+      actionHistories: Object.fromEntries(
+        [...this.actionHistories.entries()].map(([key, records]) => [
+          key,
+          records.map((record) => ({ ...record })),
+        ])
+      ),
+      transitionHistories: Object.fromEntries(
+        [...this.transitionHistories.entries()].map(([key, records]) => [
+          key,
+          records.map((record) => ({ ...record })),
+        ])
+      ),
+      continuations: [...continuationKeys].map((stateKey) => ({
+        stateKey,
+        state: 'needs_replan' as const,
+        reason: 'save_restore' as const,
+      })),
+    };
+  }
+
+  importSaveState(state: Partial<NpcPuppetMasterSaveState> | null | undefined): void {
+    this.haltAllNpcs();
+    for (const [key, records] of Object.entries(state?.actionHistories || {})) {
+      if (!Array.isArray(records)) continue;
+      const legacySeparator = key.lastIndexOf(':');
+      const legacySceneId = legacySeparator > 0 ? key.slice(0, legacySeparator) : '';
+      const npcId = legacySceneId ? key.slice(legacySeparator + 1) : key;
+      if (!npcId) continue;
+      this.actionHistories.set(
+        npcId,
+        records
+          .flatMap((record: any): NpcActionHistoryRecord[] => {
+            if (
+              record &&
+              typeof record.sceneId === 'string' &&
+              typeof record.timestamp === 'number' &&
+              typeof record.summary === 'string' &&
+              typeof record.status === 'string' &&
+              typeof record.worldChanged === 'boolean'
+            ) {
+              return [record as NpcActionHistoryRecord];
+            }
+            // SaveState v1 used sceneId:npcId keys and aggregated summaries.
+            // Preserve those factual records when loading an older save.
+            if (!legacySceneId || !record || typeof record.summary !== 'string') return [];
+            return [
+              {
+                sceneId: legacySceneId,
+                timestamp: Number.isFinite(record.updatedAt) ? record.updatedAt : Date.now(),
+                status: 'ok',
+                worldChanged: /changed world state/i.test(record.summary),
+                summary: record.summary,
+              },
+            ];
+          })
+          .slice(-PM_ACTION_HISTORY_LIMIT)
+          .map((record) => ({ ...record }))
+      );
+    }
+    for (const [npcId, records] of Object.entries(state?.transitionHistories || {})) {
+      if (!Array.isArray(records) || !npcId.trim()) continue;
+      this.transitionHistories.set(
+        npcId,
+        records
+          .filter(
+            (record: any): record is NpcTransitionHistoryRecord =>
+              record &&
+              typeof record.timestamp === 'number' &&
+              typeof record.sourceSceneId === 'string' &&
+              typeof record.destinationSceneId === 'string' &&
+              typeof record.exitId === 'string' &&
+              (record.kind === 'scene_transfer' || record.kind === 'local_teleport')
+          )
+          .slice(-PM_TRANSITION_HISTORY_LIMIT)
+          .map((record) => ({ ...record }))
+      );
+    }
+    for (const continuation of state?.continuations || []) {
+      if (
+        continuation?.state === 'needs_replan' &&
+        typeof continuation.stateKey === 'string' &&
+        continuation.stateKey.trim()
+      ) {
+        this.restoredContinuationStates.set(continuation.stateKey, 'needs_replan');
+        this.continuationStates.set(continuation.stateKey, {
+          state: 'needs_replan',
+          changedAt: Date.now(),
+          reason: 'save_restore',
+        });
+      }
+    }
   }
 
   haltAllNpcs(): void {
@@ -251,19 +440,29 @@ export class NpcPuppetMaster {
     this.loopStates.clear();
     this.patternLoopStates.clear();
     this.actionHistories.clear();
+    this.transitionHistories.clear();
     this.pendingPlanContinuations.clear();
-    this.memoryContinuationCounts.clear();
+    this.pendingIncomingGives.clear();
+    this.objectiveConfirmationRetryCounts.clear();
+    this.emptyObjectiveRecoveryCounts.clear();
+    for (const timeoutId of this.pendingContinuationTimeouts.values()) {
+      globalThis.clearTimeout(timeoutId);
+    }
+    this.pendingContinuationTimeouts.clear();
+    this.deferredContinuationTriggers.clear();
+    this.continuationStates.clear();
+    this.restoredContinuationStates.clear();
+    this.stateOnlyContinuationCounts.clear();
     this.npcCallTimes.clear();
     this.sceneCallTimes.clear();
     this.executor.clearAllPending();
 
-    const scene = this.game.sceneManager.currentScene;
-    if (!scene) return;
-
-    for (const entity of scene.entities) {
-      if (entity instanceof Actor && ComponentSystem.isNpc(entity)) {
-        entity.stop();
-        this.executor.clearState(entity.name);
+    for (const scene of this.game.sceneManager.scenes.values()) {
+      for (const entity of scene.entities) {
+        if (entity instanceof Actor && ComponentSystem.isNpc(entity)) {
+          entity.stop();
+          this.executor.clearState(entity.name);
+        }
       }
     }
   }
@@ -272,11 +471,65 @@ export class NpcPuppetMaster {
     return this.lastDebugInfo;
   }
 
+  recordExitTransition(args: {
+    npcId: string;
+    sourceSceneId: string;
+    destinationSceneId: string;
+    exitId: string;
+  }): void {
+    const npcId = args.npcId.trim();
+    const sourceSceneId = args.sourceSceneId.trim();
+    const destinationSceneId = args.destinationSceneId.trim();
+    const exitId = args.exitId.trim();
+    if (!npcId || !sourceSceneId || !destinationSceneId || !exitId) return;
+
+    const records = this.transitionHistories.get(npcId) || [];
+    records.push({
+      timestamp: Date.now(),
+      sourceSceneId,
+      destinationSceneId,
+      exitId,
+      kind: sourceSceneId === destinationSceneId ? 'local_teleport' : 'scene_transfer',
+    });
+    this.transitionHistories.set(npcId, records.slice(-PM_TRANSITION_HISTORY_LIMIT));
+  }
+
+  getContinuationState(sceneId: string, npcId: string): NpcContinuationStateSnapshot {
+    return (
+      this.continuationStates.get(`${sceneId}:${npcId}`) || {
+        state: 'idle',
+        changedAt: 0,
+      }
+    );
+  }
+
   traceWake(stage: string, details: Record<string, unknown> = {}): void {
     const console = (this.game as any).console;
     if (!console?.parserPeekPmEnabled) return;
-    const body = Object.keys(details).length ? ` ${JSON.stringify(details)}` : '';
-    const message = `--- PM WAKE TRACE ---\n${stage}${body}`;
+
+    let body = JSON.stringify(details);
+    if (stage === 'player_speech_received' || stage === 'player_speech_logged') {
+      const d = details as any;
+      body = `${d.actorId || 'player'} -> [${(d.listenerNpcIds || d.knownByActorIds || []).join(', ')}]: "${d.speech || d.entryId || ''}"`;
+    } else if (stage === 'schedule_scene_scan') {
+      const d = details as any;
+      body = `${d.sceneId}: Selected [${(d.selectedNpcIds || []).join(', ')}]`;
+    } else if (stage === 'batch_enqueued') {
+      const d = details as any;
+      body = `: ${d.sceneId}: ${d.npcId} (trigger: ${d.triggerType || 'none'})`;
+    } else if (stage === 'continuation_state_changed') {
+      const d = details as any;
+      body = `${d.stateKey}: ${d.previous} -> ${d.state} (${d.reason})`;
+    } else if (stage === 'pending_plan_stored') {
+      const d = details as any;
+      body = `${d.npcId}: ${d.remainingStepCount} steps remaining [${(d.remainingStepTypes || []).join(', ')}]. Interrupts: [${(d.interruptOn || []).join(', ')}]`;
+    } else if (Object.keys(details).length === 0) {
+      body = '';
+    } else {
+      body = `: ${body}`;
+    }
+
+    const message = `--- PM WAKE TRACE ---\n> ${stage}${body}`;
     if (typeof console.logDebug === 'function') {
       console.logDebug(message);
     } else if (typeof console.log === 'function') {
@@ -284,7 +537,7 @@ export class NpcPuppetMaster {
     }
   }
 
-  async scheduleScene(scene: Scene): Promise<void> {
+  async scheduleScene(scene: Scene, options: ScheduleSceneOptions = {}): Promise<void> {
     const npcStates = this.worldModelBuilder.getNpcActors(scene).map((npc) => ({
       npcId: npc.name,
       cursor: scene.sceneLog.lastPmProcessedAtByNpc[npc.name] ?? scene.sceneLog.lastPmProcessedAt,
@@ -311,27 +564,40 @@ export class NpcPuppetMaster {
     }
 
     // External scene events such as player speech must never be starved by an
-    // autonomous NPC chain that exhausted its background rate budget.
-    this.sceneCallTimes.delete(scene.id);
+    // autonomous NPC chain that exhausted its background rate budget. Calls
+    // from autonomous SAY plans deliberately keep the normal budget.
+    const resetRateBudget = options.resetRateBudget !== false;
+    if (resetRateBudget) this.sceneCallTimes.delete(scene.id);
     const completions: Promise<void>[] = [];
     for (const npcId of unreadNpcIds) {
-      this.clearLoopSuppression(scene, npcId);
-      this.patternLoopStates.delete(this.getNpcStateKey(scene, npcId));
-      this.memoryContinuationCounts.delete(this.getNpcStateKey(scene, npcId));
-      this.npcCallTimes.delete(this.getNpcStateKey(scene, npcId));
+      if (resetRateBudget) {
+        this.clearLoopSuppression(scene, npcId);
+        this.patternLoopStates.delete(this.getNpcStateKey(scene, npcId));
+        this.stateOnlyContinuationCounts.delete(this.getNpcStateKey(scene, npcId));
+        this.npcCallTimes.delete(this.getNpcStateKey(scene, npcId));
+      }
       completions.push(this.enqueueNpc(scene, npcId));
     }
     await Promise.all(completions);
   }
 
-  scheduleNpc(scene: Scene, npcId: string, trigger: NpcIndividualTrigger): void {
+  scheduleNpc(
+    scene: Scene,
+    npcId: string,
+    trigger: NpcIndividualTrigger,
+    preserveTerminalCompletion: boolean = false
+  ): void {
     const stateKey = this.getNpcStateKey(scene, npcId);
     const loopState = this.loopStates.get(stateKey);
     const patternLoopState = this.patternLoopStates.get(stateKey);
     if (
       trigger.type === 'action_completed' &&
       patternLoopState?.cooldownUntil &&
-      patternLoopState.cooldownUntil > Date.now()
+      patternLoopState.cooldownUntil > Date.now() &&
+      // This is the terminal result that started the cooldown.  It still has
+      // to resolve an already-scheduled runtime barrier; suppressing it here
+      // strands the pending continuation permanently.
+      !(preserveTerminalCompletion && this.isTerminalNoProgressCode(trigger.result.code))
     ) {
       return;
     }
@@ -340,7 +606,8 @@ export class NpcPuppetMaster {
       loopState?.cooldownUntil &&
       loopState.cooldownUntil > Date.now() &&
       trigger.result.repeatKey === loopState.repeatKey &&
-      (trigger.result.repeatCount || 0) > PM_REPEAT_SUPPRESS_COUNT
+      (trigger.result.repeatCount || 0) > PM_REPEAT_SUPPRESS_COUNT &&
+      !(preserveTerminalCompletion && this.isTerminalNoProgressCode(trigger.result.code))
     ) {
       return;
     }
@@ -367,7 +634,7 @@ export class NpcPuppetMaster {
     this.processingScenes.add(processingKey);
     try {
       const worldModel = this.worldModelBuilder.build(scene);
-      const plans = await this.processWorldModel(worldModel);
+      const plans = await this.processWorldModel(scene, worldModel);
       if (this.haltGenerationId !== currentGeneration) return [];
       if (this.lastDebugInfo?.error) return [];
       for (const npc of worldModel.npcs) {
@@ -407,7 +674,7 @@ export class NpcPuppetMaster {
     try {
       const worldModel = this.worldModelBuilder.build(scene, { npcIds: [npcId] });
       if (!worldModel.npcs.length) return [];
-      const plans = await this.processWorldModel(worldModel, trigger);
+      const plans = await this.processWorldModel(scene, worldModel, trigger);
       if (this.haltGenerationId !== currentGeneration) return [];
       if (!this.lastDebugInfo?.error && !this.shouldPreserveUnreadEventsForRetry(npcId)) {
         scene.sceneLog.markProcessed(undefined, npcId);
@@ -419,6 +686,7 @@ export class NpcPuppetMaster {
   }
 
   private async processWorldModel(
+    scene: Scene,
     worldModel: NpcWorldModel,
     trigger?: NpcIndividualTrigger | NpcBatchTrigger
   ): Promise<NpcPlan[]> {
@@ -428,6 +696,7 @@ export class NpcPuppetMaster {
     if (worldModel.npcs && worldModel.npcs.length === 1 && SlmInferenceEngine.isReady()) {
       const npcContext = worldModel.npcs[0];
       const slmResult = await SlmInferenceEngine.infer(npcContext);
+      if (this.haltGenerationId !== currentGeneration) return [];
       if (slmResult.kind === 'success' && slmResult.plans.length > 0) {
         const normalized = this.normalizeResponse(
           { kind: 'pm_response', plans: slmResult.plans },
@@ -436,18 +705,37 @@ export class NpcPuppetMaster {
         if (normalized.valid) {
           const expandedPlans = this.expandImplicitApproaches(normalized.plans, worldModel);
           const itemValidation = this.validatePlanItems(expandedPlans, worldModel, trigger);
-          const acceptedPlans = this.removePrematureStrategySteps(
-            this.removeRepeatedNoProgressSteps(itemValidation.plans, trigger),
+          const filteredPlans = this.deferPlansDependingOnUnconfirmedGive(
+            this.removePrematureGiveClaims(
+              this.removePrematureStrategySteps(
+                this.removeRepeatedNoProgressSteps(itemValidation.plans, trigger),
+                trigger,
+                worldModel
+              )
+            )
+          );
+          const completionValidation = this.validateObjectiveCompletionConfirmations(
+            filteredPlans,
+            worldModel,
+            trigger
+          );
+          const acceptedPlans = this.recoverEmptyPlansForActiveObjectives(
+            completionValidation.plans,
+            worldModel,
             trigger
           );
           if (acceptedPlans.length > 0) {
+            this.settlePendingObjectiveConfirmations(worldModel, acceptedPlans);
             this.traceWake('slm_handled_routine', {
               sceneId: worldModel.scene.id,
               npcId: npcContext.id,
               steps: acceptedPlans[0].steps.length,
             });
             for (const plan of acceptedPlans) {
-              const outcomes = this.executePlanAndTrackContinuation(plan);
+              const outcomes = this.executePlanAndTrackContinuation(
+                plan,
+                completionValidation.confirmedObjectiveIdsByNpc.get(plan.npcId)
+              );
               const hasScheduled = outcomes.some((outcome) => outcome.status === 'scheduled');
               if (!hasScheduled) {
                 ShadowLogger.commit(
@@ -464,6 +752,11 @@ export class NpcPuppetMaster {
                   : trigger;
               this.maybeScheduleContinuation([plan], planTrigger, hasScheduled);
             }
+            this.scheduleObjectiveConfirmationRetries(
+              scene,
+              completionValidation.rejectedNpcIds,
+              acceptedPlans
+            );
             return acceptedPlans;
           }
         }
@@ -475,7 +768,7 @@ export class NpcPuppetMaster {
       });
     }
 
-    const system = await this.buildSystemPrompt(worldModel);
+    const system = await this.buildSystemPrompt(scene, worldModel);
     const messages = this.buildMessages(worldModel, trigger);
     const staticPrefix = this.getStaticPrefixDebug(system);
     const dynamicPrompt = this.getDynamicPromptDebug(messages);
@@ -505,8 +798,8 @@ export class NpcPuppetMaster {
       return [];
     }
 
-    const extractedJson = this.extractJson(response.text);
-    const parsed = this.parseJson(extractedJson);
+    const extractedJson = extractJson(response.text);
+    const parsed = parseJson(extractedJson);
     const normalized = this.normalizeResponse(parsed, worldModel);
     const expandedPlans = normalized.valid
       ? this.expandImplicitApproaches(normalized.plans, worldModel)
@@ -515,18 +808,34 @@ export class NpcPuppetMaster {
       ? this.validatePlanItems(expandedPlans, worldModel, trigger)
       : { plans: normalized.plans, rejectedPlans: [] };
     const itemValidatedPlans = itemValidation.plans;
-    const acceptedPlans = normalized.valid
-      ? this.removePrematureStrategySteps(
-          this.removeRepeatedNoProgressSteps(
-            this.removeUnsupportedDiscoveryClaims(
-              this.removeUnavailableCommandSteps(itemValidatedPlans, worldModel),
-              trigger
-            ),
-            trigger
-          ),
-          trigger
+    const filteredPlans = normalized.valid
+      ? this.deferPlansDependingOnUnconfirmedGive(
+          this.removePrematureGiveClaims(
+            this.removePrematureStrategySteps(
+              this.removeRepeatedNoProgressSteps(
+                this.removeUnsupportedDiscoveryClaims(
+                  this.removeUnavailableCommandSteps(itemValidatedPlans, worldModel),
+                  trigger
+                ),
+                trigger
+              ),
+              trigger,
+              worldModel
+            )
+          )
         )
       : itemValidatedPlans;
+    const completionValidation = this.validateObjectiveCompletionConfirmations(
+      filteredPlans,
+      worldModel,
+      trigger
+    );
+    const acceptedPlans = this.recoverEmptyPlansForActiveObjectives(
+      completionValidation.plans,
+      worldModel,
+      trigger
+    );
+    acceptedPlans.forEach((plan, index) => assertNpcPlan(plan, `$.plans[${index}]`));
     this.lastDebugInfo = {
       matched: acceptedPlans.length > 0,
       provider: this.provider.getProviderName(),
@@ -551,6 +860,16 @@ export class NpcPuppetMaster {
 
     if (!normalized.valid) return [];
 
+    // A pending marker is a one-turn claim. Keep it visible for the next PM
+    // call only when the model repeats the marker; otherwise restore the
+    // objective to active state so it can be planned again.
+    this.settlePendingObjectiveConfirmations(worldModel, acceptedPlans);
+
+    // Completed objectives were presented in this request as JUST COMPLETED.
+    // Retire them only after that one PM turn, never by mutating their text.
+    this.pruneObjectivesSeenAsCompleted(scene, worldModel);
+    this.pruneTransientMemorySeenThisTurn(scene, worldModel);
+
     for (const plan of acceptedPlans) {
       const npcContext = worldModel.npcs.find((n) => n.id === plan.npcId);
       const planTrigger =
@@ -564,7 +883,10 @@ export class NpcPuppetMaster {
     }
 
     for (const plan of acceptedPlans) {
-      const outcomes = this.executePlanAndTrackContinuation(plan);
+      const outcomes = this.executePlanAndTrackContinuation(
+        plan,
+        completionValidation.confirmedObjectiveIdsByNpc.get(plan.npcId)
+      );
       const hasScheduled = outcomes.some((outcome) => outcome.status === 'scheduled');
       if (!hasScheduled) {
         ShadowLogger.commit(
@@ -585,19 +907,118 @@ export class NpcPuppetMaster {
         outcomes.some((outcome) => outcome.status === 'scheduled')
       );
     }
+    this.scheduleObjectiveConfirmationRetries(
+      scene,
+      completionValidation.rejectedNpcIds,
+      acceptedPlans
+    );
     return acceptedPlans;
   }
 
-  private executePlanAndTrackContinuation(plan: NpcPlan): NpcPlanExecutionOutcome[] {
-    const scene = this.game.sceneManager.currentScene;
+  private executePlanAndTrackContinuation(
+    plan: NpcPlan,
+    confirmedObjectiveIds?: ReadonlySet<string>
+  ): NpcPlanExecutionOutcome[] {
+    const scene = this.getNpcScene(plan.npcId);
     if (scene) {
-      this.pendingPlanContinuations.delete(this.getNpcStateKey(scene, plan.npcId));
+      const stateKey = this.getNpcStateKey(scene, plan.npcId);
+      if (this.pendingPlanContinuations.has(stateKey)) {
+        // A caller may only replace a continuation through the formal
+        // interrupt policy. Ordinary scene scans must wait for the barrier.
+        this.traceWake('batch_deferred_pending_continuation', {
+          sceneId: scene.id,
+          npcId: plan.npcId,
+          reason: 'replacement_plan_blocked',
+        });
+        return [];
+      }
     }
-    const outcomes = this.executor.executePlan(plan);
+    const observableItemIds = scene ? this.getNpcObservableItemIds(scene, plan.npcId) : [];
+    if (scene) this.registerPendingIncomingGives(scene, plan);
+    const outcomes = this.executor.executePlan(plan, confirmedObjectiveIds);
     if (scene) {
-      this.storePendingContinuationAfterScheduledOutcome(scene, plan, outcomes);
+      const failedOutcome = outcomes.find((outcome) => outcome.status === 'failed');
+      if (failedOutcome) {
+        this.traceWake('plan_step_failed', {
+          sceneId: scene.id,
+          npcId: plan.npcId,
+          code: failedOutcome.code,
+          actionType: failedOutcome.actionType,
+          targetId: failedOutcome.targetId,
+          itemId: failedOutcome.itemId,
+          commandId: failedOutcome.commandId,
+          plannedStepTypes: plan.steps.map((step) => step.type),
+        });
+      }
+      if (this.hasConcretePlanAction(plan)) {
+        this.stateOnlyContinuationCounts.delete(this.getNpcStateKey(scene, plan.npcId));
+      }
+      if (this.hasPhysicalPlanAction(plan)) {
+        this.emptyObjectiveRecoveryCounts.delete(this.getNpcStateKey(scene, plan.npcId));
+      }
+      this.storePendingContinuationAfterScheduledOutcome(
+        scene,
+        plan,
+        outcomes,
+        [],
+        observableItemIds
+      );
+      if (!outcomes.some((outcome) => outcome.status === 'scheduled')) {
+        this.releasePendingIncomingGives(scene, plan.npcId, 'give_finished_without_barrier');
+      }
     }
     return outcomes;
+  }
+
+  private getIncomingGiveKey(scene: Scene, recipientNpcId: string): string {
+    return `${scene.id}:${recipientNpcId}`;
+  }
+
+  private registerPendingIncomingGives(scene: Scene, plan: NpcPlan): void {
+    for (const step of plan.steps) {
+      if (step.type !== 'GIVE') continue;
+      const recipient = scene.getObjectByName(step.targetId);
+      if (!(recipient instanceof Actor) || !ComponentSystem.getNpcComponent(recipient)?.enabled)
+        continue;
+      const key = this.getIncomingGiveKey(scene, recipient.name);
+      this.pendingIncomingGives.set(key, {
+        sceneId: scene.id,
+        giverNpcId: plan.npcId,
+        recipientNpcId: recipient.name,
+        itemId: step.itemId,
+      });
+      this.traceWake('incoming_give_pending', {
+        sceneId: scene.id,
+        giverNpcId: plan.npcId,
+        recipientNpcId: recipient.name,
+        itemId: step.itemId,
+      });
+    }
+  }
+
+  private releasePendingIncomingGives(scene: Scene, giverNpcId: string, reason: string): void {
+    for (const [key, pending] of this.pendingIncomingGives) {
+      if (pending.sceneId !== scene.id || pending.giverNpcId !== giverNpcId) continue;
+      this.pendingIncomingGives.delete(key);
+      this.traceWake('incoming_give_released', {
+        sceneId: scene.id,
+        giverNpcId,
+        recipientNpcId: pending.recipientNpcId,
+        itemId: pending.itemId,
+        reason,
+      });
+      const recipientScene = this.getNpcScene(pending.recipientNpcId);
+      if (recipientScene === scene) {
+        this.scheduleNpc(scene, pending.recipientNpcId, {
+          type: 'manual',
+          reason: 'incoming_give_resolved',
+        });
+      }
+    }
+  }
+
+  private getPendingIncomingGive(scene: Scene, npcId: string) {
+    return this.pendingIncomingGives.get(this.getIncomingGiveKey(scene, npcId));
   }
 
   private validatePlanItems(
@@ -608,18 +1029,35 @@ export class NpcPuppetMaster {
     plans: NpcPlan[];
     rejectedPlans: NonNullable<NpcPuppetMasterDebugInfo['rejectedPlans']>;
   } {
-    const scene = this.game.sceneManager.currentScene;
     const acceptedPlans: NpcPlan[] = [];
     const rejectedPlans: NonNullable<NpcPuppetMasterDebugInfo['rejectedPlans']> = [];
     for (const plan of plans) {
+      const scene = this.getNpcScene(plan.npcId);
+      const actor = scene?.getObjectByName(plan.npcId);
       const npc = worldModel.npcs.find((candidate) => candidate.id === plan.npcId);
-      if (!npc) continue;
+      if (!npc || !(actor instanceof Actor)) continue;
       const availableIds = new Set([
         ...(npc.inventory?.itemIds || []),
         ...(npc.entities || [])
           .filter((entity) => entity.interaction === 'held' || entity.interaction === 'reachable')
           .map((entity) => entity.id),
       ]);
+      // `itemIds` intentionally contains only the Actor's main inventory.
+      // Do not use the prompt projection as the authority for nested TAKE:
+      // hidden items can be semantically revealed to this actor yet remain
+      // absent from player-facing inventory text.
+      const nestedTakeableIds = new Set(
+        (scene?.getAllSceneObjects() || [])
+          .filter(
+            (item): item is Entity =>
+              item instanceof Entity &&
+              item !== actor &&
+              this.game.inventoryManager.isEntityWithinActorInventory(actor, item) &&
+              this.game.actorWorld.getObjectPerception(actor, item, true, scene).visibility ===
+                'visible'
+          )
+          .map((item) => item.name)
+      );
       const knownItemIds = new Set(
         (npc.knownEntities || [])
           .filter((entity) => entity.kind === 'item')
@@ -627,10 +1065,11 @@ export class NpcPuppetMaster {
       );
       const missing: Array<{ stepType: NpcPlanStep['type']; itemId: string }> = [];
       const entitiesById = new Map((npc.entities || []).map((entity) => [entity.id, entity]));
+      const visibleActorIds = new Set((npc.actors || []).map((actor) => actor.id));
       const plannedAvailableIds = new Set(availableIds);
       for (let stepIndex = 0; stepIndex < plan.steps.length; stepIndex++) {
         const step = plan.steps[stepIndex];
-        if ((step.type === 'PUT' || step.type === 'USE') && !availableIds.has(step.itemId)) {
+        if ((step.type === 'PUT' || step.type === 'GIVE') && !availableIds.has(step.itemId)) {
           if (!plannedAvailableIds.has(step.itemId)) {
             missing.push({ stepType: step.type, itemId: step.itemId });
           }
@@ -643,10 +1082,30 @@ export class NpcPuppetMaster {
               (candidate) => candidate.type === 'MOVE_TO' && candidate.targetId === step.targetId
             );
           const canBecomeReachable = target?.approach === 'route_available' && hasPriorMove;
-          if (!plannedAvailableIds.has(step.targetId) && !canBecomeReachable) {
+          const canExtractFromNestedInventory = nestedTakeableIds.has(step.targetId);
+          if (
+            !plannedAvailableIds.has(step.targetId) &&
+            !canBecomeReachable &&
+            !canExtractFromNestedInventory
+          ) {
             missing.push({ stepType: step.type, itemId: step.targetId });
           } else {
             plannedAvailableIds.add(step.targetId);
+          }
+        }
+        if (step.type === 'GIVE') {
+          const target = entitiesById.get(step.targetId);
+          const hasPriorMove = plan.steps
+            .slice(0, stepIndex)
+            .some(
+              (candidate) => candidate.type === 'MOVE_TO' && candidate.targetId === step.targetId
+            );
+          const canBecomeReachable = target?.approach === 'route_available' && hasPriorMove;
+          if (
+            !visibleActorIds.has(step.targetId) &&
+            (!target || (!plannedAvailableIds.has(step.targetId) && !canBecomeReachable))
+          ) {
+            missing.push({ stepType: step.type, itemId: step.targetId });
           }
         }
         if (step.type === 'COMMAND') {
@@ -693,12 +1152,8 @@ export class NpcPuppetMaster {
       }
       if (retryScheduled && scene) {
         const currentGeneration = this.haltGenerationId;
-        const currentScene = scene;
         globalThis.setTimeout(() => {
-          if (
-            this.haltGenerationId !== currentGeneration ||
-            this.game.sceneManager.currentScene !== currentScene
-          )
+          if (this.haltGenerationId !== currentGeneration || this.getNpcScene(plan.npcId) !== scene)
             return;
           this.scheduleNpc(scene, plan.npcId, {
             type: 'plan_rejected_missing_items',
@@ -745,6 +1200,25 @@ export class NpcPuppetMaster {
             });
           }
         }
+        if (step.type === 'GIVE') {
+          const target = entitiesById.get(step.targetId);
+          const hasPriorMove = steps.some(
+            (candidate) => candidate.type === 'MOVE_TO' && candidate.targetId === step.targetId
+          );
+          if (
+            target?.interaction !== 'reachable' &&
+            target?.approach === 'route_available' &&
+            !hasPriorMove
+          ) {
+            steps.push({ type: 'MOVE_TO', targetId: step.targetId });
+            changed = true;
+            this.traceWake('give_auto_approach_inserted', {
+              sceneId: worldModel.scene.id,
+              npcId: plan.npcId,
+              targetId: step.targetId,
+            });
+          }
+        }
         if (step.type === 'TRAVERSE_EXIT') {
           const target = entitiesById.get(step.targetId);
           const hasPriorMove = steps.some(
@@ -774,10 +1248,148 @@ export class NpcPuppetMaster {
   private getSafeRejectedPlanPrefix(plan: NpcPlan): NpcPlanStep[] {
     const safePrefix: NpcPlanStep[] = [];
     for (const step of plan.steps) {
-      if (step.type !== 'SAY' && step.type !== 'MEMORY_SET') break;
+      if (
+        step.type !== 'SAY' &&
+        step.type !== 'MEMORY_SET' &&
+        step.type !== 'MEMORY_ADD' &&
+        step.type !== 'MEMORY_REMOVE' &&
+        step.type !== 'OBJECTIVE_ADD' &&
+        step.type !== 'OBJECTIVE_UPDATE' &&
+        step.type !== 'OBJECTIVE_MARK_COMPLETED' &&
+        step.type !== 'OBJECTIVE_REMOVE'
+      )
+        break;
       safePrefix.push(step);
     }
     return safePrefix;
+  }
+
+  /**
+   * A single provider response is not a transaction: a recipient cannot act
+   * on an item until the giver's semantic GIVE has emitted item_given.  Keep
+   * such recipient plans out of this batch; a successful GIVE explicitly
+   * wakes the recipient with refreshed inventory and SceneLog context. For a
+   * closed cycle of GIVEs, one sender is retained to make the first confirmed
+   * transfer possible.
+   */
+  private deferPlansDependingOnUnconfirmedGive(plans: NpcPlan[]): NpcPlan[] {
+    const recipientIds = new Set(
+      plans.flatMap((plan) =>
+        plan.steps
+          .filter((step): step is Extract<NpcPlanStep, { type: 'GIVE' }> => step.type === 'GIVE')
+          .map((step) => step.targetId)
+      )
+    );
+    if (!recipientIds.size) return plans;
+
+    // A recipient normally must wait for item_given.  A cycle such as
+    // A -> B and B -> A has no external first giver, though: deferring every
+    // recipient would remove the entire response.  Keep one stable plan in
+    // each strongly connected component to initiate the cycle; its runtime
+    // item_given wake will refresh and safely resume the next recipient.
+    const planNpcIds = new Set(plans.map((plan) => plan.npcId));
+    const planOrder = new Map(plans.map((plan, index) => [plan.npcId, index]));
+    const giveTargetsByNpcId = new Map<string, Set<string>>();
+    for (const plan of plans) {
+      const targets = giveTargetsByNpcId.get(plan.npcId) || new Set<string>();
+      for (const step of plan.steps) {
+        if (step.type === 'GIVE' && planNpcIds.has(step.targetId)) {
+          targets.add(step.targetId);
+        }
+      }
+      giveTargetsByNpcId.set(plan.npcId, targets);
+    }
+
+    const indexes = new Map<string, number>();
+    const lowLinks = new Map<string, number>();
+    const stack: string[] = [];
+    const onStack = new Set<string>();
+    const cycleStarters = new Map<string, string[]>();
+    let nextIndex = 0;
+    const visit = (npcId: string): void => {
+      indexes.set(npcId, nextIndex);
+      lowLinks.set(npcId, nextIndex);
+      nextIndex += 1;
+      stack.push(npcId);
+      onStack.add(npcId);
+
+      for (const targetId of giveTargetsByNpcId.get(npcId) || []) {
+        if (!indexes.has(targetId)) {
+          visit(targetId);
+          lowLinks.set(npcId, Math.min(lowLinks.get(npcId)!, lowLinks.get(targetId)!));
+        } else if (onStack.has(targetId)) {
+          lowLinks.set(npcId, Math.min(lowLinks.get(npcId)!, indexes.get(targetId)!));
+        }
+      }
+
+      if (lowLinks.get(npcId) !== indexes.get(npcId)) return;
+      const component: string[] = [];
+      let memberId: string;
+      do {
+        memberId = stack.pop()!;
+        onStack.delete(memberId);
+        component.push(memberId);
+      } while (memberId !== npcId);
+
+      const isSelfCycle = component.length === 1 && giveTargetsByNpcId.get(npcId)?.has(npcId);
+      if (component.length < 2 && !isSelfCycle) return;
+      component.sort((left, right) => planOrder.get(left)! - planOrder.get(right)!);
+      cycleStarters.set(component[0], component);
+    };
+    for (const npcId of planNpcIds) {
+      if (!indexes.has(npcId)) visit(npcId);
+    }
+
+    return plans.filter((plan) => {
+      if (!recipientIds.has(plan.npcId)) return true;
+      const cycle = cycleStarters.get(plan.npcId);
+      if (cycle) {
+        this.traceWake('recipient_plan_retained_to_break_give_cycle', {
+          npcId: plan.npcId,
+          cycleNpcIds: cycle,
+        });
+        return true;
+      }
+      this.traceWake('recipient_plan_deferred_pending_give', {
+        npcId: plan.npcId,
+        reason: 'unconfirmed_give_in_same_response',
+        stepTypes: plan.steps.map((step) => step.type),
+      });
+      return false;
+    });
+  }
+
+  /** Runtime confirmation is the only authority for completed ownership. */
+  private removePrematureGiveClaims(plans: NpcPlan[]): NpcPlan[] {
+    const completedTransferClaim = /\b(gave|given|traded|received|got|transferred)\b/i;
+    return plans
+      .map((plan) => {
+        if (!plan.steps.some((step) => step.type === 'GIVE')) return plan;
+        const steps = plan.steps.filter((step) => {
+          if (step.type === 'SAY') return !completedTransferClaim.test(step.text);
+          if (step.type === 'MEMORY_SET' || step.type === 'MEMORY_ADD') {
+            return !completedTransferClaim.test(step.memory);
+          }
+          return true;
+        });
+        const memory =
+          typeof plan.memory === 'string' && completedTransferClaim.test(plan.memory)
+            ? undefined
+            : plan.memory;
+        if (steps.length === plan.steps.length && memory === plan.memory) return plan;
+        this.traceWake('premature_give_claim_removed', {
+          npcId: plan.npcId,
+          removedStepCount: plan.steps.length - steps.length,
+          removedPlanMemory: memory === undefined && plan.memory !== undefined,
+        });
+        return {
+          npcId: plan.npcId,
+          steps,
+          ...(memory !== undefined ? { memory } : {}),
+          ...(plan.interruptOn !== undefined ? { interruptOn: plan.interruptOn } : {}),
+        };
+      })
+      .filter((plan) => plan.steps.length > 0 || plan.memory !== undefined);
   }
 
   private shouldPreserveUnreadEventsForRetry(npcId: string): boolean {
@@ -805,7 +1417,9 @@ export class NpcPuppetMaster {
     scene: Scene,
     plan: NpcPlan,
     outcomes: NpcPlanExecutionOutcome[],
-    previousCompletedSteps: NpcPlanExecutionOutcome[] = []
+    previousCompletedSteps: NpcPlanExecutionOutcome[] = [],
+    observableItemIds: string[] = this.getNpcObservableItemIds(scene, plan.npcId),
+    tailApproachAttempts: number = 0
   ): void {
     const scheduledIndex = outcomes.findIndex((outcome) => outcome.status === 'scheduled');
     if (scheduledIndex < 0) return;
@@ -819,19 +1433,33 @@ export class NpcPuppetMaster {
       !remainingSteps.length &&
       !hasPendingMemory &&
       !interruptOn.length &&
-      barrierStep.type !== 'MOVE_TO'
+      barrierStep.type !== 'MOVE_TO' &&
+      // A scene transfer needs its completion hand-off even when it is the
+      // whole plan.  Besides emitting plan completion in the destination,
+      // that hand-off records the one-turn arrival fact used by the next PM
+      // decision.  Without it, a bare TRAVERSE_EXIT loses the destination
+      // context and the NPC can replan from stale travel history.
+      barrierStep.type !== 'TRAVERSE_EXIT'
     ) {
       return;
     }
-    this.pendingPlanContinuations.set(this.getNpcStateKey(scene, plan.npcId), {
+    const stateKey = this.getNpcStateKey(scene, plan.npcId);
+    this.pendingPlanContinuations.set(stateKey, {
+      state: 'awaiting_barrier',
       npcId: plan.npcId,
+      sourceSceneId: scene.id,
       barrierStep,
       steps: remainingSteps,
       ...(hasPendingMemory ? { memory: plan.memory } : {}),
       interruptOn,
       completedSteps: [...previousCompletedSteps, ...outcomes.slice(0, scheduledIndex)],
       trackCompletion,
+      inventoryItemIds: this.getNpcInventoryItemIds(scene, plan.npcId),
+      observableItemIds,
+      tailApproachAttempts,
     });
+    this.schedulePendingContinuationRecovery(scene, plan.npcId, stateKey, barrierStep);
+    this.transitionContinuation(stateKey, 'awaiting_barrier', 'scheduled_step');
     this.traceWake('pending_plan_stored', {
       sceneId: scene.id,
       npcId: plan.npcId,
@@ -843,15 +1471,97 @@ export class NpcPuppetMaster {
     });
   }
 
+  private transitionContinuation(
+    stateKey: string,
+    state: NpcContinuationState,
+    reason?: string
+  ): void {
+    const previous = this.continuationStates.get(stateKey)?.state || 'idle';
+    const allowed: Record<NpcContinuationState, NpcContinuationState[]> = {
+      idle: ['awaiting_barrier', 'needs_replan', 'completed'],
+      awaiting_barrier: ['executing_tail', 'needs_replan', 'interrupted', 'completed'],
+      executing_tail: ['awaiting_barrier', 'needs_replan', 'interrupted', 'completed'],
+      needs_replan: ['awaiting_barrier', 'interrupted'],
+      interrupted: ['awaiting_barrier'],
+      completed: ['awaiting_barrier'],
+    };
+    if (!allowed[previous].includes(state)) {
+      console.warn(`[NpcPuppetMaster] invalid continuation transition ${previous} -> ${state}`, {
+        stateKey,
+        reason,
+      });
+    }
+    this.continuationStates.set(stateKey, {
+      state,
+      changedAt: Date.now(),
+      ...(reason ? { reason } : {}),
+    });
+    if (state !== 'awaiting_barrier') {
+      this.pendingPlanContinuations.delete(stateKey);
+      const timeoutId = this.pendingContinuationTimeouts.get(stateKey);
+      if (timeoutId) globalThis.clearTimeout(timeoutId);
+      this.pendingContinuationTimeouts.delete(stateKey);
+    }
+    this.traceWake('continuation_state_changed', { stateKey, previous, state, reason });
+  }
+
+  private schedulePendingContinuationRecovery(
+    scene: Scene,
+    npcId: string,
+    stateKey: string,
+    barrierStep: NpcPlanStep
+  ): void {
+    const previousTimeout = this.pendingContinuationTimeouts.get(stateKey);
+    if (previousTimeout) globalThis.clearTimeout(previousTimeout);
+    const currentGeneration = this.haltGenerationId;
+    const timeoutId = globalThis.setTimeout(() => {
+      this.pendingContinuationTimeouts.delete(stateKey);
+      if (this.haltGenerationId !== currentGeneration || this.getNpcScene(npcId) !== scene) return;
+      const pending = this.pendingPlanContinuations.get(stateKey);
+      if (!pending || pending.barrierStep !== barrierStep) return;
+
+      const result: NpcPlanExecutionOutcome = {
+        status: 'failed',
+        code: 'continuation_timeout',
+        npcId,
+        targetId:
+          'targetId' in barrierStep && typeof barrierStep.targetId === 'string'
+            ? barrierStep.targetId
+            : undefined,
+        actionType: this.getBarrierActionType(barrierStep),
+        message: `Timed out waiting for ${barrierStep.type} completion.`,
+        worldChanged: false,
+      };
+      this.transitionContinuation(stateKey, 'needs_replan', 'barrier_timeout');
+      this.traceWake('pending_continuation_timeout', {
+        sceneId: scene.id,
+        npcId,
+        barrierStepType: barrierStep.type,
+        timeoutMs: PM_PENDING_CONTINUATION_TIMEOUT_MS,
+      });
+      this.scheduleNpc(scene, npcId, {
+        type: 'plan_interrupted',
+        reason: 'ACTION_FAILED',
+        result,
+        completedSteps: pending.completedSteps,
+        remainingSteps: pending.steps,
+      });
+      this.resumeDeferredContinuation(scene, npcId);
+    }, PM_PENDING_CONTINUATION_TIMEOUT_MS);
+    this.pendingContinuationTimeouts.set(stateKey, timeoutId);
+  }
+
+  private getBarrierActionType(barrierStep: NpcPlanStep): NpcPlanExecutionOutcome['actionType'] {
+    return barrierStep.type === 'MOVE_TO' || barrierStep.type === 'WAIT'
+      ? undefined
+      : barrierStep.type;
+  }
+
   private tryExecutePendingContinuation(
     scene: Scene,
     npcId: string,
     triggers: NpcIndividualTrigger[]
   ): boolean {
-    const stateKey = this.getNpcStateKey(scene, npcId);
-    const pending = this.pendingPlanContinuations.get(stateKey);
-    if (!pending) return false;
-
     const trigger = [...triggers]
       .reverse()
       .find(
@@ -861,6 +1571,30 @@ export class NpcPuppetMaster {
           candidate.type === 'wait_elapsed'
       );
     if (!trigger) return false;
+
+    let stateKey = this.getNpcStateKey(scene, npcId);
+    let pending = this.pendingPlanContinuations.get(stateKey);
+    if (
+      !pending &&
+      trigger.type === 'action_completed' &&
+      trigger.result.code === 'exit_traversed'
+    ) {
+      const sourceContinuation = [...this.pendingPlanContinuations.entries()].find(
+        ([, candidate]) =>
+          candidate.npcId === npcId && candidate.barrierStep.type === 'TRAVERSE_EXIT'
+      );
+      if (sourceContinuation) {
+        [stateKey, pending] = sourceContinuation;
+        const sourceSceneId =
+          pending?.sourceSceneId || stateKey.slice(0, stateKey.lastIndexOf(':'));
+        this.traceWake('cross_scene_exit_continuation_matched', {
+          sourceSceneId,
+          destinationSceneId: scene.id,
+          npcId,
+        });
+      }
+    }
+    if (!pending) return false;
 
     let barrierResult = this.getContinuationBarrierResult(trigger, npcId);
     if (trigger.type === 'move_completed' && pending.barrierStep.type === 'MOVE_TO') {
@@ -884,7 +1618,7 @@ export class NpcPuppetMaster {
             message: `Already at ${targetId}; repeating MOVE_TO cannot make progress.`,
           };
           this.recordActionHistory(scene, npcId, terminalResult);
-          this.pendingPlanContinuations.delete(stateKey);
+          this.transitionContinuation(stateKey, 'needs_replan', 'move_without_progress');
           this.traceWake('move_no_progress_loop', {
             sceneId: scene.id,
             npcId,
@@ -892,12 +1626,8 @@ export class NpcPuppetMaster {
             repeatCount: terminalResult.repeatCount,
           });
           const currentGeneration = this.haltGenerationId;
-          const currentScene = scene;
           globalThis.setTimeout(() => {
-            if (
-              this.haltGenerationId !== currentGeneration ||
-              this.game.sceneManager.currentScene !== currentScene
-            )
+            if (this.haltGenerationId !== currentGeneration || this.getNpcScene(npcId) !== scene)
               return;
             this.scheduleNpc(scene, npcId, {
               type: 'action_completed',
@@ -938,21 +1668,24 @@ export class NpcPuppetMaster {
         : pending.completedSteps;
 
     if (trigger.type === 'action_completed' && barrierResult.code === 'exit_traversed') {
-      this.pendingPlanContinuations.delete(stateKey);
+      const sourceSceneId = pending.sourceSceneId || stateKey.slice(0, stateKey.lastIndexOf(':'));
+      this.transitionContinuation(stateKey, 'completed', 'scene_transfer');
+      this.releasePendingIncomingGives(scene, npcId, 'scene_transfer');
       const destinationScene = Array.from(this.game.sceneManager.scenes.values()).find(
         (candidate) => candidate.getObjectByName(npcId)
       );
-      const memory = destinationScene
-        ? this.buildSceneArrivalMemory(destinationScene, pending.memory)
-        : pending.memory;
+      const memory = pending.memory;
       const completionOutcomes = this.executor.executePlan({
         npcId: pending.npcId,
         steps: [],
         ...(memory !== undefined ? { memory } : {}),
       });
+      if (destinationScene) {
+        this.addTransientArrivalMemory(destinationScene, pending.npcId);
+      }
       const finalResults = [...completedSteps, ...completionOutcomes];
       this.traceWake('plan_completed_after_scene_transfer', {
-        sourceSceneId: scene.id,
+        sourceSceneId,
         destinationSceneId: destinationScene?.id,
         npcId,
         discardedStepTypes: pending.steps.map((step) => step.type),
@@ -982,7 +1715,13 @@ export class NpcPuppetMaster {
     });
 
     if (interrupt) {
-      this.pendingPlanContinuations.delete(stateKey);
+      this.transitionContinuation(stateKey, 'interrupted', interrupt.type);
+      this.releasePendingIncomingGives(scene, npcId, `continuation_interrupted:${interrupt.type}`);
+      this.traceWake('pending_continuation_interrupted', {
+        sceneId: scene.id,
+        npcId,
+        reason: interrupt.type,
+      });
       this.traceWake('plan_interrupted', {
         sceneId: scene.id,
         npcId,
@@ -993,12 +1732,8 @@ export class NpcPuppetMaster {
       });
       ShadowLogger.discard(npcId);
       const currentGeneration = this.haltGenerationId;
-      const currentScene = scene;
       globalThis.setTimeout(() => {
-        if (
-          this.haltGenerationId !== currentGeneration ||
-          this.game.sceneManager.currentScene !== currentScene
-        )
+        if (this.haltGenerationId !== currentGeneration || this.getNpcScene(npcId) !== scene)
           return;
         this.scheduleNpc(scene, npcId, {
           type: 'plan_interrupted',
@@ -1014,7 +1749,7 @@ export class NpcPuppetMaster {
       return true;
     }
 
-    this.pendingPlanContinuations.delete(stateKey);
+    this.transitionContinuation(stateKey, 'executing_tail', 'barrier_resolved');
     const barrierFailed = this.isFailedPlanBarrier(trigger, barrierResult);
     if (barrierFailed && pending.memory !== undefined) {
       this.traceWake('pending_plan_memory_discarded_after_failure', {
@@ -1023,21 +1758,27 @@ export class NpcPuppetMaster {
         code: barrierResult.code,
       });
     }
+    const preparedTail = this.prepareContinuationTail(scene, pending);
     const continuationPlan: NpcPlan = {
       npcId: pending.npcId,
-      steps: pending.steps,
+      steps: preparedTail.steps,
       ...(!barrierFailed && pending.memory !== undefined ? { memory: pending.memory } : {}),
       interruptOn: pending.interruptOn,
     };
+    const observableItemIds = this.getNpcObservableItemIds(scene, pending.npcId);
     const outcomes = this.executor.executePlan(continuationPlan);
     this.storePendingContinuationAfterScheduledOutcome(
       scene,
       continuationPlan,
       outcomes,
-      completedSteps
+      completedSteps,
+      observableItemIds,
+      preparedTail.tailApproachAttempts
     );
     const hasScheduled = outcomes.some((outcome) => outcome.status === 'scheduled');
     if (hasScheduled) return true;
+    this.releasePendingIncomingGives(scene, npcId, 'continuation_finished');
+    this.transitionContinuation(stateKey, 'completed', 'tail_finished');
     const finalResults = [...completedSteps, ...outcomes];
     if (!pending.trackCompletion) return false;
     this.traceWake('plan_completed', {
@@ -1052,13 +1793,8 @@ export class NpcPuppetMaster {
       finalResults.some((outcome) => outcome.worldChanged)
     );
     const currentGeneration = this.haltGenerationId;
-    const currentScene = scene;
     globalThis.setTimeout(() => {
-      if (
-        this.haltGenerationId !== currentGeneration ||
-        this.game.sceneManager.currentScene !== currentScene
-      )
-        return;
+      if (this.haltGenerationId !== currentGeneration || this.getNpcScene(npcId) !== scene) return;
       this.scheduleNpc(scene, npcId, {
         type: 'plan_completed',
         results: finalResults,
@@ -1067,14 +1803,10 @@ export class NpcPuppetMaster {
     return true;
   }
 
-  private buildSceneArrivalMemory(scene: Scene, existing?: string): string {
+  private getSceneArrivalMemory(scene: Scene): string {
     const title = this.game.textAssets.getResolvedSceneField(scene, 'title')?.trim();
     const location = title || scene.id;
-    const arrival = `Arrived in ${location}.`;
-    const base = typeof existing === 'string' ? existing.trim() : '';
-    if (!base) return arrival;
-    if (base.toLowerCase().includes(arrival.toLowerCase())) return base;
-    return `${base} ${arrival}`;
+    return `Arrived in ${location}.`;
   }
 
   private getContinuationBarrierResult(
@@ -1097,6 +1829,51 @@ export class NpcPuppetMaster {
     return trigger.result;
   }
 
+  /**
+   * MOVE_TO targets are dynamic. A route may have completed while its Actor
+   * target moved during the batch debounce, so a stored GIVE tail must use
+   * the current reachability predicate instead of trusting the old arrival.
+   */
+  private prepareContinuationTail(
+    scene: Scene,
+    pending: PendingPlanContinuation
+  ): { steps: NpcPlanStep[]; tailApproachAttempts: number } {
+    const first = pending.steps[0];
+    if (first?.type !== 'GIVE') {
+      return { steps: pending.steps, tailApproachAttempts: pending.tailApproachAttempts || 0 };
+    }
+    const actor = scene.getObjectByName(pending.npcId);
+    const target = scene.getObjectByName(first.targetId);
+    if (!(actor instanceof Actor) || !target) {
+      return { steps: pending.steps, tailApproachAttempts: pending.tailApproachAttempts || 0 };
+    }
+    if (!ComponentSystem.getInteractionDistanceError(target, actor)) {
+      return { steps: pending.steps, tailApproachAttempts: pending.tailApproachAttempts || 0 };
+    }
+
+    const attempts = pending.tailApproachAttempts || 0;
+    if (attempts >= PM_TAIL_APPROACH_REPLAN_LIMIT) {
+      this.traceWake('give_tail_approach_limit_reached', {
+        sceneId: scene.id,
+        npcId: pending.npcId,
+        targetId: first.targetId,
+        attempts,
+      });
+      return { steps: pending.steps, tailApproachAttempts: attempts };
+    }
+
+    this.traceWake('give_tail_auto_approach_inserted', {
+      sceneId: scene.id,
+      npcId: pending.npcId,
+      targetId: first.targetId,
+      attempts: attempts + 1,
+    });
+    return {
+      steps: [{ type: 'MOVE_TO', targetId: first.targetId }, ...pending.steps],
+      tailApproachAttempts: attempts + 1,
+    };
+  }
+
   private getPlanInterruptConditions(plan: NpcPlan): NpcPlanInterruptCondition[] {
     if (Array.isArray(plan.interruptOn)) return plan.interruptOn;
     const consequentialSteps = plan.steps.filter((step) => this.isPhysicalPlanStep(step));
@@ -1110,7 +1887,10 @@ export class NpcPuppetMaster {
   ): boolean {
     return (
       interruptOn.length > 0 ||
-      plan.steps.filter((step) => this.isPhysicalPlanStep(step)).length > 1
+      plan.steps.filter((step) => this.isPhysicalPlanStep(step)).length > 1 ||
+      // A terminal exit changes the NPC's scene.  Its destination needs a
+      // fresh PM turn even when the exit is the only physical step.
+      plan.steps.some((step) => step.type === 'TRAVERSE_EXIT')
     );
   }
 
@@ -1120,6 +1900,13 @@ export class NpcPuppetMaster {
     trigger: NpcIndividualTrigger,
     result: NpcPlanExecutionOutcome | ActorMoveResult
   ): NpcPlanInterruptCondition | null {
+    // A MOVE_TO is a hard runtime barrier for everything after it. Continuing
+    // with a tail such as TRAVERSE_EXIT after route_blocked can only turn one
+    // actionable navigation failure into a misleading exit_not_reachable.
+    // This must hold even when a model omitted ACTION_FAILED from interruptOn.
+    if (pending.barrierStep.type === 'MOVE_TO' && this.isFailedPlanBarrier(trigger, result)) {
+      return { type: 'ACTION_FAILED' };
+    }
     for (const condition of pending.interruptOn) {
       if (condition.type === 'ACTION_FAILED' && this.isFailedPlanBarrier(trigger, result)) {
         return condition;
@@ -1135,7 +1922,7 @@ export class NpcPuppetMaster {
         return condition;
       }
       if (condition.type === 'ITEM_FOUND') {
-        const itemId = this.getFoundItemId(scene, pending.npcId, condition.itemId, result);
+        const itemId = this.getFoundItemId(scene, pending, condition.itemId, result);
         if (itemId) return { ...condition, itemId };
       }
     }
@@ -1172,7 +1959,7 @@ export class NpcPuppetMaster {
 
   private getFoundItemId(
     scene: Scene,
-    npcId: string,
+    pending: PendingPlanContinuation,
     itemId: string | undefined,
     result: NpcPlanExecutionOutcome | ActorMoveResult
   ): string | null {
@@ -1193,22 +1980,46 @@ export class NpcPuppetMaster {
       return result.targetId;
     }
 
-    const worldModel = this.worldModelBuilder.build(scene, { npcIds: [npcId] });
-    const npc = worldModel.npcs.find((candidate) => candidate.id === npcId);
-    if (!npc) return null;
-    if (itemId && Array.isArray(npc.inventory?.itemIds) && npc.inventory.itemIds.includes(itemId)) {
-      return itemId;
-    }
+    const previousItemIds = new Set(pending.observableItemIds || pending.inventoryItemIds || []);
+    const newlyObservableItemIds = this.getNpcObservableItemIds(scene, pending.npcId).filter(
+      (candidate) => !previousItemIds.has(candidate)
+    );
+    return itemId
+      ? newlyObservableItemIds.find((candidate) => candidate === itemId) || null
+      : newlyObservableItemIds[0] || null;
+  }
 
-    if (!itemId) return null;
-    const entity = itemId
-      ? npc.entities.find(
-          (candidate) =>
-            candidate.id === itemId &&
-            (candidate.interaction === 'held' || candidate.interaction === 'reachable')
-        )
-      : null;
-    return entity?.id || null;
+  private getNpcInventoryItemIds(scene: Scene, npcId: string): string[] {
+    return (
+      this.getNpcObservableContext(scene, npcId)?.inventory?.items?.map((item) => item.id) || []
+    );
+  }
+
+  private getNpcObservableItemIds(scene: Scene, npcId: string): string[] {
+    const npc = this.getNpcObservableContext(scene, npcId);
+    if (!npc) return [];
+    const reachableItemIds = (npc.entities || [])
+      .filter((entity) => entity.interaction === 'held' || entity.interaction === 'reachable')
+      .filter((entity) => {
+        const object = scene.getObjectByName(entity.id);
+        return object?.components?.some((component: any) => component?.type === 'Item');
+      })
+      .map((entity) => entity.id);
+    return Array.from(
+      new Set([
+        ...(npc.inventory?.items?.map((item) => item.id) || []),
+        ...(npc.visibleItemIds || []),
+        ...reachableItemIds,
+      ])
+    );
+  }
+
+  private getNpcObservableContext(scene: Scene, npcId: string): NpcActorContext | undefined {
+    const npc = scene.getObjectByName(npcId);
+    if (!(npc instanceof Actor)) return undefined;
+    return this.worldModelBuilder
+      .build(scene, { npcIds: [npcId] })
+      .npcs.find((candidate) => candidate.id === npcId);
   }
 
   private isPhysicalPlanStep(step: NpcPlanStep): boolean {
@@ -1219,9 +2030,9 @@ export class NpcPuppetMaster {
       step.type === 'OPEN' ||
       step.type === 'CLOSE' ||
       step.type === 'TAKE' ||
+      step.type === 'GIVE' ||
       step.type === 'PUT' ||
-      step.type === 'COMMAND' ||
-      step.type === 'USE'
+      step.type === 'COMMAND'
     );
   }
 
@@ -1272,7 +2083,9 @@ export class NpcPuppetMaster {
         if (!hasUnsupportedClaims) return plan;
         const steps = plan.steps.filter((step) => {
           if (step.type === 'SAY') return !this.hasUnsupportedDiscoveryClaim(step.text);
-          if (step.type === 'MEMORY_SET') return !this.hasUnsupportedDiscoveryClaim(step.memory);
+          if (step.type === 'MEMORY_SET' || step.type === 'MEMORY_ADD') {
+            return !this.hasUnsupportedDiscoveryClaim(step.memory);
+          }
           return true;
         });
         const memory =
@@ -1331,13 +2144,18 @@ export class NpcPuppetMaster {
 
   private removePrematureStrategySteps(
     plans: NpcPlan[],
-    trigger?: NpcIndividualTrigger | NpcBatchTrigger
+    trigger?: NpcIndividualTrigger | NpcBatchTrigger,
+    worldModel?: NpcWorldModel
   ): NpcPlan[] {
     const allowedNpcIds = this.getStrategyAllowedNpcIds(trigger);
     return plans
       .map((plan) => {
         const hasStrategy = plan.steps.some((step) => step.type === 'THINK_STRATEGY');
-        if (!hasStrategy || allowedNpcIds.has(plan.npcId)) return plan;
+        const waitElapsedWithActiveObjective =
+          this.triggerContainsWaitElapsed(trigger, plan.npcId) &&
+          (worldModel?.npcs.find((npc) => npc.id === plan.npcId)?.objectives?.length || 0) > 0;
+        if (!hasStrategy || allowedNpcIds.has(plan.npcId) || waitElapsedWithActiveObjective)
+          return plan;
         const steps = plan.steps.filter((step) => step.type !== 'THINK_STRATEGY');
         if (!steps.some((step) => this.isConsequentialPlanStep(step))) return null;
         return {
@@ -1347,6 +2165,18 @@ export class NpcPuppetMaster {
         };
       })
       .filter((plan): plan is NpcPlan => !!plan);
+  }
+
+  private triggerContainsWaitElapsed(
+    trigger: NpcIndividualTrigger | NpcBatchTrigger | undefined,
+    npcId: string
+  ): boolean {
+    if (!trigger) return false;
+    if (trigger.type === 'wait_elapsed') return true;
+    if (trigger.type !== 'batch') return false;
+    return (trigger.triggersByNpc[npcId] || []).some(
+      (candidate) => candidate.type === 'wait_elapsed'
+    );
   }
 
   private getStrategyAllowedNpcIds(trigger?: NpcIndividualTrigger | NpcBatchTrigger): Set<string> {
@@ -1431,11 +2261,27 @@ export class NpcPuppetMaster {
       step.type === 'OPEN' ||
       step.type === 'CLOSE' ||
       step.type === 'TAKE' ||
+      step.type === 'GIVE' ||
       step.type === 'PUT' ||
       step.type === 'COMMAND' ||
-      step.type === 'USE' ||
       step.type === 'WAIT' ||
       step.type === 'THINK_STRATEGY'
+    );
+  }
+
+  private hasPhysicalPlanAction(plan: NpcPlan): boolean {
+    return plan.steps.some(
+      (step) =>
+        step.type === 'MOVE_TO' ||
+        step.type === 'TRAVERSE_EXIT' ||
+        step.type === 'LOOK' ||
+        step.type === 'EXAMINE' ||
+        step.type === 'OPEN' ||
+        step.type === 'CLOSE' ||
+        step.type === 'TAKE' ||
+        step.type === 'GIVE' ||
+        step.type === 'PUT' ||
+        step.type === 'COMMAND'
     );
   }
 
@@ -1489,41 +2335,179 @@ export class NpcPuppetMaster {
     trigger: NpcIndividualTrigger | undefined,
     hasScheduledStep: boolean
   ): void {
-    if (hasScheduledStep || trigger?.type !== 'move_completed') return;
+    if (hasScheduledStep) return;
 
     for (const plan of plans) {
       const hasExplicitStateUpdate = plan.steps.some(
-        (step) => step.type === 'MEMORY_SET' || step.type === 'OBJECTIVES_SET'
+        (step) =>
+          step.type === 'MEMORY_SET' ||
+          step.type === 'OBJECTIVES_SET' ||
+          step.type === 'MEMORY_ADD' ||
+          step.type === 'MEMORY_REMOVE' ||
+          step.type === 'OBJECTIVE_ADD' ||
+          step.type === 'OBJECTIVE_UPDATE' ||
+          step.type === 'OBJECTIVE_MARK_COMPLETED' ||
+          step.type === 'OBJECTIVE_REMOVE'
       );
       const hasPlanMemory = typeof plan.memory === 'string';
-      if (!hasExplicitStateUpdate && !hasPlanMemory) continue;
+      const isStateOnlyPlan = !this.hasConcretePlanAction(plan);
+      if (!isStateOnlyPlan) continue;
 
-      const scene = this.game.sceneManager.currentScene;
-      const stateKey = scene ? this.getNpcStateKey(scene, plan.npcId) : plan.npcId;
-      if (hasExplicitStateUpdate) {
-        this.memoryContinuationCounts.delete(stateKey);
-      } else {
-        const count = this.memoryContinuationCounts.get(stateKey) || 0;
-        if (count >= PM_MEMORY_CONTINUATION_LIMIT) continue;
-        this.memoryContinuationCounts.set(stateKey, count + 1);
+      const scene = this.getNpcScene(plan.npcId);
+      if (!scene) continue;
+
+      const isSayOnlyPlan =
+        plan.steps.length > 0 && plan.steps.every((step) => step.type === 'SAY');
+      const shouldContinueSayOnlyPlan =
+        isSayOnlyPlan && this.hasActiveNpcObjectives(scene, plan.npcId);
+      if (!hasExplicitStateUpdate && !hasPlanMemory && !shouldContinueSayOnlyPlan) continue;
+
+      if (plan.steps.some((step) => step.type === 'OBJECTIVE_ADD')) {
+        this.traceWake('objective_add_without_concrete_action', {
+          sceneId: scene.id,
+          npcId: plan.npcId,
+          stepTypes: plan.steps.map((step) => step.type),
+        });
+      }
+
+      const stateKey = this.getNpcStateKey(scene, plan.npcId);
+      const count = this.stateOnlyContinuationCounts.get(stateKey) || 0;
+      if (count >= PM_STATE_ONLY_CONTINUATION_LIMIT) {
+        this.traceWake('state_only_plan_continuation_suppressed', {
+          sceneId: scene?.id,
+          npcId: plan.npcId,
+          count,
+          limit: PM_STATE_ONLY_CONTINUATION_LIMIT,
+          triggerType: trigger?.type,
+        });
+        continue;
+      }
+      this.stateOnlyContinuationCounts.set(stateKey, count + 1);
+      const delayMs = shouldContinueSayOnlyPlan ? PM_SAY_ONLY_CONTINUATION_DELAY_MS : 0;
+
+      if (shouldContinueSayOnlyPlan) {
+        const actor = scene.getObjectByName(plan.npcId);
+        this.traceWake('say_only_plan_continuation_scheduled', {
+          sceneId: scene.id,
+          npcId: plan.npcId,
+          delayMs,
+          objectives:
+            ComponentSystem.getNpcComponent(actor instanceof Actor ? actor : null)?.objectives
+              ?.length || 0,
+        });
       }
 
       const currentGeneration = this.haltGenerationId;
-      const currentScene = scene;
       globalThis.setTimeout(() => {
-        const activeScene = this.game.sceneManager.currentScene;
-        if (
-          !activeScene ||
-          this.haltGenerationId !== currentGeneration ||
-          activeScene !== currentScene
-        )
+        if (this.haltGenerationId !== currentGeneration || this.getNpcScene(plan.npcId) !== scene)
           return;
-        this.scheduleNpc(activeScene, plan.npcId, {
+        this.scheduleNpc(scene, plan.npcId, {
           type: 'plan_continued',
-          reason: 'previous_plan_updated_memory_or_objectives_without_scheduling_action',
+          reason: 'previous_state_only_plan_completed_without_scheduling_action',
         });
-      }, 0);
+      }, delayMs);
     }
+  }
+
+  private hasActiveNpcObjectives(scene: Scene, npcId: string): boolean {
+    const actor = scene.getObjectByName(npcId);
+    return (
+      actor instanceof Actor &&
+      (ComponentSystem.getNpcComponent(actor)?.objectives?.length || 0) > 0
+    );
+  }
+
+  /**
+   * A completion marker is deliberately a one-turn acknowledgement. The
+   * world model is built before provider invocation, so removing flags here
+   * cannot consume objectives marked by the response currently being run.
+   */
+  private pruneObjectivesSeenAsCompleted(scene: Scene, worldModel: NpcWorldModel): void {
+    const hasCompleted = (objectives: NpcObjective[]): boolean =>
+      objectives.some(
+        (objective) => objective.completed === true || hasCompleted(objective.subtasks)
+      );
+    const prune = (objectives: NpcObjective[]): NpcObjective[] =>
+      objectives
+        .filter((objective) => objective.completed !== true)
+        .map((objective) => ({ ...objective, subtasks: prune(objective.subtasks) }));
+
+    for (const npc of worldModel.npcs) {
+      if (!hasCompleted(npc.objectives || [])) continue;
+      const npcScene = scene.entities.some((entity) => entity.name === npc.id)
+        ? scene
+        : this.getNpcScene(npc.id);
+      const actor = npcScene?.entities.find((entity) => entity.name === npc.id);
+      if (!actor) continue;
+      // ComponentSystem returns a normalized snapshot; update the stored
+      // component itself so this lifecycle state survives the next build.
+      const component = actor.components.find((candidate: any) => candidate?.type === 'NPC') as
+        | {
+            objectives?: NpcObjective[];
+            objectivesInitializedFromTA?: boolean;
+            objectivesTARevision?: string;
+          }
+        | undefined;
+      if (!component) continue;
+      component.objectives = prune(normalizeNpcObjectives(component.objectives));
+      component.objectivesInitializedFromTA = true;
+      const textAssets = this.game.textAssets as any;
+      component.objectivesTARevision =
+        typeof textAssets.getResolvedNpcObjectivesRevision === 'function'
+          ? textAssets.getResolvedNpcObjectivesRevision(actor)
+          : typeof textAssets.getResolvedObjectListRevision === 'function'
+            ? textAssets.getResolvedObjectListRevision(actor, 'objectives')
+            : JSON.stringify([]);
+    }
+  }
+
+  private addTransientArrivalMemory(scene: Scene, npcId: string): void {
+    const actor = scene.entities.find((entity) => entity.name === npcId);
+    const component = actor?.components.find((candidate: any) => candidate?.type === 'NPC') as
+      | { transientMemory?: string[] | string }
+      | undefined;
+    if (!component) return;
+    const arrival = this.getSceneArrivalMemory(scene);
+    const transientMemory = Array.isArray(component.transientMemory)
+      ? component.transientMemory
+      : typeof component.transientMemory === 'string'
+        ? [component.transientMemory]
+        : [];
+    if (!transientMemory.some((entry) => entry.trim() === arrival)) {
+      component.transientMemory = [...transientMemory, arrival];
+    }
+  }
+
+  private pruneTransientMemorySeenThisTurn(scene: Scene, worldModel: NpcWorldModel): void {
+    for (const npc of worldModel.npcs) {
+      if (!npc.transientMemory?.length) continue;
+      const npcScene = scene.entities.some((entity) => entity.name === npc.id)
+        ? scene
+        : this.getNpcScene(npc.id);
+      const actor = npcScene?.entities.find((entity) => entity.name === npc.id);
+      const component = actor?.components.find((candidate: any) => candidate?.type === 'NPC') as
+        | { transientMemory?: string[] | string }
+        | undefined;
+      if (!component) continue;
+      component.transientMemory = [];
+    }
+  }
+
+  private hasConcretePlanAction(plan: NpcPlan): boolean {
+    return plan.steps.some(
+      (step) =>
+        ![
+          'SAY',
+          'MEMORY_SET',
+          'OBJECTIVES_SET',
+          'MEMORY_ADD',
+          'MEMORY_REMOVE',
+          'OBJECTIVE_ADD',
+          'OBJECTIVE_UPDATE',
+          'OBJECTIVE_MARK_COMPLETED',
+          'OBJECTIVE_REMOVE',
+        ].includes(step.type)
+    );
   }
 
   private scheduleNpcWait(npcId: string, ms: number): void {
@@ -1532,11 +2516,10 @@ export class NpcPuppetMaster {
       globalThis.clearTimeout(existing);
     }
     const currentGeneration = this.haltGenerationId;
-    const currentScene = this.game.sceneManager.currentScene;
     const timeoutId = globalThis.setTimeout(() => {
       this.waitTimeouts.delete(npcId);
-      const scene = this.game.sceneManager.currentScene;
-      if (scene && this.haltGenerationId === currentGeneration && scene === currentScene) {
+      const scene = this.getNpcScene(npcId);
+      if (scene && this.haltGenerationId === currentGeneration) {
         this.scheduleNpc(scene, npcId, { type: 'wait_elapsed', ms });
       }
     }, ms);
@@ -1560,7 +2543,7 @@ export class NpcPuppetMaster {
         model: this.provider.getModelName(),
       });
 
-      const system = this.buildStrategySystemPrompt(worldModel);
+      const system = this.buildStrategySystemPrompt(scene, worldModel);
       const messages = this.buildStrategyMessages(worldModel, npcId, reason);
       const staticPrefix = this.getStaticPrefixDebug(system);
       const response = this.provider.isAvailable()
@@ -1599,8 +2582,8 @@ export class NpcPuppetMaster {
         return;
       }
 
-      const extractedJson = this.extractJson(response.text);
-      const parsed = this.parseJson(extractedJson);
+      const extractedJson = extractJson(response.text);
+      const parsed = parseJson(extractedJson);
       const normalized = this.normalizeStrategyResponse(parsed, npcId);
       if (!normalized) {
         const debug = {
@@ -1613,10 +2596,18 @@ export class NpcPuppetMaster {
       }
 
       const actor = scene.getObjectByName(npcId);
-      const memoryUpdated =
-        typeof normalized.memory === 'string' && this.setNpcMemory(actor, normalized.memory);
-      const objectivesUpdated = normalized.objectives
-        ? this.setNpcObjectives(actor, normalized.objectives)
+      const updateOutcomes = normalized.updates?.length
+        ? this.executor.executePlan({ npcId, steps: normalized.updates })
+        : [];
+      const memoryUpdated = updateOutcomes.some((outcome) =>
+        outcome.code.startsWith('npc_memory_')
+      );
+      const objectivesUpdated = updateOutcomes.some((outcome) =>
+        outcome.code.startsWith('npc_objective')
+      )
+        ? normalizeNpcObjectives(
+            ComponentSystem.getNpcComponent(actor instanceof Actor ? actor : null)?.objectives
+          )
         : undefined;
       const waitMs = this.clampStrategyWaitMs(normalized.waitMs);
       const debug: NpcPuppetMasterStrategyDebugInfo = {
@@ -1650,13 +2641,11 @@ export class NpcPuppetMaster {
     this.scheduleNpcWait(npcId, debug.waitMs);
   }
 
-  private buildStrategySystemPrompt(worldModel: NpcWorldModel): LlmProviderContent {
+  private buildStrategySystemPrompt(scene: Scene, worldModel: NpcWorldModel): LlmProviderContent {
     const staticContext = {
       projectionVersion: 'pm-entity-v1',
       scene: worldModel.scene,
-      entities: this.worldModelBuilder.buildStaticEntityProjection(
-        this.game.sceneManager.currentScene!
-      ),
+      entities: this.worldModelBuilder.buildStaticEntityProjection(scene),
     };
     return [
       { type: 'text', text: STRATEGY_SYSTEM_PROMPT },
@@ -1684,7 +2673,7 @@ export class NpcPuppetMaster {
           'Strategy-only NPC context:',
           JSON.stringify(dynamicContext),
           '',
-          `Return strictly valid JSON: {"kind":"npc_strategy_response","npcId":"${npcId}","memory":"...","objectives":[...],"waitMs":30000}`,
+          `Return strictly valid JSON: {"kind":"npc_strategy_response","npcId":"${npcId}","updates":[...],"waitMs":30000}`,
         ].join('\n'),
       },
     ];
@@ -1695,12 +2684,35 @@ export class NpcPuppetMaster {
     const record = value as Partial<NpcStrategyResponse>;
     if (record.kind !== 'npc_strategy_response') return null;
     if (typeof record.npcId !== 'string' || record.npcId.trim() !== npcId) return null;
-    const memory = typeof record.memory === 'string' ? record.memory.trim() : undefined;
-    const objectives = Array.isArray(record.objectives)
-      ? record.objectives
-          .map((objective) => (typeof objective === 'string' ? objective.trim() : ''))
-          .filter(Boolean)
-      : undefined;
+    const updates = Array.isArray((record as any).updates)
+      ? (record as any).updates
+          .map((step: unknown) => this.normalizeStep(step))
+          .filter((step: NpcPlanStep | null): step is NpcPlanStep => !!step)
+          .filter((step: NpcPlanStep) =>
+            [
+              'MEMORY_ADD',
+              'MEMORY_REMOVE',
+              'OBJECTIVE_ADD',
+              'OBJECTIVE_UPDATE',
+              'OBJECTIVE_MARK_COMPLETED',
+              'OBJECTIVE_REMOVE',
+            ].includes(step.type)
+          )
+      : (() => {
+          // Older saves/queued providers may still return the previous strategy shape.
+          const legacy: NpcPlanStep[] = [];
+          if (typeof (record as any).memory === 'string' && (record as any).memory.trim()) {
+            legacy.push({ type: 'MEMORY_SET', memory: (record as any).memory.trim() });
+          }
+          if (Array.isArray((record as any).objectives)) {
+            const objectives = (record as any).objectives
+              .filter((objective: unknown): objective is string => typeof objective === 'string')
+              .map((objective: string) => objective.trim())
+              .filter(Boolean);
+            if (objectives.length) legacy.push({ type: 'OBJECTIVES_SET', objectives });
+          }
+          return legacy.length ? legacy : undefined;
+        })();
     const waitMs =
       typeof record.waitMs === 'number' && Number.isFinite(record.waitMs)
         ? record.waitMs
@@ -1708,8 +2720,7 @@ export class NpcPuppetMaster {
     return {
       kind: 'npc_strategy_response',
       npcId,
-      ...(memory ? { memory } : {}),
-      ...(objectives ? { objectives } : {}),
+      ...(updates?.length ? { updates } : {}),
       ...(waitMs !== undefined ? { waitMs } : {}),
     };
   }
@@ -1719,50 +2730,15 @@ export class NpcPuppetMaster {
     return Math.max(PM_STRATEGY_MIN_WAIT_MS, Math.min(PM_STRATEGY_MAX_WAIT_MS, ms));
   }
 
-  private setNpcMemory(actor: unknown, memory: string): boolean {
-    const component =
-      actor instanceof Actor
-        ? (actor.components?.find((candidate: any) => candidate?.type === 'NPC') as
-            | { type: 'NPC'; memory?: string }
-            | undefined)
-        : undefined;
-    if (!component) return false;
-    component.memory = String(memory || '').trim();
-    return true;
-  }
-
-  private setNpcObjectives(actor: unknown, objectives: string[]): string[] | undefined {
-    const component =
-      actor instanceof Actor
-        ? (actor.components?.find((candidate: any) => candidate?.type === 'NPC') as
-            | {
-                type: 'NPC';
-                objectives?: string[];
-                objectivesInitializedFromTA?: boolean;
-                objectivesTARevision?: string;
-              }
-            | undefined)
-        : undefined;
-    if (!component) return undefined;
-    component.objectives = objectives
-      .map((objective) => String(objective || '').trim())
-      .filter(Boolean);
-    component.objectivesInitializedFromTA = true;
-    component.objectivesTARevision = this.game.textAssets.getResolvedObjectListRevision(
-      actor as Actor,
-      'objectives'
-    );
-    return component.objectives;
-  }
-
-  private async buildSystemPrompt(worldModel: NpcWorldModel): Promise<LlmProviderContent> {
+  private async buildSystemPrompt(
+    scene: Scene,
+    worldModel: NpcWorldModel
+  ): Promise<LlmProviderContent> {
     const systemPrompt = await this.loadSystemPrompt();
     const staticContext = {
       projectionVersion: 'pm-entity-v1',
       scene: worldModel.scene,
-      entities: this.worldModelBuilder.buildStaticEntityProjection(
-        this.game.sceneManager.currentScene!
-      ),
+      entities: this.worldModelBuilder.buildStaticEntityProjection(scene),
     };
 
     return [
@@ -1794,10 +2770,13 @@ export class NpcPuppetMaster {
           `Generate plans ONLY for active NPCs: ${activeNpcIds}.`,
           'CRITICAL RULES:',
           '1. "npcId" MUST be the ID of the NPC (e.g. "NPC"), never an item ID.',
-          '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, OBJECTIVES_SET, MEMORY_SET.',
+          '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, WAIT, THINK_STRATEGY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE.',
           '3. To run an entity command like "turn_tv_on", use: {"type":"COMMAND","commandId":"turn_tv_on","arguments":{}}.',
           '4. currentSceneId is the authoritative current location for each NPC. Memory, actionHistory, and prior TRAVERSE_EXIT results are historical and must not override currentSceneId.',
-          '5. Static catalog membership is not current presence. Target only this NPC dynamic entities or inventory; plan_rejected_missing_items means the item is not currently available, not merely route-blocked.',
+          '5. CURRENT OBJECTIVES persist across scenes. Keep the parent goal and, after a confirmed blocker, use OBJECTIVE_ADD before dependent actions to add the concrete next prerequisite and its dependency chain. OBJECTIVE_MARK_COMPLETED updates planning state only; it never performs a task, transfers an item, or changes the world. Mark a leaf objective when current state or authoritative actionHistory makes its completion reasonably clear. Runtime keeps physical changes authoritative and rejects only structural contradictions, especially completing a parent with active subtasks. A [JUST COMPLETED] objective and [JUST ARRIVED] memory entry are informational runtime context and will be removed after this turn. Use OBJECTIVE_REMOVE for obsolete objectives. MEMORY_ADD/MEMORY_REMOVE maintain factual memory.',
+          '6. transitionHistory records recent Exit activations, including local teleports. Do not repeat a route that forms a cycle without new evidence, a world change relevant to the objective, or a materially different destination.',
+          '7. Static catalog membership is not current presence. Target only this NPC dynamic entities or inventory; plan_rejected_missing_items means the item is not currently available, not merely route-blocked.',
+          '8. Any newly accepted, promised, volunteered, or self-chosen future work MUST be represented by OBJECTIVE_ADD in the same plan before dependent action or speech, unless an active objective already covers it. This includes work undertaken to help another NPC.',
           `Return strictly valid JSON: {"kind":"pm_response","plans":[{"npcId":"${firstNpcId}","steps":[...]}]}`,
         ].join('\n'),
       },
@@ -1810,7 +2789,12 @@ export class NpcPuppetMaster {
   ): Record<string, unknown> {
     const compactTrigger = trigger ? this.compactPromptTrigger(trigger) : undefined;
     return this.compactPromptRecord({
-      scene: worldModel.scene,
+      currentTimestamp: Date.now(),
+      // Description and lore are static and already present in the cacheable catalog.
+      scene: this.compactPromptRecord({
+        id: worldModel.scene.id,
+        title: worldModel.scene.title,
+      }),
       trigger: compactTrigger,
       npcs: worldModel.npcs.map((npc) => {
         const entities = npc.entities || [];
@@ -1824,8 +2808,8 @@ export class NpcPuppetMaster {
           id: npc.id,
           currentSceneId: worldModel.scene.id,
           currentSceneTitle: worldModel.scene.title,
-          objectives: npc.objectives,
-          memory: npc.memory,
+          objectives: this.getPromptObjectives(npc.objectives),
+          memory: this.getPromptMemory(npc.memory, npc.transientMemory),
           inventory: npc.inventory,
           knownEntities: knownEntities.some(
             (entity) => entity.id !== npc.id && !currentEntityIds.has(entity.id)
@@ -1843,7 +2827,8 @@ export class NpcPuppetMaster {
                   })
                 )
             : undefined,
-          actionHistory: this.getPromptActionHistory(worldModel.scene.id, npc.id, npcTrigger),
+          actionHistory: this.getPromptActionHistory(npc.id, npcTrigger),
+          transitionHistory: this.getPromptTransitionHistory(npc.id),
           newEvents: newEvents.length
             ? newEvents.map((event) => this.compactPromptEvent(event))
             : undefined,
@@ -1859,6 +2844,411 @@ export class NpcPuppetMaster {
         });
       }),
     });
+  }
+
+  private getPromptObjectives(objectives: NpcObjective[] | undefined): NpcObjective[] {
+    return (objectives || []).map((objective) => ({
+      id: objective.id,
+      text: objective.completed
+        ? `${objective.text} [JUST COMPLETED]`
+        : objective.pendingConfirmation
+          ? `${objective.text} [PENDING CONFIRMATION]`
+          : objective.text,
+      subtasks: this.getPromptObjectives(objective.subtasks),
+    }));
+  }
+
+  private validateObjectiveCompletionConfirmations(
+    plans: NpcPlan[],
+    worldModel: NpcWorldModel,
+    trigger?: NpcIndividualTrigger | NpcBatchTrigger
+  ): {
+    plans: NpcPlan[];
+    confirmedObjectiveIdsByNpc: Map<string, Set<string>>;
+    rejectedNpcIds: Set<string>;
+  } {
+    const confirmedObjectiveIdsByNpc = new Map<string, Set<string>>();
+    const rejectedNpcIds = new Set<string>();
+    const objectivesByNpc = new Map(
+      worldModel.npcs.map((npc) => [npc.id, normalizeNpcObjectives(npc.objectives)] as const)
+    );
+
+    const validatedPlans = plans
+      .map((plan) => {
+        const objectives = objectivesByNpc.get(plan.npcId) || [];
+        const seenMarkers = new Set<string>();
+        const steps = plan.steps.filter((step) => {
+          if (step.type !== 'OBJECTIVE_MARK_COMPLETED') return true;
+          if (seenMarkers.has(step.objectiveId)) {
+            rejectedNpcIds.add(plan.npcId);
+            return false;
+          }
+          seenMarkers.add(step.objectiveId);
+
+          const objective = findNpcObjective(objectives, step.objectiveId);
+          // A JUST COMPLETED objective is still shown for one PM turn, so the
+          // model can easily repeat its marker. That repetition is a harmless
+          // no-op and must not fail the whole plan before its physical tail.
+          if (objective?.completed) {
+            this.traceWake('objective_completion_already_recorded', {
+              sceneId: worldModel.scene.id,
+              npcId: plan.npcId,
+              objectiveId: step.objectiveId,
+            });
+            return false;
+          }
+          // Missing IDs remain in the plan so the executor can produce its
+          // normal deterministic failure outcome.
+          if (!objective) return true;
+          // A parent objective represents the whole procedure. A successful
+          // child action (for example taking the remote) must not confirm the
+          // parent while its other required subtasks are still active.
+          // Drop only this invalid marker so the same response can still
+          // repair objectives, memory, and its valid action tail.
+          if (
+            objective.subtasks.length > 0 &&
+            !this.areAllObjectiveSubtasksCompleted(objective.subtasks)
+          ) {
+            this.traceWake('objective_completion_composite_incomplete', {
+              sceneId: worldModel.scene.id,
+              npcId: plan.npcId,
+              objectiveId: step.objectiveId,
+              evidence: step.evidence,
+            });
+            return false;
+          }
+          if (
+            step.evidence &&
+            this.matchesCurrentCompletionEvidence(trigger, plan.npcId, step.evidence)
+          ) {
+            this.objectiveConfirmationRetryCounts.delete(`${worldModel.scene.id}:${plan.npcId}`);
+            const confirmed = confirmedObjectiveIdsByNpc.get(plan.npcId) || new Set<string>();
+            confirmed.add(step.objectiveId);
+            confirmedObjectiveIdsByNpc.set(plan.npcId, confirmed);
+            return true;
+          }
+          const npcContext = worldModel.npcs.find((npc) => npc.id === plan.npcId);
+          const inventoryMatch = npcContext
+            ? this.findInventoryObjectiveMatch(npcContext, objective)
+            : null;
+          if (inventoryMatch) {
+            this.objectiveConfirmationRetryCounts.delete(`${worldModel.scene.id}:${plan.npcId}`);
+            const confirmed = confirmedObjectiveIdsByNpc.get(plan.npcId) || new Set<string>();
+            confirmed.add(step.objectiveId);
+            confirmedObjectiveIdsByNpc.set(plan.npcId, confirmed);
+            this.traceWake('objective_completion_confirmed_from_inventory', {
+              sceneId: worldModel.scene.id,
+              npcId: plan.npcId,
+              objectiveId: step.objectiveId,
+              itemId: inventoryMatch.itemId,
+              itemTitle: inventoryMatch.itemTitle,
+            });
+            return true;
+          }
+          // Objectives are planning state, not world mutations. A leaf marker
+          // without a perfectly matching current trigger is accepted unless
+          // the runtime can prove it wrong. This avoids leaving a completed
+          // branch stale merely because an asynchronous result was delivered
+          // through a previous batch or continuation.
+          this.objectiveConfirmationRetryCounts.delete(`${worldModel.scene.id}:${plan.npcId}`);
+          const confirmed = confirmedObjectiveIdsByNpc.get(plan.npcId) || new Set<string>();
+          confirmed.add(step.objectiveId);
+          confirmedObjectiveIdsByNpc.set(plan.npcId, confirmed);
+          this.traceWake('objective_completion_soft_confirmed', {
+            sceneId: worldModel.scene.id,
+            npcId: plan.npcId,
+            objectiveId: step.objectiveId,
+            evidence: step.evidence,
+          });
+          return true;
+        });
+        return steps.length ? { ...plan, steps } : null;
+      })
+      .filter((plan): plan is NpcPlan => !!plan);
+
+    return { plans: validatedPlans, confirmedObjectiveIdsByNpc, rejectedNpcIds };
+  }
+
+  private recoverEmptyPlansForActiveObjectives(
+    plans: NpcPlan[],
+    worldModel: NpcWorldModel,
+    trigger?: NpcIndividualTrigger | NpcBatchTrigger
+  ): NpcPlan[] {
+    if (plans.length) return plans;
+
+    const recoveries: NpcPlan[] = [];
+    for (const npc of worldModel.npcs) {
+      if (!npc.objectives?.length || !this.hasObjectiveCompletionRecoveryTrigger(trigger, npc.id))
+        continue;
+      const stateKey = `${worldModel.scene.id}:${npc.id}`;
+      const count = this.emptyObjectiveRecoveryCounts.get(stateKey) || 0;
+      if (count >= PM_EMPTY_OBJECTIVE_RECOVERY_LIMIT) {
+        this.traceWake('active_objective_empty_plan_recovery_suppressed', {
+          sceneId: worldModel.scene.id,
+          npcId: npc.id,
+          count,
+          limit: PM_EMPTY_OBJECTIVE_RECOVERY_LIMIT,
+          triggerType: trigger?.type,
+        });
+        continue;
+      }
+      this.emptyObjectiveRecoveryCounts.set(stateKey, count + 1);
+      this.traceWake('active_objective_empty_plan_recovered', {
+        sceneId: worldModel.scene.id,
+        npcId: npc.id,
+        triggerType: trigger?.type,
+      });
+      recoveries.push({
+        npcId: npc.id,
+        steps: [{ type: 'THINK_STRATEGY', reason: 'active objective produced an empty plan' }],
+      });
+    }
+    return recoveries;
+  }
+
+  private hasObjectiveCompletionRecoveryTrigger(
+    trigger: NpcIndividualTrigger | NpcBatchTrigger | undefined,
+    npcId: string
+  ): boolean {
+    const triggers =
+      trigger?.type === 'batch' ? trigger.triggersByNpc[npcId] || [] : trigger ? [trigger] : [];
+    return triggers.some(
+      (candidate) =>
+        candidate.type === 'plan_continued' &&
+        candidate.reason === 'objective_completion_unconfirmed'
+    );
+  }
+
+  private areAllObjectiveSubtasksCompleted(subtasks: NpcObjective[]): boolean {
+    return subtasks.every(
+      (subtask) =>
+        subtask.completed === true && this.areAllObjectiveSubtasksCompleted(subtask.subtasks)
+    );
+  }
+
+  private findInventoryObjectiveMatch(
+    npc: NpcActorContext,
+    objective: NpcObjective
+  ): { itemId: string; itemTitle: string } | null {
+    const inventory = npc.inventory;
+    if (!inventory?.available || !Array.isArray(inventory.itemIds) || !inventory.itemIds.length) {
+      return null;
+    }
+    // Holding an item proves only an acquisition-style leaf objective. It
+    // cannot prove a composite procedure such as installing a battery and
+    // turning on a TV merely because one of its named tools is held.
+    if (objective.subtasks.length || !this.isInventoryAcquisitionObjective(objective.text)) {
+      return null;
+    }
+
+    const objectiveTokens = this.getObjectiveMatchTokens(objective.text);
+    if (!objectiveTokens.length) return null;
+    const inventoryItems = Array.isArray(inventory.items) ? inventory.items : [];
+
+    for (const itemId of inventory.itemIds) {
+      const item = inventoryItems.find((candidate) => candidate.id === itemId);
+      const itemTitle = item?.title?.trim() || itemId;
+      const itemTokens = this.getObjectiveMatchTokens(itemTitle);
+      if (itemTokens.length && itemTokens.every((token) => objectiveTokens.includes(token))) {
+        return { itemId, itemTitle };
+      }
+    }
+    return null;
+  }
+
+  private isInventoryAcquisitionObjective(text: string): boolean {
+    const normalized = text.toLocaleLowerCase();
+    const acquisition =
+      /\b(?:find|get|obtain|take|retrieve|acquire|collect|pick\s+up)\b/i.test(normalized) ||
+      /(?:получ\p{L}*|найт\p{L}*|взят\p{L}*|доста\p{L}*)/iu.test(normalized);
+    if (!acquisition) return false;
+    return !/\b(?:install|insert|turn\s+on|turn\s+off|use|put|place|give|trade|repair)\b/i.test(
+      normalized
+    );
+  }
+
+  private getObjectiveMatchTokens(value: string): string[] {
+    const stopWords = new Set([
+      'a',
+      'an',
+      'and',
+      'for',
+      'from',
+      'in',
+      'into',
+      'of',
+      'on',
+      'the',
+      'to',
+      'with',
+    ]);
+    return Array.from(
+      new Set(
+        value
+          .normalize('NFKD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLocaleLowerCase()
+          .split(/[^\p{L}\p{N}]+/u)
+          .filter((token) => token.length > 1 && !stopWords.has(token))
+      )
+    );
+  }
+
+  private matchesCurrentCompletionEvidence(
+    trigger: NpcIndividualTrigger | NpcBatchTrigger | undefined,
+    npcId: string,
+    evidence: NpcObjectiveCompletionEvidence
+  ): boolean {
+    const hasIdentity = !!(
+      evidence.code ||
+      evidence.targetId ||
+      evidence.itemId ||
+      evidence.commandId
+    );
+    if (!hasIdentity) return false;
+    const triggers =
+      trigger?.type === 'batch' ? trigger.triggersByNpc[npcId] || [] : trigger ? [trigger] : [];
+    return triggers.some((candidate) => {
+      const results: Array<NpcPlanExecutionOutcome | ActorMoveResult> =
+        candidate.type === 'action_completed'
+          ? [candidate.result]
+          : candidate.type === 'plan_completed'
+            ? candidate.results
+            : candidate.type === 'plan_interrupted'
+              ? [...candidate.completedSteps, candidate.result]
+              : [];
+      return results.some((result) => {
+        if (!result || result.status !== 'ok' || result.actionType !== evidence.actionType)
+          return false;
+        return (
+          (!evidence.code || result.code === evidence.code) &&
+          (!evidence.targetId || result.targetId === evidence.targetId) &&
+          (!evidence.itemId || result.itemId === evidence.itemId) &&
+          (!evidence.commandId || result.commandId === evidence.commandId)
+        );
+      });
+    });
+  }
+
+  private scheduleObjectiveConfirmationRetries(
+    scene: Scene,
+    rejectedNpcIds: Set<string>,
+    acceptedPlans: NpcPlan[]
+  ): void {
+    for (const npcId of rejectedNpcIds) {
+      const replacement = acceptedPlans.find((plan) => plan.npcId === npcId);
+      // A retained plan is handled by the normal continuation policy below.
+      // This fallback exists only for a response consisting solely of rejected
+      // completion markers, which would otherwise leave an active objective idle.
+      if (replacement) continue;
+      const stateKey = this.getNpcStateKey(scene, npcId);
+      const count = this.stateOnlyContinuationCounts.get(stateKey) || 0;
+      if (count >= PM_STATE_ONLY_CONTINUATION_LIMIT) continue;
+      const confirmationRetries = this.objectiveConfirmationRetryCounts.get(stateKey) || 0;
+      if (confirmationRetries >= 1) {
+        this.clearPendingObjectiveConfirmations(scene, npcId);
+        this.traceWake('objective_completion_retry_suppressed', {
+          sceneId: scene.id,
+          npcId,
+          retries: confirmationRetries,
+        });
+        continue;
+      }
+      this.objectiveConfirmationRetryCounts.set(stateKey, confirmationRetries + 1);
+      this.stateOnlyContinuationCounts.set(stateKey, count + 1);
+      const generation = this.haltGenerationId;
+      globalThis.setTimeout(() => {
+        if (generation !== this.haltGenerationId || this.getNpcScene(npcId) !== scene) return;
+        this.scheduleNpc(scene, npcId, {
+          type: 'plan_continued',
+          reason: 'objective_completion_unconfirmed',
+        });
+      }, 0);
+    }
+  }
+
+  private clearPendingObjectiveConfirmations(scene: Scene, npcId: string): void {
+    const actor = scene.getObjectByName(npcId);
+    if (!(actor instanceof Actor)) return;
+    const component = ComponentSystem.getNpcComponent(actor);
+    if (!component?.objectives) return;
+    const objectives = normalizeNpcObjectives(component.objectives);
+    let changed = false;
+    const visit = (items: NpcObjective[]): void => {
+      for (const objective of items) {
+        if (objective.pendingConfirmation) {
+          delete objective.pendingConfirmation;
+          changed = true;
+        }
+        visit(objective.subtasks);
+      }
+    };
+    visit(objectives);
+    if (!changed) return;
+    component.objectives = objectives;
+    component.objectivesInitializedFromTA = true;
+  }
+
+  private settlePendingObjectiveConfirmations(
+    worldModel: NpcWorldModel,
+    acceptedPlans: NpcPlan[]
+  ): void {
+    const markedByNpc = new Map<string, Set<string>>();
+    for (const plan of acceptedPlans) {
+      const marked = new Set(
+        plan.steps
+          .filter((step) => step.type === 'OBJECTIVE_MARK_COMPLETED')
+          .map((step) => step.objectiveId)
+      );
+      if (marked.size) markedByNpc.set(plan.npcId, marked);
+    }
+
+    for (const npc of worldModel.npcs) {
+      const actor = this.getNpcScene(npc.id)?.getObjectByName(npc.id);
+      if (!(actor instanceof Actor)) continue;
+      const component = actor.components.find((candidate: any) => candidate?.type === 'NPC') as
+        | {
+            objectives?: NpcObjective[] | string[];
+            objectivesInitializedFromTA?: boolean;
+            objectivesTARevision?: string;
+          }
+        | undefined;
+      if (!component?.objectives) continue;
+      const marked = markedByNpc.get(npc.id) || new Set<string>();
+      let changed = false;
+      const clearUnconfirmed = (objectives: NpcObjective[]): void => {
+        for (const objective of objectives) {
+          if (objective.pendingConfirmation && !marked.has(objective.id)) {
+            delete objective.pendingConfirmation;
+            changed = true;
+          }
+          clearUnconfirmed(objective.subtasks);
+        }
+      };
+      const objectives = normalizeNpcObjectives(component.objectives);
+      clearUnconfirmed(objectives);
+      if (changed) {
+        component.objectives = objectives;
+        component.objectivesInitializedFromTA = true;
+        const textAssets = this.game.textAssets as any;
+        component.objectivesTARevision =
+          typeof textAssets.getResolvedNpcObjectivesRevision === 'function'
+            ? textAssets.getResolvedNpcObjectivesRevision(actor)
+            : typeof textAssets.getResolvedObjectListRevision === 'function'
+              ? textAssets.getResolvedObjectListRevision(actor, 'objectives')
+              : JSON.stringify([]);
+      }
+    }
+  }
+
+  private getPromptMemory(
+    memory: string[] | undefined,
+    transientMemory: string[] | undefined
+  ): string[] | undefined {
+    const durable = memory || [];
+    const transient = (transientMemory || []).map((entry) => `${entry} [JUST ARRIVED]`);
+    const combined = [...durable, ...transient];
+    return combined.length ? combined : undefined;
   }
 
   private compactPromptTrigger(trigger: NpcIndividualTrigger | NpcBatchTrigger): unknown {
@@ -1935,9 +3325,10 @@ export class NpcPuppetMaster {
       text: event.text,
       payload: this.compactPromptRecord({
         action: payload.action,
-        subjectId: payload.subjectId,
-        targetId: payload.targetId,
         itemId: payload.itemId,
+        targetId: payload.targetId,
+        reason: payload.reason,
+        subjectId: payload.subjectId,
         commandId: payload.commandId,
         relation: payload.relation,
         state: payload.state,
@@ -1963,16 +3354,21 @@ export class NpcPuppetMaster {
   }
 
   private getPromptActionHistory(
-    sceneId: string,
     npcId: string,
     trigger?: NpcIndividualTrigger
-  ): string[] | undefined {
-    const history = this.getNpcActionHistory(sceneId, npcId);
+  ): Array<Record<string, unknown>> | undefined {
+    const history = this.getNpcActionHistory(npcId);
     if (!history || trigger?.type !== 'action_completed') return history;
     const result = trigger.result;
     const target = result.targetId || result.itemId || result.commandId;
     if (!target || !result.actionType) return history;
-    return history.filter((entry) => !entry.startsWith(`${result.actionType} ${target}:`));
+    return history.filter(
+      (entry) =>
+        !(
+          entry.actionType === result.actionType &&
+          (entry.targetId || entry.itemId || entry.commandId) === target
+        )
+    );
   }
 
   private compactPromptRecord<T extends Record<string, unknown>>(value: T): T {
@@ -2013,7 +3409,7 @@ export class NpcPuppetMaster {
     }
     let sections: Record<string, number> = {};
     if (jsonStart >= 0 && jsonEnd > jsonStart) {
-      const parsed = this.parseJson(text.slice(jsonStart, jsonEnd + 1)) as any;
+      const parsed = parseJson(text.slice(jsonStart, jsonEnd + 1)) as any;
       if (parsed && typeof parsed === 'object') {
         sections = Object.fromEntries(
           Object.entries(parsed).map(([key, value]) => [key, JSON.stringify(value).length])
@@ -2034,11 +3430,12 @@ export class NpcPuppetMaster {
   ): Array<Record<string, unknown>> {
     return (entities || []).map((entity) => ({
       id: entity.id,
+      title: entity.title,
       lastSeenSceneId: entity.lastSeenSceneId,
-      visibility: entity.visibility,
+      ...(entity.visibility !== 'visible' ? { visibility: entity.visibility } : {}),
       ...(entity.location ? { location: entity.location } : {}),
-      interaction: entity.interaction,
-      approach: entity.approach,
+      ...(entity.interaction !== 'reachable' ? { interaction: entity.interaction } : {}),
+      ...(entity.approach !== 'already_reachable' ? { approach: entity.approach } : {}),
       ...(entity.switch
         ? {
             switch: {
@@ -2057,6 +3454,7 @@ export class NpcPuppetMaster {
             commands: entity.commands.map((command) => ({
               id: command.id,
               ...(command.available !== undefined ? { available: command.available } : {}),
+              ...(command.executable !== undefined ? { executable: command.executable } : {}),
               ...(command.requires
                 ? {
                     requires: command.requires.map((requirement) => ({
@@ -2068,6 +3466,7 @@ export class NpcPuppetMaster {
                     })),
                   }
                 : {}),
+              ...(command.preconditions ? { preconditions: command.preconditions } : {}),
             })),
           }
         : {}),
@@ -2107,6 +3506,17 @@ export class NpcPuppetMaster {
     return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, '0')}`;
   }
 
+  private getSceneLogWatermarks(scene: Scene, npcIds: Iterable<string>): Map<string, number> {
+    const watermarks = new Map<string, number>();
+    for (const npcId of npcIds) {
+      const processedThrough = scene.sceneLog
+        .getUnreadEntries(npcId)
+        .reduce((latest, event) => Math.max(latest, event.timestamp), Number.NEGATIVE_INFINITY);
+      if (Number.isFinite(processedThrough)) watermarks.set(npcId, processedThrough);
+    }
+    return watermarks;
+  }
+
   private enqueueNpc(scene: Scene, npcId: string, trigger?: NpcIndividualTrigger): Promise<void> {
     let resolveCompletion: () => void = () => {};
     const completion = new Promise<void>((resolve) => {
@@ -2138,18 +3548,52 @@ export class NpcPuppetMaster {
       alreadyScheduled: !!batch.timeoutId,
     });
     if (batch.timeoutId) return completion;
+    // A request for this scene is in flight. Keep one coalesced follow-up
+    // batch and let the current request finish; polling every second here
+    // used to consume rate budget without ever reaching the provider.
+    if (this.processingScenes.has(`batch:${scene.id}`)) return completion;
+    this.scheduleBatchFlush(batch);
+    return completion;
+  }
+
+  private scheduleBatchFlush(batch: PendingNpcBatch, delayMs: number = PM_BATCH_DEBOUNCE_MS): void {
+    if (batch.timeoutId) return;
     const currentGeneration = this.haltGenerationId;
     batch.timeoutId = globalThis.setTimeout(() => {
       if (this.haltGenerationId !== currentGeneration) {
-        if (this.pendingBatches.get(scene.id) === batch) {
-          this.pendingBatches.delete(scene.id);
+        if (this.pendingBatches.get(batch.scene.id) === batch) {
+          this.pendingBatches.delete(batch.scene.id);
         }
         batch.completionResolvers.forEach((resolve) => resolve());
         return;
       }
-      void this.flushBatch(scene.id);
-    }, PM_BATCH_DEBOUNCE_MS);
-    return completion;
+      void this.flushBatch(batch.scene.id);
+    }, delayMs);
+  }
+
+  private mergeBatchAfterProcessing(batch: PendingNpcBatch): void {
+    let queued = this.pendingBatches.get(batch.scene.id);
+    if (!queued) {
+      queued = {
+        scene: batch.scene,
+        npcIds: new Set(),
+        triggersByNpc: new Map(),
+        timeoutId: null,
+        completionResolvers: [],
+      };
+      this.pendingBatches.set(batch.scene.id, queued);
+    }
+    if (queued.timeoutId) {
+      globalThis.clearTimeout(queued.timeoutId);
+      queued.timeoutId = null;
+    }
+    for (const npcId of batch.npcIds) queued.npcIds.add(npcId);
+    for (const [npcId, triggers] of batch.triggersByNpc) {
+      const existing = queued.triggersByNpc.get(npcId) || [];
+      existing.push(...triggers);
+      queued.triggersByNpc.set(npcId, existing);
+    }
+    queued.completionResolvers.push(...batch.completionResolvers);
   }
 
   private async flushBatch(sceneId: string): Promise<void> {
@@ -2160,27 +3604,69 @@ export class NpcPuppetMaster {
     }
     this.pendingBatches.delete(sceneId);
     const { scene } = batch;
+    const waitForTextAssets = (this.game.sceneManager as any).waitForTextAssets;
+    if (typeof waitForTextAssets === 'function') {
+      await waitForTextAssets.call(this.game.sceneManager, scene);
+    }
     const continuationNpcIds = [...batch.npcIds].filter((npcId) =>
       this.tryExecutePendingContinuation(scene, npcId, batch.triggersByNpc.get(npcId) || [])
     );
-    const providerCandidateNpcIds = [...batch.npcIds].filter(
-      (npcId) => !continuationNpcIds.includes(npcId)
-    );
+    // PM batches belong to the NPC's scene, not to the player's current scene.
+    // Let an NPC keep acting after it has crossed an Exit and is now offscreen.
+    const providerCandidateNpcIds = [...batch.npcIds].filter((npcId) => {
+      if (continuationNpcIds.includes(npcId)) return false;
+      const npcScene = this.getNpcScene(npcId);
+      if (npcScene !== scene) {
+        this.traceWake('batch_npc_skipped_scene_changed', {
+          sceneId,
+          npcId,
+          destinationSceneId: npcScene?.id ?? null,
+        });
+        return false;
+      }
+      const triggers = batch.triggersByNpc.get(npcId) || [];
+      if (!triggers.length && !scene.sceneLog.getUnreadEntries(npcId).length) {
+        this.traceWake('batch_npc_skipped_no_unread_events', {
+          sceneId,
+          npcId,
+        });
+        return false;
+      }
+      const incomingGive = this.getPendingIncomingGive(scene, npcId);
+      if (incomingGive && incomingGive.giverNpcId !== npcId) {
+        this.traceWake('batch_deferred_pending_incoming_give', {
+          sceneId,
+          npcId,
+          giverNpcId: incomingGive.giverNpcId,
+          itemId: incomingGive.itemId,
+          triggerTypes: triggers.map((trigger) => trigger.type),
+        });
+        return false;
+      }
+      const stateKey = this.getNpcStateKey(scene, npcId);
+      if (!this.pendingPlanContinuations.has(stateKey)) return true;
+      const deferred = this.deferredContinuationTriggers.get(stateKey) || [];
+      deferred.push(...triggers);
+      this.deferredContinuationTriggers.set(stateKey, deferred);
+      this.traceWake('batch_deferred_pending_continuation', {
+        sceneId,
+        npcId,
+        triggerTypes: triggers.map((trigger) => trigger.type),
+        deferredTriggerCount: deferred.length,
+      });
+      return false;
+    });
     if (continuationNpcIds.length) {
       this.traceWake('pending_plan_continued', {
         sceneId,
         npcIds: continuationNpcIds,
         rateLimitBypassed: true,
       });
-    }
-    if (scene !== this.game.sceneManager.currentScene) {
-      this.traceWake('batch_stopped', {
-        sceneId,
-        reason: 'scene_is_no_longer_current',
-        continuationsExecuted: continuationNpcIds,
-      });
-      batch.completionResolvers.forEach((resolve) => resolve());
-      return;
+      for (const npcId of continuationNpcIds) {
+        if (!this.pendingPlanContinuations.has(this.getNpcStateKey(scene, npcId))) {
+          this.resumeDeferredContinuation(scene, npcId);
+        }
+      }
     }
     if (!providerCandidateNpcIds.length) {
       batch.completionResolvers.forEach((resolve) => resolve());
@@ -2194,6 +3680,17 @@ export class NpcPuppetMaster {
         model: this.provider.getModelName(),
       });
       batch.completionResolvers.forEach((resolve) => resolve());
+      return;
+    }
+
+    const processingKey = `batch:${scene.id}`;
+    if (this.processingScenes.has(processingKey)) {
+      this.traceWake('batch_requeued', {
+        sceneId,
+        reason: 'scene_batch_already_processing',
+        npcIds: providerCandidateNpcIds,
+      });
+      this.mergeBatchAfterProcessing(batch);
       return;
     }
 
@@ -2232,20 +3729,12 @@ export class NpcPuppetMaster {
 
     const providerNpcIds = allowedNpcIds;
 
-    const processingKey = `batch:${scene.id}`;
-    if (this.processingScenes.has(processingKey)) {
-      this.traceWake('batch_requeued', {
-        sceneId,
-        reason: 'scene_batch_already_processing',
-        npcIds: providerNpcIds,
-      });
-      this.deferBatch(batch, providerNpcIds);
-      batch.completionResolvers.forEach((resolve) => resolve());
-      return;
-    }
-
     this.processingScenes.add(processingKey);
     try {
+      // Snapshot before building the prompt. Events that arrive afterwards
+      // remain unread for the coalesced follow-up batch, even if the current
+      // provider request finishes later.
+      const processedEventWatermarks = this.getSceneLogWatermarks(scene, providerNpcIds);
       const worldModel = this.worldModelBuilder.build(scene, { npcIds: providerNpcIds });
       if (!worldModel.npcs.length) {
         this.traceWake('batch_stopped', {
@@ -2268,19 +3757,23 @@ export class NpcPuppetMaster {
         model: this.provider.getModelName(),
       });
       await this.processWorldModel(
+        scene,
         worldModel,
         Object.keys(triggersByNpc).length ? { type: 'batch', triggersByNpc } : undefined
       );
       if (!this.lastDebugInfo?.error) {
         for (const npcId of providerNpcIds) {
-          if (!this.shouldPreserveUnreadEventsForRetry(npcId)) {
-            scene.sceneLog.markProcessed(undefined, npcId);
+          const processedThrough = processedEventWatermarks.get(npcId);
+          if (processedThrough !== undefined && !this.shouldPreserveUnreadEventsForRetry(npcId)) {
+            scene.sceneLog.markProcessed(processedThrough, npcId);
           }
         }
       }
     } finally {
       this.processingScenes.delete(processingKey);
       batch.completionResolvers.forEach((resolve) => resolve());
+      const queued = this.pendingBatches.get(sceneId);
+      if (queued && !queued.timeoutId) this.scheduleBatchFlush(queued, 0);
     }
   }
 
@@ -2362,7 +3855,7 @@ export class NpcPuppetMaster {
         ...result,
         status: 'failed',
         code: 'pattern_without_progress',
-        message: `Cyclic no-progress behavior detected: ${[...new Set(signatures)].join(', ')} have already been tried and did not help. Do not continue this action pattern. Choose a materially different strategy, ask for help, WAIT/rest voluntarily, or reconsider current objectives with OBJECTIVES_SET if the goal is not currently achievable.`,
+        message: `Cyclic no-progress behavior detected: ${[...new Set(signatures)].join(', ')} have already been tried and did not help. Do not continue this action pattern. Choose a materially different strategy, ask for help, WAIT/rest voluntarily, or revise the relevant objective branch if the goal is not currently achievable.`,
       };
     }
 
@@ -2418,31 +3911,27 @@ export class NpcPuppetMaster {
   }
 
   private recordActionHistory(scene: Scene, npcId: string, result: NpcPlanExecutionOutcome): void {
-    const stateKey = this.getNpcStateKey(scene, npcId);
-    const target = result.targetId || result.commandId || result.itemId || '';
-    if (!target) return;
-
-    if (result.worldChanged) {
-      this.removeActionHistoryForTarget(stateKey, target);
-      this.upsertActionHistory(
-        stateKey,
-        this.getActionHistorySignature(result, target, 'changed'),
-        `${result.actionType || 'ACTION'} ${target}${result.relation ? ` ${result.relation}` : ''}: changed world state`
-      );
-      return;
-    }
-
-    const summary = this.summarizeNoProgressAction(result);
-    if (!summary) return;
-    this.upsertActionHistory(stateKey, summary.signature, summary.text);
+    if (result.status === 'scheduled') return;
+    const records = this.actionHistories.get(npcId) || [];
+    records.push({
+      sceneId: scene.id,
+      timestamp: Date.now(),
+      ...(result.actionType ? { actionType: result.actionType } : {}),
+      ...(result.code ? { code: result.code } : {}),
+      status: result.status,
+      ...(result.targetId ? { targetId: result.targetId } : {}),
+      ...(result.itemId ? { itemId: result.itemId } : {}),
+      ...(result.commandId ? { commandId: result.commandId } : {}),
+      worldChanged: result.worldChanged === true,
+      summary: this.summarizeActionHistoryResult(result),
+    });
+    this.actionHistories.set(npcId, records.slice(-PM_ACTION_HISTORY_LIMIT));
   }
 
-  private summarizeNoProgressAction(
-    result: NpcPlanExecutionOutcome
-  ): { signature: string; text: string } | null {
+  private summarizeActionHistoryResult(result: NpcPlanExecutionOutcome): string {
     const actionType = result.actionType || 'ACTION';
     const target = result.targetId || result.commandId || result.itemId || '';
-    if (!target) return null;
+    const targetLabel = target ? ` ${target}` : '';
 
     if (
       result.status === 'ok' &&
@@ -2450,82 +3939,48 @@ export class NpcPuppetMaster {
       !result.worldChanged &&
       (!result.discoveredEntityIds || result.discoveredEntityIds.length === 0)
     ) {
-      return {
-        signature: this.getActionHistorySignature(result, target, 'nothing_new'),
-        text: `${actionType} ${target}${result.relation ? ` ${result.relation}` : ''}: inspected, nothing new found`,
-      };
+      return `${actionType}${targetLabel}${result.relation ? ` ${result.relation}` : ''}: inspected, nothing new found`;
     }
 
-    if (result.code === 'switch_already_open') {
-      return {
-        signature: this.getActionHistorySignature(result, target, 'already_open'),
-        text: `${actionType} ${target}: already open`,
-      };
+    if (result.worldChanged) return `${actionType}${targetLabel}: changed world state`;
+    if (result.status === 'failed' || result.status === 'unsupported') {
+      return `${actionType}${targetLabel}: failed (${result.code || 'unknown_error'})`;
     }
-
-    if (result.code === 'switch_already_closed') {
-      return {
-        signature: this.getActionHistorySignature(result, target, 'already_closed'),
-        text: `${actionType} ${target}: already closed`,
-      };
-    }
-
-    if (
-      result.code === 'repeated_without_progress' ||
-      result.code === 'pattern_without_progress' ||
-      result.code === 'pattern_loop_sleep'
-    ) {
-      return {
-        signature: this.getActionHistorySignature(result, target, 'repeated_no_progress'),
-        text: `${actionType} ${target}${result.relation ? ` ${result.relation}` : ''}: repeated without progress`,
-      };
-    }
-
-    return null;
+    return `${actionType}${targetLabel}: ${result.code || result.status}`;
   }
 
-  private upsertActionHistory(stateKey: string, signature: string, summary: string): void {
+  private getNpcActionHistory(npcId: string): Array<Record<string, unknown>> | undefined {
+    const records = this.actionHistories.get(npcId);
+    if (!records?.length) return undefined;
     const now = Date.now();
-    const records = this.actionHistories.get(stateKey) || [];
-    const existing = records.find((record) => record.signature === signature);
-    if (existing) {
-      existing.count += 1;
-      existing.summary = summary;
-      existing.updatedAt = now;
-    } else {
-      records.push({ signature, summary, count: 1, updatedAt: now });
-    }
-    records.sort((a, b) => a.updatedAt - b.updatedAt);
-    this.actionHistories.set(stateKey, records.slice(-PM_ACTION_HISTORY_LIMIT));
-  }
-
-  private getActionHistorySignature(
-    result: NpcPlanExecutionOutcome,
-    target: string,
-    suffix: string
-  ): string {
-    const actionType = result.actionType || 'ACTION';
-    const relation =
-      (actionType === 'LOOK' || actionType === 'EXAMINE') && result.relation
-        ? `:${result.relation}`
-        : '';
-    return `${actionType}:${target}${relation}:${suffix}`;
-  }
-
-  private removeActionHistoryForTarget(stateKey: string, target: string): void {
-    const records = this.actionHistories.get(stateKey);
-    if (!records?.length) return;
-    this.actionHistories.set(
-      stateKey,
-      records.filter((record) => !record.signature.includes(`:${target}:`))
+    return records.map((record) =>
+      this.compactPromptRecord({
+        sceneId: record.sceneId,
+        ageMs: Math.max(0, now - record.timestamp),
+        actionType: record.actionType,
+        code: record.code,
+        status: record.status,
+        targetId: record.targetId,
+        itemId: record.itemId,
+        commandId: record.commandId,
+        worldChanged: record.worldChanged,
+        summary: record.summary,
+      })
     );
   }
 
-  private getNpcActionHistory(sceneId: string, npcId: string): string[] | undefined {
-    const records = this.actionHistories.get(`${sceneId}:${npcId}`);
+  private getPromptTransitionHistory(npcId: string): Array<Record<string, unknown>> | undefined {
+    const records = this.transitionHistories.get(npcId);
     if (!records?.length) return undefined;
+    const now = Date.now();
     return records.map((record) =>
-      record.count > 1 ? `${record.summary} x${record.count}` : record.summary
+      this.compactPromptRecord({
+        ageMs: Math.max(0, now - record.timestamp),
+        sourceSceneId: record.sourceSceneId,
+        destinationSceneId: record.destinationSceneId,
+        exitId: record.exitId,
+        kind: record.kind,
+      })
     );
   }
 
@@ -2556,14 +4011,10 @@ export class NpcPuppetMaster {
 
   private deferBatch(batch: PendingNpcBatch, npcIds: string[] = [...batch.npcIds]): void {
     const currentGeneration = this.haltGenerationId;
-    const currentScene = batch.scene;
     globalThis.setTimeout(() => {
-      if (
-        this.haltGenerationId !== currentGeneration ||
-        this.game.sceneManager.currentScene !== currentScene
-      )
-        return;
       for (const npcId of npcIds) {
+        if (this.haltGenerationId !== currentGeneration || this.getNpcScene(npcId) !== batch.scene)
+          continue;
         const triggers = batch.triggersByNpc.get(npcId) || [];
         if (!triggers.length) {
           void this.enqueueNpc(batch.scene, npcId);
@@ -2578,6 +4029,31 @@ export class NpcPuppetMaster {
 
   private getNpcStateKey(scene: Scene, npcId: string): string {
     return `${scene.id}:${npcId}`;
+  }
+
+  private getNpcScene(npcId: string): Scene | null {
+    const current = this.game.sceneManager.currentScene;
+    if (current?.getObjectByName(npcId) instanceof Actor) return current;
+    return (
+      Array.from(this.game.sceneManager.scenes.values()).find(
+        (scene) => scene.getObjectByName(npcId) instanceof Actor
+      ) || null
+    );
+  }
+
+  private resumeDeferredContinuation(scene: Scene, npcId: string): void {
+    const stateKey = this.getNpcStateKey(scene, npcId);
+    const triggers = this.deferredContinuationTriggers.get(stateKey);
+    if (!triggers?.length) return;
+    this.deferredContinuationTriggers.delete(stateKey);
+    this.traceWake('pending_continuation_resumed', {
+      sceneId: scene.id,
+      npcId,
+      triggerTypes: triggers.map((trigger) => trigger.type),
+    });
+    for (const trigger of triggers) {
+      void this.enqueueNpc(scene, npcId, trigger);
+    }
   }
 
   private async loadSystemPrompt(): Promise<string> {
@@ -2596,25 +4072,6 @@ export class NpcPuppetMaster {
       this.systemPromptCache = FALLBACK_SYSTEM_PROMPT;
     }
     return this.systemPromptCache;
-  }
-
-  private extractJson(text: string): string {
-    const fenceMatch = /```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/.exec(text);
-    if (fenceMatch?.[1]) return fenceMatch[1].trim();
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
-    if (firstBrace >= 0 && lastBrace > firstBrace) {
-      return text.slice(firstBrace, lastBrace + 1).trim();
-    }
-    return text.trim();
-  }
-
-  private parseJson(text: string): unknown | null {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return null;
-    }
   }
 
   private logStrategyDebug(debug: NpcPuppetMasterStrategyDebugInfo): void {
@@ -2765,76 +4222,74 @@ export class NpcPuppetMaster {
         }
 
         if (dynamicContext) {
+          let summaryHeader = '';
           if (dynamicContext.scene) {
-            promptLines.push(`Scene: ${JSON.stringify(dynamicContext.scene)}`);
+            summaryHeader += `Scene: ${dynamicContext.scene.id}`;
           }
           // Format Trigger
           let triggerStr = 'None';
           if (dynamicContext.trigger) {
             const t = dynamicContext.trigger;
-            if (t.type === 'wait_elapsed') {
-              triggerStr = `Wait elapsed (${t.ms}ms)`;
-            } else if (t.type === 'move_completed') {
+            if (t.type === 'wait_elapsed') triggerStr = `Wait elapsed (${t.ms}ms)`;
+            else if (t.type === 'move_completed')
               triggerStr = `Move completed (${t.result?.status || 'unknown'})`;
-            } else if (t.type === 'action_completed') {
+            else if (t.type === 'action_completed')
               triggerStr = `Action completed (${t.result?.code || 'unknown'})`;
-            } else if (t.type === 'plan_continued') {
-              triggerStr = `Plan continued: ${t.reason}`;
-            } else if (t.type === 'plan_interrupted') {
-              triggerStr = `Plan interrupted (${t.reason})`;
-            } else if (t.type === 'plan_completed') {
+            else if (t.type === 'plan_continued') triggerStr = `Plan continued: ${t.reason}`;
+            else if (t.type === 'plan_interrupted') triggerStr = `Plan interrupted (${t.reason})`;
+            else if (t.type === 'plan_completed')
               triggerStr = `Plan completed (${Array.isArray(t.results) ? t.results.length : 0} results)`;
-            } else if (t.type === 'manual') {
-              triggerStr = `Manual trigger: ${t.reason || 'none'}`;
-            } else {
-              triggerStr = JSON.stringify(t);
-            }
+            else if (t.type === 'manual') triggerStr = `Manual trigger: ${t.reason || 'none'}`;
+            else if (t.type === 'batch') {
+              const summaries = Object.entries(t.triggersByNpc || {}).map(([npcId, triggers]) => {
+                const latest = (triggers as any[])[(triggers as any[]).length - 1];
+                if (!latest) return `${npcId}: none`;
+                const res = latest.result?.status || latest.result?.code || latest.reason || '';
+                return `${npcId}: ${latest.type}${res ? `(${res})` : ''}`;
+              });
+              triggerStr = `Batch: ${summaries.join(', ')}`;
+            } else triggerStr = JSON.stringify(t);
           }
-          promptLines.push(`Trigger: ${triggerStr}`);
+          summaryHeader += ` | Trigger: ${triggerStr}`;
 
           // Format Speech Events if any
+          const speeches: string[] = [];
           if (Array.isArray(dynamicContext.npcs)) {
             for (const npc of dynamicContext.npcs) {
               if (Array.isArray(npc.newEvents)) {
                 for (const ev of npc.newEvents) {
-                  if (ev.kind === 'speech') {
-                    promptLines.push(`Speech: ${ev.displayName || ev.actorId}: "${ev.text}"`);
-                  } else if (ev.kind === 'action') {
-                    promptLines.push(`Action: ${ev.text}`);
-                  }
+                  if (ev.kind === 'speech')
+                    speeches.push(`${ev.displayName || ev.actorId}: "${ev.text}"`);
+                  else if (ev.kind === 'action') speeches.push(`Action: ${ev.text}`);
                 }
               }
             }
           }
+          if (speeches.length > 0) summaryHeader += ` | Speech: ${speeches.join(', ')}`;
+          promptLines.push(summaryHeader);
 
           // Summarize Active NPCs
           promptLines.push('Active NPCs:');
           if (Array.isArray(dynamicContext.npcs)) {
             for (const npc of dynamicContext.npcs) {
               const objStr = npc.objectives ? JSON.stringify(npc.objectives) : '[]';
-              const memStr = npc.memory ? `"${npc.memory}"` : 'none';
+              const memStr = npc.memory ? JSON.stringify(npc.memory) : 'none';
               let invStr = '';
-              if (
-                npc.inventory &&
-                npc.inventory.available &&
-                Array.isArray(npc.inventory.itemIds)
-              ) {
+              if (npc.inventory?.available && Array.isArray(npc.inventory.itemIds)) {
                 const itemNames = npc.inventory.itemIds.map((id: unknown) => String(id));
-                if (itemNames.length > 0) {
-                  invStr = ` | Inventory: [${itemNames.join(', ')}]`;
-                }
+                if (itemNames.length > 0) invStr = ` | Inv: [${itemNames.join(', ')}]`;
+                const nestedItems = Array.isArray(npc.inventory.items)
+                  ? npc.inventory.items.filter((item: any) => item && item.containerId !== npc.id)
+                  : [];
+                if (nestedItems.length > 0) invStr += ` | Nested: ${nestedItems.length} items`;
               }
               promptLines.push(
-                `  * ${npc.id} @ ${npc.currentSceneId || dynamicContext.scene?.id || 'unknown'} -> Objectives: ${objStr} | Memory: ${memStr}${invStr}`
+                `  * ${npc.id} @ ${npc.currentSceneId || dynamicContext.scene?.id || 'unknown'} -> Obj: ${objStr} | Mem: ${memStr}${invStr}`
               );
-              const knownEntities = Array.isArray(npc.knownEntities)
-                ? npc.knownEntities.map((entry: any) => ({
-                    id: String(entry.id || ''),
-                    kind: entry.kind,
-                    lastSeenSceneId: entry.lastSeenSceneId,
-                  }))
-                : [];
-              promptLines.push(`    knownEntities: ${JSON.stringify(knownEntities)}`);
+              const knownEntities = Array.isArray(npc.knownEntities) ? npc.knownEntities : [];
+              if (knownEntities.length > 0) {
+                promptLines.push(`    knownEntities: ${knownEntities.length} items`);
+              }
             }
           }
         } else {
@@ -2997,8 +4452,77 @@ export class NpcPuppetMaster {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
     const record = value as Record<string, unknown>;
     if (record.type === 'SAY') {
-      const text = typeof record.text === 'string' ? record.text.trim() : '';
+      let text = typeof record.text === 'string' ? record.text.trim() : '';
+      if (text) {
+        text = text
+          .split('—')
+          .map((s) => s.trim())
+          .join('\u202F—\u202F');
+      }
       return text ? { type: 'SAY', text } : null;
+    }
+    if (record.type === 'MEMORY_ADD' || record.type === 'MEMORY_REMOVE') {
+      const memory = typeof record.memory === 'string' ? record.memory.trim() : '';
+      return memory ? { type: record.type, memory } : null;
+    }
+    if (record.type === 'OBJECTIVE_ADD') {
+      if (
+        !record.objective ||
+        typeof record.objective !== 'object' ||
+        Array.isArray(record.objective)
+      ) {
+        return null;
+      }
+      const objective = normalizeNpcObjectiveDraft(record.objective);
+      const parentId =
+        record.parentId === null
+          ? null
+          : typeof record.parentId === 'string' && record.parentId.trim()
+            ? record.parentId.trim()
+            : undefined;
+      return objective
+        ? { type: 'OBJECTIVE_ADD', objective, ...(parentId !== undefined ? { parentId } : {}) }
+        : null;
+    }
+    if (record.type === 'OBJECTIVE_UPDATE') {
+      const objectiveId = typeof record.objectiveId === 'string' ? record.objectiveId.trim() : '';
+      const text = typeof record.text === 'string' ? record.text.trim() : '';
+      return objectiveId && text ? { type: 'OBJECTIVE_UPDATE', objectiveId, text } : null;
+    }
+    if (record.type === 'OBJECTIVE_REMOVE') {
+      const objectiveId = typeof record.objectiveId === 'string' ? record.objectiveId.trim() : '';
+      return objectiveId ? { type: 'OBJECTIVE_REMOVE', objectiveId } : null;
+    }
+    if (record.type === 'OBJECTIVE_MARK_COMPLETED') {
+      const objectiveId = typeof record.objectiveId === 'string' ? record.objectiveId.trim() : '';
+      const rawEvidence = record.evidence;
+      const evidence =
+        rawEvidence && typeof rawEvidence === 'object' && !Array.isArray(rawEvidence)
+          ? (() => {
+              const value = rawEvidence as Record<string, unknown>;
+              const actionType =
+                typeof value.actionType === 'string' ? value.actionType.trim() : '';
+              if (
+                !['TAKE', 'GIVE', 'PUT', 'COMMAND', 'OPEN', 'CLOSE', 'LOOK', 'EXAMINE'].includes(
+                  actionType
+                )
+              ) {
+                return undefined;
+              }
+              const text = (key: string) =>
+                typeof value[key] === 'string' && value[key].trim() ? value[key].trim() : undefined;
+              return {
+                actionType: actionType as NpcObjectiveCompletionEvidence['actionType'],
+                ...(text('code') ? { code: text('code') } : {}),
+                ...(text('targetId') ? { targetId: text('targetId') } : {}),
+                ...(text('itemId') ? { itemId: text('itemId') } : {}),
+                ...(text('commandId') ? { commandId: text('commandId') } : {}),
+              };
+            })()
+          : undefined;
+      return objectiveId
+        ? { type: 'OBJECTIVE_MARK_COMPLETED', objectiveId, ...(evidence ? { evidence } : {}) }
+        : null;
     }
     if (record.type === 'MEMORY_SET') {
       const memory = typeof record.memory === 'string' ? record.memory.trim() : '';
@@ -3042,6 +4566,11 @@ export class NpcPuppetMaster {
       const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : '';
       return targetId ? { type: 'TAKE', targetId } : null;
     }
+    if (record.type === 'GIVE') {
+      const itemId = typeof record.itemId === 'string' ? record.itemId.trim() : '';
+      const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : '';
+      return itemId && targetId ? { type: 'GIVE', itemId, targetId } : null;
+    }
     if (record.type === 'PUT') {
       const itemId = typeof record.itemId === 'string' ? record.itemId.trim() : '';
       const targetId =
@@ -3074,11 +4603,6 @@ export class NpcPuppetMaster {
       return Object.keys(args).length
         ? { type: 'COMMAND', commandId, arguments: args }
         : { type: 'COMMAND', commandId };
-    }
-    if (record.type === 'USE') {
-      const itemId = typeof record.itemId === 'string' ? record.itemId.trim() : '';
-      const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : '';
-      return itemId && targetId ? { type: 'USE', itemId, targetId } : null;
     }
     if (record.type === 'WAIT') {
       const ms = typeof record.ms === 'number' && Number.isFinite(record.ms) ? record.ms : 0;

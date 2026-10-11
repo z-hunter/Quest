@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { createParserFixture } from '../fixtures/parserFactory';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { Parser } from '../../src/mechanics/Parser';
+import { createLlmProvider } from '../../src/mechanics/llm/createLlmProvider';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
+import { Actor } from '../../src/entities/Actor';
 
 function inventoryNames(fixture: any): string[] {
   return fixture.game.inventory.map((entity: any) => entity.name);
@@ -19,7 +21,7 @@ async function runSemanticParser(
     parserPeekPnEnabled: false,
     log() {},
   } as any;
-  const parser = new Parser(fixture.game);
+  const parser = new Parser(fixture.game, createLlmProvider());
   await parser.parse(input);
   return fixture.messages;
 }
@@ -32,6 +34,29 @@ async function finishAutoApproach(fixture: any): Promise<void> {
 }
 
 describe('Parser + game integration smoke', () => {
+  it('executes the player GIVE command into a protected Actor inventory', async () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const guard = new Actor(fixture.game, 10, 0, 10, 10, 'guard');
+    guard.components = [
+      { type: 'NPC', enabled: true },
+      { type: 'Inventory', relation: 'in', capacity: 1, groups: [], protected: true, items: [] },
+    ];
+    fixture.scene.addEntity(guard);
+    fixture.textAssets.setObject(guard.name, { title: 'Guard', description: 'A guard.' });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A brass key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.game.addInventoryEntity(player, key, 'in');
+
+    const messages = await runSemanticParser(fixture, 'give key to guard');
+
+    expect(messages.at(-1)).toBe('You give the Key to Guard.');
+    expect(fixture.game.inventoryManager.hasInventoryEntity(guard, key, 'in')).toBe(true);
+  });
+
   it('takes revealed contents from a held editor-authored container without auto-approach', async () => {
     const fixture = createParserFixture();
     const player = fixture.addPlayer('Hero', 0, 0);
@@ -74,6 +99,42 @@ describe('Parser + game integration smoke', () => {
     expect(moveTo).not.toHaveBeenCalled();
     expect(fixture.game.inventory).toContain(batteries);
     expect(fixture.game.getInventoryEntities(remote, 'in')).not.toContain(batteries);
+  });
+
+  it('takes a visible item from a reachable spatial parent even when its own coordinates are distant', async () => {
+    const fixture = createParserFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const pillow = fixture.addEntity('right_pillow', {
+      title: 'right pillow',
+      description: 'A sofa pillow.',
+    });
+    pillow.x = 0;
+    pillow.y = 0;
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      description: 'A remote tucked under the pillow.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: pillow.name, relation: 'under' },
+    });
+    remote.x = 500;
+    remote.y = 500;
+    fixture.textAssets.setObject(pillow.name, {
+      title: 'right pillow',
+      description: 'A sofa pillow.',
+      synonyms: ['pillow'],
+    });
+    fixture.textAssets.setObject(remote.name, {
+      title: 'TV remote',
+      description: 'A remote tucked under the pillow.',
+      synonyms: ['remote'],
+    });
+    const moveTo = vi.spyOn(player, 'moveTo');
+
+    const result = await fixture.run('take remote');
+
+    expect(result.messages.at(-1)).toContain('You picked up the TV remote');
+    expect(fixture.game.inventory).toContain(remote);
+    expect(moveTo).not.toHaveBeenCalled();
   });
 
   it('describes direct spatial contents with LOOK UNDER', async () => {
@@ -557,6 +618,57 @@ describe('Parser + game integration smoke', () => {
     const result = await fixture.run('open chair');
 
     expect(result.messages.at(-1)).toBe(fixture.game.text('parser.parse_unknown'));
+  });
+
+  it('uses OPEN on an accessible non-switch container to list its contents', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('remote', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    const batterySlot = fixture.addEntity('remote_battery_slot', {
+      title: null,
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+      components: [{ type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] }],
+    });
+    const batteries = fixture.addEntity('aaa_batteries', {
+      title: 'AAA batteries',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.addInventoryEntity(batterySlot, batteries);
+
+    const result = await fixture.run('open remote');
+
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'In',
+        relation: 'in',
+        target: 'TV remote',
+        items: 'AAA batteries',
+      })
+    );
+  });
+
+  it('uses OPEN on a held switch matched by a synonym', async () => {
+    const fixture = createParserFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('remote', {
+      title: 'TV remote',
+      components: [
+        { type: 'Item', ignoreDistance: true },
+        { type: 'Switch', state: 1 },
+      ],
+    });
+    fixture.textAssets.setObject(remote.name, { title: 'TV remote', synonyms: ['rc'] });
+    fixture.game.inventoryManager.handleSceneChange();
+    fixture.game.addInventoryEntity(player, remote);
+
+    const result = await fixture.run('open rc');
+
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.open_success', { target: 'TV remote' })
+    );
   });
 
   it('reports a clearly openable closed container on LOOK IN but not on direct LOOK of hidden contents', async () => {
@@ -1203,7 +1315,7 @@ describe('Parser + game integration smoke', () => {
       description: 'A far cassette on the floor.',
       synonyms: ['cassette', 'cassete', 'music'],
     });
-    musicCassette.x = 5;
+    musicCassette.x = 200;
     musicCassette.y = 0;
     const floor = fixture.addWalkbox('Walk_main', 'in');
     floor.components = [
@@ -1212,7 +1324,7 @@ describe('Parser + game integration smoke', () => {
         relation: 'in',
         capacity: 10,
         groups: [],
-        items: [{ id: 'music_cassette', x: 200, y: 0 }],
+        items: [{ id: 'music_cassette', x: 5, y: 0 }],
       },
     ];
     musicCassette.spatial = { parentNodeId: 'Walk_main', relation: 'in' };

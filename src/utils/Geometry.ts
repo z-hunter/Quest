@@ -171,4 +171,32 @@ export class Geometry {
     }
     return true;
   }
+
+  static getPointToSegmentDistance(
+    point: { x: number; y: number },
+    start: { x: number; y: number },
+    end: { x: number; y: number }
+  ): number {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSq = dx * dx + dy * dy;
+    if (lengthSq <= 0) return Math.hypot(point.x - start.x, point.y - start.y);
+
+    const t = Math.max(
+      0,
+      Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq)
+    );
+    return Math.hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy));
+  }
+
+  static getPointToPolygonDistance(
+    point: { x: number; y: number },
+    polygon: Array<{ x: number; y: number }>
+  ): number {
+    if (Geometry.isPointInPolygon(point, polygon)) return 0;
+    return polygon.reduce((closest, start, index) => {
+      const end = polygon[(index + 1) % polygon.length];
+      return Math.min(closest, Geometry.getPointToSegmentDistance(point, start, end));
+    }, Number.POSITIVE_INFINITY);
+  }
 }

@@ -12,9 +12,11 @@ At the start of a new session, before resuming nontrivial work, or before archit
 2. Recall `agent_memory` for relevant fresh facts, decisions, incidents, commits, runbooks, and known caveats.
 3. If the task needs whole-project context, complete the NotebookLM readiness flow and ask for a structured subsystem overview before scanning large code areas.
 4. Use `local_rag` as fallback or sidecar for fuzzy related-document discovery and indexed docs.
-5. Check Kairo for active/high-priority `proj:quest` tasks when starting a new session, resuming work, or when the request may already have a follow-up. Do not check Kairo for tiny one-shot questions unless task status may matter.
-6. Verify conclusions against the current repository before editing.
-7. For substantial work, keep Kairo updated while working and store durable conclusions in `agent_memory` after validation.
+5. Use the Xerj MCP to analyze/search project files instead of indexing them yourself. This will help you locate the necessary files and their sections faster without wasting tokens.
+6. Check Kairo for active/high-priority `proj:quest` tasks when starting a new session, resuming work, or when the request may already have a follow-up. Do not check Kairo for tiny one-shot questions unless task status may matter.
+7. Verify conclusions against the current repository before editing.
+
+8. For substantial work, keep Kairo updated while working and store durable conclusions in `agent_memory` after validation.
 
 ## Responsibility Model
 
@@ -195,35 +197,6 @@ Kairo conventions:
 - Title: start with `[Quest]`, use an action phrase, and mention owner only when delegated or user-facing.
 - Description: include owner, context, expected outcome, acceptance criteria, relevant files/links, and source when useful.
 
-## Antigravity CLI Delegation Rule
-
-When Antigravity CLI (`agy.exe`) is installed, use it as an external worker or bounded orchestrator for technical tasks where practical and safe. Prefer the `antigravity-cli-agent` skill.
-
-Good Antigravity work packages:
-
-- bounded implementation chores and focused bug fixes;
-- mechanical edits, migrations, and small test-writing tasks;
-- independent read-only reviews or subsystem analysis;
-- several related technical subtasks that Antigravity can decompose across its own tools or subagents;
-- multiple independent tasks with disjoint file ownership.
-
-Do not delegate:
-
-- high-level architecture, product direction, or risk acceptance;
-- project-knowledge recall, GDD interpretation, or design decisions without exact Codex-supplied conclusions;
-- open-ended refactors or authority to expand scope;
-- final integration, test selection, acceptance, or user-facing recommendations.
-
-Antigravity rules:
-
-- Local Antigravity may use its available tools, plugins, and subagents within the delegated scope. When relevant, create `owner:antigravity` Kairo tasks and tell it exactly which memory/task context to consult or update.
-- Codex remains responsible for task framing, architecture judgment, write boundaries, diff review, test selection, final integration, and explaining the result independently.
-- Give Antigravity explicit objectives, allowed write scope, forbidden files/changes, validation expectations, deliverables, and stop conditions. Its internal decomposition must preserve those boundaries.
-- Parallel Antigravity work must have disjoint write ownership. Prefer read-only parallel analysis or separate worktrees when overlap is possible.
-- Invoke Antigravity through the `antigravity-cli-agent` ConPTY wrapper. It provides a real Windows pseudoterminal for `agy --print` and captures output headlessly despite the upstream non-TTY stdout bug.
-- Keep delegated work one-shot and explicit. If the captured output contains an interactive permission prompt, stop and retry with narrower scope or an approved permission rule; do not use the shared desktop/TUI as the default control path.
-- After Antigravity edits, inspect `git status`/`git diff`, reject out-of-scope changes, and run the relevant tests locally.
-- ConPTY print sessions terminate automatically after the response. No `/QUIT`, visible terminal cleanup, OCR, or desktop focus handling is needed.
 
 ## Implementation Discipline
 
@@ -234,6 +207,27 @@ Antigravity rules:
 - For parser command/debugging issues, use the running app when practical: enable `#PEEK-ON`, reproduce the command, and inspect `CONTEXT`, `SCOPE`, `ENVELOPE`, `CORE`, and `RESULT` before guessing.
 - For runtime/scene/gameplay bugs, prefer diagnostic helpers or temporary probes that explain engine decisions, such as why `isWalkable` returned false, which object blocked a path, or which semantic rule selected a parser target.
 - Do not revert user changes. Work with dirty files unless the user explicitly asks to revert them.
+
+## Playwright Debug API
+
+When testing the web/Vite build with Playwright, read `debugAPI.md` and use the Debug API for deterministic engine setup and inspection instead of UI clicks, coordinate guessing, or opening editor submenus.
+
+- Entry point: `window.__QUEST_DEBUG__.api` (fallback: `window.__SCANLINE_DEBUG__.api`). It is available only in the web/Vite runtime; it is intentionally absent in Tauri. Check `<html data-quest-mode>` when verifying the active mode.
+- Use `api.modes.getMode()` / `setMode('game' | 'scene-editor' | 'sprite-editor')` to switch modes, and `await api.scenes.load(filename)` to load a scene through the normal pipeline before inspecting it.
+- Use `api.objects.listObjects()`, `getObject(nameOrId)`, `getObjectProperties(nameOrId)`, and `setObjectProperty` / `setObjectProperties` for scene inspection and mutation without selecting objects in the UI.
+- Use `api.settings.getSetting(path)`, `setSetting(path, value)`, `setSettings`, `saveSettings`, and `loadSettings` for deterministic graphics/audio/editor setup; disable CRT for clean screenshots with `setSetting('crt.enabled', false)`.
+- Use `await api.console.sendCommand(command)` plus `api.console.getMessages({ afterTimestamp, type })` for parser/console tests. `#...` commands use the developer console; other commands use gameplay input. `api.console.open/close/clear` are available when overlay state matters.
+- Use `await api.performance.sample({ durationMs, sections: ['update', 'render'] })` for frame metrics and `api.renderer.getDiagnostics()` for Box3D cache, visible-face, BSP, fallback, and command-sequence checks.
+- In Playwright, call these through `page.evaluate(...)`; await scene loads, commands, and performance samples. Preserve normal UI assertions for user-visible behavior, using the API only to establish state or inspect engine results.
+
+Example:
+
+```ts
+await page.evaluate(() => window.__QUEST_DEBUG__.api.setMode('scene-editor'));
+await expect(page.locator('html')).toHaveAttribute('data-quest-mode', 'scene-editor');
+await page.evaluate(() => window.__QUEST_DEBUG__.api.scenes.load('box3d2_t.json'));
+const diagnostics = await page.evaluate(() => window.__QUEST_DEBUG__.api.renderer.getDiagnostics());
+```
 
 ## Validation Ladder
 

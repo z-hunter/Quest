@@ -4,6 +4,7 @@ export type ParserIntentId =
   | 'look'
   | 'examine'
   | 'take'
+  | 'give'
   | 'put'
   | 'open'
   | 'close'
@@ -86,6 +87,7 @@ export function matchStage1Intent(input: string, lexicon: ParserLexiconAsset): S
     'look',
     'examine',
     'take',
+    'give',
     'put',
     'open',
     'close',
@@ -287,5 +289,29 @@ export function extractTakeCommand(
     item: stripFromList(value, lexicon.articles || []) || null,
     target: null,
     relation: null,
+  };
+}
+
+export function extractGiveCommand(
+  input: string,
+  lexicon: ParserLexiconAsset
+): { item: string | null; target: string | null } {
+  let value = input.replace(/[?.!,]+$/g, '').trim();
+  if (!value) return { item: null, target: null };
+
+  value = stripFromList(value, lexicon.politePrefixes || []);
+  value = stripFromList(value, lexicon.normalizationPrefixes.give || []);
+  if (!value) return { item: null, target: null };
+
+  const match = /\s+(?:to)\s+/i.exec(value);
+  if (!match?.index) {
+    return { item: stripFromList(value, lexicon.articles || []) || null, target: null };
+  }
+
+  return {
+    item: stripFromList(value.slice(0, match.index).trim(), lexicon.articles || []) || null,
+    target:
+      stripFromList(value.slice(match.index + match[0].length).trim(), lexicon.articles || []) ||
+      null,
   };
 }

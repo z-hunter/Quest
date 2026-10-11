@@ -1,6 +1,6 @@
 ﻿# Scanline Engine вЂ” Technical Specification
 
-> **Last audited**: 2026-07-07. Reflects current `src/` directory structure and implemented subsystems.
+> **Last audited**: 2026-08-29. Reflects current `src/` directory structure and implemented subsystems.
 
 ---
 
@@ -29,7 +29,7 @@ The Scanline Engine is a 2.5D retro-style adventure game engine built on a moder
 - **IGame Interface**: All runtime services depend on `src/core/IGame.ts`, not the concrete `Game` class, enabling isolated unit testing without a full engine context.
 - **Semantic-Driven World Model**: The game world's behaviour is driven by Text Assets (TA) вЂ” external `.json` files that define descriptions, synonyms, tags, relation facts, authored commands, and failure messages. Engine code is decoupled from authored text.
 - **Facade Pattern**: `SceneEditor` / `vetool.tsx` acts as a central editor facade, delegating operations to specialized managers.
-- **Descriptive Renderer**: `SceneRenderer` is a stateless function that receives `Scene + Context`, fully decoupling rendering from state.
+- **Descriptive Renderer**: `SceneRenderer` renders the current `Scene + Context` and keeps invalidation-safe caches for static Box3D layers.
 - **Platform Adapter**: `src/platform/fileApi.ts` transparently routes file I/O to either the Vite dev middleware or Tauri's native Rust commands.
 
 ---
@@ -49,7 +49,6 @@ For new developers or AI agents вЂ” functional map of the `src/` directory:
 | `ScriptAPI.ts` | Public scripting surface for authored event scripts |
 | `ScriptRegistry.ts` | Registers and invokes authored game scripts |
 | `AssetLoader.ts` | Image, audio, and scene asset loading pipeline |
-| `AudioManager.ts` | High-level audio manager facade |
 | `Input.ts` | Keyboard, mouse, pointer input abstraction |
 
 ### `src/mechanics/` вЂ” Parser, LLM, NPC
@@ -106,6 +105,8 @@ For new developers or AI agents вЂ” functional map of the `src/` directory:
 | `Entity.ts` | Base class: Transform, Visuals, Parallax, serialization |
 | `Actor.ts` | `Entity` + pathfinding (`moveTo`), animation sets, directional sprites |
 | `QuadObject.ts` | Perspective polygon objects (walls, floors) with per-vertex parallax |
+| `Box3DObject.ts` | Shared-XYZ frustum geometry, Scene camera projection, managed Quad faces, BSP fragments, raycast and surface anchors |
+| `Box3D.template.json` | Default serialized `Box3D` plus the fixed six numeric face indices |
 | `Walkbox.ts` | Walkable floor area polygon |
 | `Triggerbox.ts` | Script-triggering overlap zone |
 | `Folder.ts` | Logical grouping entity |
@@ -119,6 +120,26 @@ For new developers or AI agents вЂ” functional map of the `src/` directory:
 ### `src/editor/`, `src/components/`, `vetool.tsx` вЂ” Editor UI
 
 React-based visual editor: scene tree (HierarchyPanel), properties inspector (PropertiesPanel), sprite sheet editor, walkbox/triggerbox painting tools.
+
+### Box3D / 3D System Code Guide
+
+The detailed subsystem contract is [`3dSys.md`](3dSys.md). Start with these integration points:
+
+| File | 3D responsibility |
+|------|-------------------|
+| `src/entities/Box3DObject.ts` | Eight-vertex frustum, `Z → Y → X` transform, shared Scene projection, face synchronization, cached BSP fragments, raycast and attached-surface anchors |
+| `src/entities/QuadObject.ts` | Managed-face metadata, per-frame reuse of full-face projective texture meshes across BSP fragments, and the `box3dCameraProjected` path that prevents a second Quad parallax pass |
+| `src/scene/Scene.ts` | Serializable `box3dPerspective` and `box3dOcclusionMode`; face sync before components and after Camera update |
+| `src/scene/SceneManager.ts` | `Box3D` JSON loading and restoration of missing numeric faces |
+| `src/graphics/SceneRenderer.ts` | Per-Layer Box3D batching, exact/fast occlusion, retained static bitmap layers, BSP drawing, per-frame profiling and texture-mesh frame tokens, alpha/open-face behavior and direct Quad render for unsplit faces |
+| `src/scene/SceneInteraction.ts` | Runtime picking through the shared physical 3D raycast |
+| `src/systems/ThreeDParallaxSystem.ts` | Grid-to-physical-plane anchors and true-depth rendering of Entity attached to managed faces |
+| `src/tools/SceneEditor.ts` | Unified creation/deletion, vertex/axis overlay |
+| `src/tools/editor/EditorTransformManager.ts` | Box/face mouse manipulation and editor raycast selection |
+| `src/tools/editor/EditorSelectionManager.ts` | Recursive Box/faces/descendants copy, duplicate, paste and prefab remapping |
+| `src/components/editor/properties/Box3DProperties.tsx` | Parent Transform 3D / Frustum and per-Box occlusion controls |
+| `src/components/editor/properties/SceneProperties.tsx` | Shared Scene `3D Perspective` and `3D Occlusion` controls |
+| `tests/entities/box3d-object.test.ts` | Main geometry, projection, BSP, raycast and degenerate-shape regression suite |
 
 ### `src/platform/` вЂ” Platform Abstraction
 
@@ -142,24 +163,125 @@ Actor movement (`Actor.moveTo`) uses **A\* grid pathfinding** via `ActorNavigati
 
 ### 3.2 Rendering Pipeline
 
-`SceneRenderer.ts` (stateless function):
+`SceneRenderer.ts` renders the current runtime state from the `Scene`. It does not own a separate scene model, but retains invalidation-safe bitmap caches for static Box3D layers.
 
-1. **Parallax Layers Setup** вЂ” depth scale contexts
-2. **Entity Sort** вЂ” by Layer, then Visual Y (screen-space depth)
-3. **Render Pass** вЂ” Normal Layer в†’ Subscene Layer в†’ CRT shader post-processing
-4. **Debug Overlays** вЂ” Walkboxes, Triggerboxes, selection handles, NPC debug info
+1. **Sort** — by `layer`, then depth (normally visual Y). A Quad may instead select `Depth sort mode: By Parallax`: lower global P is farther away and renders first; higher P renders in front. Equal values fall back to the ordinary sorting rule.
+2. **Entity transform** — for each visible entity the renderer establishes the camera transform:
 
-### 3.3 Parallax & Coordinate System (2.5D)
+   ```text
+   canvas = viewportCenter + zoom * (entityLocalCoordinate - camera * entity.globalP)
+   ```
 
-Objects share World Coordinates (X, Y) but render at different screen positions based on their Parallax Factor (`p`) and Camera Position:
+   `globalP` is `entity.parallax`, with `1` as the default. This transform applies to every entity, including Quads.
+3. **Entity draw** — `Entity.render()` draws sprites at their authored geometry. `QuadObject.render()` supplies its own per-vertex geometry (described below), including Retro Grid and texture projection.
+4. **Passes and overlays** — normal scene layer, optional subscene/focus layer, transient pickup effects, CRT/post-processing, and editor/debug overlays.
 
+The important implementation consequence is that `QuadObject.getVisualVertices()` returns coordinates in the Quad's *inner* draw space, before step 2's outer global-P camera transform. It is not, by itself, the final canvas coordinate.
+
+#### Box3D occlusion and retained layers
+
+`Scene.box3dOcclusionMode` defaults to `exact`: overlapping Box3D faces are split by BSP, preserving geometric occlusion. `fast` depth-sorts whole faces for cheaper rendering; an individual Box3D may override the Scene mode when it can be approximated safely.
+
+For unchanged `source-over` Box3D content, `SceneRenderer.renderCachedBox3DLayer` supports any number of attached entities: it walks fragments in painter order, groups contiguous static fragments into bitmap commands, and retains each entity fragment as a live command between them. Up to four valid topology variants are retained per Layer. If a moving attached Entity is continuously BSP-split, static faces are instead cached individually and clipped from those source bitmaps each frame; only Entity fragments are rendered live. Camera movement and relevant static Box3D/face geometry or visual changes invalidate the cache. Fallback occurs only for no static faces, unavailable canvas, or unsupported blend mode; multiple attached entities must not force live rendering.
+
+### 3.3 Camera, Parallax, and Quad Coordinates (2.5D)
+
+All authored positions use world coordinates. Camera motion, not assignment of a P value, is what should make an object move relative to the screen.
+
+#### Ordinary Entity / Actor / Static
+
+For an ordinary object with authored point `R`, camera `C`, and global parallax `G`:
+
+```text
+finalWorldBeforeZoom = R - C * G
+finalCanvas          = viewportCenter + zoom * finalWorldBeforeZoom
 ```
-VisualPos = RawPos - Camera Г— (P - 1)
+
+Thus P=1 follows the camera's base world plane. Smaller P moves less with camera motion and appears farther away; larger P moves more and appears closer. Actor movement speed is a separate gameplay concern: on a 3d-parallax surface it uses only the resolved surface P (`0.2 + 0.8 * P`), never Depth Scaling.
+
+#### Quad: global P plus per-vertex P
+
+A Quad has two P levels:
+
+- **global P** (`QuadObject.parallax`, `G`) is the Quad's outer render-layer parallax and the value used by `Depth sort mode: By Parallax`;
+- **local vertex P** (`vertex.p`, `L`) describes depth across the Quad surface. The effective P of that vertex is `E = L * G`.
+
+Before the renderer's outer transform, `QuadObject.getVisualVertices()` produces:
+
+```text
+quadInnerVertex = authoredVertex - camera * (E - G)
 ```
 
-Interaction alignment and snapping are calculated in **Visual Space** (Screen Space) for WYSIWYG editing.
+The renderer then applies `-camera * G`. Therefore the final pre-zoom result is:
 
-### 3.4 Component System
+```text
+finalQuadVertex = authoredVertex - camera * (L * G)
+```
+
+This two-stage calculation is intentional: it lets one Quad carry a surface whose vertices have different P while still participating in the common entity renderer.
+
+#### Editing P without an on-screen jump
+
+Changing P in the editor must preserve the final canvas coordinate at the *current* camera position. It must not be implemented as a bare assignment to `QuadObject.parallax`.
+
+When global P changes from `G0` to `G1`, each authored Quad vertex is compensated independently:
+
+```text
+authoredVertex' = authoredVertex + camera * (G1 - G0) * localVertexP
+```
+
+and only then is `globalP` set to `G1`. Substitution in the final formula above shows that the final vertex remains unchanged. `QuadObject.setParallaxPreservingVisualPosition()` is the single editor-facing API for this operation; `QuadProperties` must use it.
+
+This was verified in Playwright against `t-quad`: changing `Quad_408` from P=1 to P=0.5 left all four final screen-space vertices unchanged. A common error is to preserve only `getVisualVertices()`; that omits the renderer's outer `-camera * G` transform and still visibly moves the Quad.
+
+#### Visual-space consumers and bindings
+
+Selection, snapping, Retro Grid lookup, controller containment, and surface metrics use visual-space Quad geometry. A direct vertex binding keeps the source authored X/Y equal to the target's authored X/Y and converts only local P so both Quads resolve the same effective P. A Grid binding converts from the target's inner visual grid point back to authored source coordinates while accounting for the target's outer global-P transform. These rules prevent a binding resolver from undoing the global-P compensation on the next update.
+
+Bindings are directed and allow many incoming links: several vertices may bind to the same target vertex or Grid node. When an editor vertex is rebound, only its previous matching reciprocal vertex-link is detached before the new binding is stored; no reverse link is created automatically. This prevents a stale reciprocal link from restoring an old Quad-vertex relationship while keeping the graph unrestricted on incoming connections.
+
+### 3.4 Surface Metrics, Perspective Correction, and 3d-parallax
+
+`QuadObject.getSurfaceMetricsAt()` is the shared surface-depth resolver. Given a point, it returns corrected local coordinates `(u, v)`, interpolated effective parallax, and local surface axes.
+
+- It uses the same `perspective` / `perspectiveAmount` projection as Retro Grid and textured Quads.
+- With Perspective correction, `v` is non-linear in visible space: the same corrected coordinate controls grid-line spacing, P interpolation, controller scale, and speed variation on the surface.
+- Without correction, P interpolation remains the normal bilinear interpolation over the Quad.
+- Degenerate geometry has safe fallbacks rather than emitting invalid coordinates.
+
+The `3d-parallax` component applies this resolved P to both Actors and Static entities on the matching Quad surface. It compensates their authored position when P changes, so a camera move keeps the object attached to the same visual grid/surface point. If multiple eligible 3d-parallax Quads contain an object, the last matching Quad in `scene.entities` wins.
+
+`3d-perspective walk` belongs to the WalkBox component. It changes only the mapping of keyboard directions onto the corrected local surface axes; it does not alter speed. Keyboard movement, click-to-walk, and NPC routes share the same P-based speed calculation.
+
+### 3.5 Depth Scaling
+
+Depth Scaling is visual size scaling and is deliberately independent from parallax and movement speed. `Entity.update()` sets:
+
+```text
+effectiveScale = modelScale * subsceneItemScale * scene.getDepthScaleFor(entity)
+```
+
+`Scene.getDepthScaleFor()` is the sole resolver used at runtime and by editor normalization. Code must not directly bake `Scene.getScaling(y)` into an object's base dimensions.
+
+#### Scene fallback
+
+For an uncontrolled object, scene scaling is the existing linear, clamped interpolation between the scene `horizon`/`front` Y coordinates and `min`/`max` scale values. It is used only when scene scaling is enabled.
+
+#### Depth scaling controller Quad
+
+A Quad with the `Depth scaling controller` component supersedes the scene fallback for objects whose **visual anchor** lies inside it:
+
+- controller top edge = horizon; bottom edge = foreground;
+- `min` is the scale at corrected `v=0`, `max` at corrected `v=1` (defaults: 0.5 and 1.0);
+- scale is `min + correctedV * (max - min)`;
+- Perspective correction therefore affects controller scale exactly as it affects Retro Grid spacing and surface P;
+- the controller applies to visible, enabled Entities and Quads; its own authored geometry is not mutated;
+- overlapping controllers resolve deterministically in reverse `scene.entities` order: the last matching controller wins;
+- a matching controller wins even when scene Depth Scaling is disabled.
+
+`ignoreScaling` excludes an Entity or Quad from both controller and scene scaling. New Quads default to `ignoreScaling=true` to retain historical behaviour; legacy-loaded Quads are migrated to that default through `depthScalingVersion: 1`. A Quad that opts in uses effective runtime vertices scaled about its centroid. Authored vertices and bindings remain unchanged; render, hit testing, WalkBox containment, grid lookup, controller containment, and movement all use the same effective geometry.
+
+### 3.6 Component System
 
 `ComponentSystem` manages typed components attached to scene objects:
 
@@ -173,14 +295,14 @@ Interaction alignment and snapping are calculated in **Visual Space** (Screen Sp
 | `TriggerBox` | Script-executing overlap zone |
 | `NPC` | NPC metadata, objectives, memory, and history |
 
-### 3.5 State Event System
+### 3.7 State Event System
 
 `StateEventSystem.setState(game, entity, stateId, value, source)` provides:
 - **Type-safe mutation** вЂ” validates value type against `State` component's `valueType`.
 - **Script dispatch** вЂ” automatically fires authored scripts attached to state transitions.
 - **Source tracking** вЂ” `source: 'parser' | 'script-api' | 'llm' | 'custom-command'` for diagnostics.
 
-### 3.6 Scene Log
+### 3.8 Scene Log
 
 `SceneLog` is the engine's shared event bus for NPC awareness:
 
@@ -188,14 +310,14 @@ Interaction alignment and snapping are calculated in **Visual Space** (Screen Sp
 - Maintains per-NPC read cursors (`lastPmProcessedAtByNpc`) so each NPC independently processes unread events.
 - Entries expire after `SCENE_LOG_RETENTION_MS` (10 minutes).
 
-### 3.7 Shadow System
+### 3.9 Shadow System
 
 `ShadowSystem` manages `Actor` drop shadows:
 
 - **Shape Caching**: Captures the "Base Visual Shape" on assignment вЂ” prevents Parallax Drift (skewing) while maintaining authored shapes.
 - Handles depth scaling and floor slope distortion.
 
-### 3.8 3D Spatial Audio
+### 3.10 3D Spatial Audio
 
 Built on the Web Audio API, mapping 2.5D parallax to 3D coordinates:
 
@@ -296,13 +418,14 @@ Decouples authored text from engine code. Supports hot-reload in dev and Tauri e
 
 ```
 SceneObject (base)
-в”њв”Ђв”Ђ Entity           в†ђ most scene objects; Transform + Visuals + Parallax
-в”‚   в”њв”Ђв”Ђ Actor        в†ђ Entity + pathfinding + animation sets + NPC component
-в”‚   в”њв”Ђв”Ђ QuadObject   в†ђ Perspective polygon (walls, floors)
-в”‚   в”њв”Ђв”Ђ Walkbox      в†ђ Floor polygon
-в”‚   в”њв”Ђв”Ђ Triggerbox   в†ђ Overlap trigger zone
-в”‚   в””в”Ђв”Ђ Folder       в†ђ Logical group
-в””в”Ђв”Ђ ...
+├── Box3DObject      ← transform-only 3D frustum; owns six managed Quad surfaces
+├── Entity           ← most scene objects; Transform + Visuals + Parallax
+│   ├── Actor        ← Entity + pathfinding + animation sets + NPC component
+│   ├── QuadObject   ← perspective polygon; also used for Box3D surfaces
+│   └── Folder       ← logical hierarchy container
+└── PolygonObject
+    ├── Walkbox      ← floor polygon
+    └── Triggerbox   ← overlap trigger zone
 ```
 
 ### 5.2 Component Architecture
@@ -368,7 +491,7 @@ npx vitest run tests/parser/ # Parser subsystem only
 npm run typecheck     # TypeScript type check (no emit)
 ```
 
-### Test Coverage Areas (41 test files)
+### Test Coverage Areas
 
 | Area | Test files (examples) |
 |------|-----------------------|
@@ -409,7 +532,7 @@ Full reference: **[ScriptSys.md](ScriptSys.md)**
 
 ### 10.2 Path Resolution & Portability
 
-In release builds, `src-tauri/src/main.rs` uses `std::env::current_exe()` (not `CARGO_MANIFEST_DIR`) for path resolution вЂ” ensures the packaged app reads/writes relative to the `.exe` location.
+Tauri resolves the project root in this order: an existing path from `QUEST_PROJECT_ROOT` (expected to be a project directory); in debug builds, the parent of `CARGO_MANIFEST_DIR`; in release builds, the executable's parent directory. Release installs may not be writable, so set `QUEST_PROJECT_ROOT` to a writable project directory. There is no project-folder picker yet. Tauri saves use an atomic file replacement, and append operations use the registered `append_project_file` command.
 
 ### 10.3 Windows Build
 
@@ -441,6 +564,7 @@ npm run tauri:build
 | [`README.md`](README.md) | Quick start, installation, hosting |
 | [`GDD.md`](GDD.md) | Game Design Document вЂ” source of truth for gameplay |
 | [`tech-spec.md`](tech-spec.md) | **This file** вЂ” technical architecture reference |
+| [`3dSys.md`](3dSys.md) | Box3D, shared 3D Scene camera, perspective, BSP, managed faces and editor lifecycle |
 | [`docs/npc-pm-slm.md`](docs/npc-pm-slm.md) | Hybrid SLM subsystem вЂ” architecture, adapters, training pipeline |
 | [`Parser.md`](Parser.md) | Parser system deep dive |
 | [`NPCsys.md`](NPCsys.md) | NPC system design |

@@ -542,15 +542,6 @@ export class SceneSpatialValidator {
             );
           }
 
-          if (!Number.isFinite((placement as any).x) || !Number.isFinite((placement as any).y)) {
-            this.addIssue(
-              'error',
-              'invalid_surface_item_placement',
-              `${object.name} Surface placement for '${itemId}' has invalid coordinates.`,
-              { objectId: object.name, relatedObjectId: itemId, relation }
-            );
-          }
-
           const parentId =
             typeof (item as any).spatial?.parentNodeId === 'string'
               ? (item as any).spatial.parentNodeId.trim()

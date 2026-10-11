@@ -1,5 +1,6 @@
 import type { Scene } from '../scene/Scene';
 import type { SceneObject } from '../entities/SceneObject';
+import { normalizeGroupIdList } from '../utils/GroupIds';
 import type { ParserLexiconAsset, ParserTrainingAsset } from '../mechanics/parserLanguage';
 import type { ParserCommandSpec } from '../mechanics/parserTypes';
 import {
@@ -8,6 +9,13 @@ import {
   openProjectFile,
   saveProjectFile,
 } from '../platform/fileApi';
+import { assertTextAssetData, ContractValidationError } from '../contracts/runtimeSchemas';
+import {
+  materializeNpcObjectives,
+  normalizeNpcMemory,
+  normalizeNpcObjectiveDrafts,
+  type NpcObjective,
+} from '../mechanics/npcState';
 
 export type TextAssetStructuredValue =
   | string
@@ -34,7 +42,8 @@ export type ObjectTextAssetData = TextAssetData & {
   description?: TextAssetTextValue;
   details?: TextAssetTextValue;
   lore?: TextAssetTextValue;
-  objectives?: TextAssetStructuredValue[];
+  memory?: TextAssetTextValue;
+  objectives?: TextAssetStructuredValue | TextAssetStructuredValue[];
   takeFailure?: TextAssetTextValue;
   synonyms?: string[];
   semanticTags?: string[];
@@ -63,6 +72,13 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     take_pickup_success_from: 'You picked up the {item} from the {source}.',
     take_already_held: 'You are already carrying the {item}.',
     take_cannot: 'You cannot take that.',
+    give_prompt: 'Give what to whom? (Format: GIVE ITEM TO ACTOR)',
+    give_which_item: 'Which item do you want to give: {options}?',
+    give_which_target: 'Whom do you want to give it to: {options}?',
+    give_target_not_found: "You don't see that person here.",
+    give_self: "You can't give something to yourself.",
+    give_success: 'You give the {item} to {target}.',
+    give_received_intro: '{actor} gives you {item}.',
     put_prompt: 'Put what?',
     put_which_item: 'Which item do you want to put down: {options}?',
     put_which_target: 'Where exactly do you want to put it: {options}?',
@@ -119,12 +135,15 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     observed_open: '[ {actor} opens {subject} ]',
     observed_close: '[ {actor} closes {subject} ]',
     observed_take: '[ {actor} takes {item} ]',
+    observed_give: '[ {actor} gives {item} to {target} ]',
+    observed_give_failed: '[ {actor} tries to give {item} to {target}, but fails: {reason} ]',
     observed_put_relation: '[ {actor} puts {item} {relation} {target} ]',
     observed_put_target: '[ {actor} puts {item} on {target} ]',
     observed_drop: '[ {actor} puts down {item} ]',
     observed_use: '[ {actor} uses {item} on {target} ]',
     observed_command: '[ {actor} operates {subject} ]',
     observed_traverse_exit: '[ {actor} goes through {subject} ]',
+    observed_left_immediate_area: '[ {actor} left the immediate area ]',
   },
   scripts: {
     pillar_key_inserted: 'You insert the key into a hidden slot in the pillar.',
@@ -139,6 +158,7 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look'],
     examine: ['examine', 'inspect', 'check'],
     take: ['take', 'get', 'pickup', 'pick up'],
+    give: ['give', 'hand', 'offer'],
     put: ['put', 'drop', 'place', 'throw', 'toss', 'discard'],
     open: ['open'],
     close: ['close', 'shut'],
@@ -159,6 +179,7 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
       'check',
     ],
     take: ['pick up', 'take', 'get', 'grab'],
+    give: ['give', 'hand', 'offer'],
     put: [
       'put down',
       'throw away',
@@ -260,6 +281,12 @@ const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
     'i want to take the key',
     'please pick up the card',
   ],
+  give: [
+    'give key to linda',
+    'give the card to guard',
+    'hand note to linda',
+    'offer the key to guard',
+  ],
   put: [
     'put key',
     'drop key',
@@ -358,45 +385,10 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
   {
     id: 'use_on',
     phrases: ['use'],
-    arguments: [
-      {
-        name: 'item',
-        kind: 'entity',
-        required: true,
-        scopes: ['held', 'reachable'],
-        messages: {
-          missing: 'Use what on what?',
-          ambiguous: 'Which item do you mean: {options}?',
-          notFound: "You don't see anything like that here.",
-          noEffect: "That doesn't work.",
-        },
-      },
-      {
-        name: 'target',
-        kind: 'entity',
-        required: true,
-        scopes: ['held', 'reachable'],
-        separatorsBefore: ['on', 'with'],
-        messages: {
-          missing: 'Use it on what?',
-          ambiguous: 'Which target do you mean: {options}?',
-          notFound: "You don't see anything like that here.",
-          noEffect: "That doesn't work.",
-        },
-      },
-    ],
-    plan: [
-      { type: 'resolveArgumentEntity', arg: 'item', saveAs: 'use_item' },
-      { type: 'resolveArgumentEntity', arg: 'target', saveAs: 'use_target' },
-      {
-        type: 'actorUseOn',
-        itemRef: 'use_item',
-        targetRef: 'use_target',
-        noEffectMessageId: 'no_effect_pair',
-      },
-    ],
+    arguments: [],
+    plan: [{ type: 'showText', messageId: 'default' }],
     messages: {
-      no_effect_pair: 'Using the {item} on the {target} does nothing.',
+      default: 'How to use?',
     },
   },
   {
@@ -427,7 +419,7 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
     ],
     messages: {
       missing_tv: "You don't see the TV here.",
-      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_remote: 'These modern TVs are impossible to operate without the remote.',
       missing_power_state: 'The TV refuses to respond.',
       success: 'The TV clicks on.',
     },
@@ -474,7 +466,7 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
     ],
     messages: {
       missing_tv: "You don't see the TV here.",
-      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_remote: 'These modern TVs are impossible to operate without the remote.',
       missing_power_state: 'The TV refuses to respond.',
       success: 'The TV clicks off.',
       success_manual: 'Fortunately, this thing can be turned off without the remote.',
@@ -496,11 +488,31 @@ export class TextAssetManager {
   private normalizeId(id: string): string {
     return String(id || '')
       .replace(/\//g, '\\')
+      .trim()
+      .toLowerCase();
+  }
+
+  private normalizePathId(id: string): string {
+    return String(id || '')
+      .replace(/\//g, '\\')
       .trim();
   }
 
+  getObjectTextAssetIds(obj: Pick<SceneObject, 'name' | 'groupID'>): string[] {
+    const groupIds = normalizeGroupIdList(obj?.groupID).split(',').filter(Boolean);
+    return [...new Set([obj?.name, ...groupIds].filter((id): id is string => !!id?.trim()))];
+  }
+
+  private getObjectAssets(obj: SceneObject): Array<TextAssetData | null | undefined> {
+    return this.getObjectTextAssetIds(obj).map((id) => this.objectCache.get(this.normalizeId(id)));
+  }
+
   private idToRelativePath(id: string): string {
-    return this.normalizeId(id).replace(/\\/g, '/');
+    return this.normalizePathId(id).replace(/\\/g, '/');
+  }
+
+  private idToUrlPath(id: string): string {
+    return this.idToRelativePath(id).split('/').map(encodeURIComponent).join('/');
   }
 
   getSceneAssetProjectPath(sceneId: string): string {
@@ -512,11 +524,11 @@ export class TextAssetManager {
   }
 
   private getSceneAssetUrl(sceneId: string): string {
-    return `/text/scenes/${this.idToRelativePath(sceneId)}.json`;
+    return `/text/scenes/${this.idToUrlPath(sceneId)}.json`;
   }
 
   private getObjectAssetUrl(objectId: string): string {
-    return `/text/objects/${this.idToRelativePath(objectId)}.json`;
+    return `/text/objects/${this.idToUrlPath(objectId)}.json`;
   }
 
   private getServiceAssetUrl(domain: string): string {
@@ -571,6 +583,7 @@ export class TextAssetManager {
       description: fallbackDescription,
       details: '',
       lore: '',
+      memory: [],
       objectives: [],
       takeFailure: '',
       synonyms: [],
@@ -598,8 +611,12 @@ export class TextAssetManager {
   }
 
   async openObjectAsset(obj: SceneObject): Promise<void> {
-    if (!obj?.name || obj.type === 'Walkbox') return;
-    const assetPath = this.getObjectAssetProjectPath(obj.name);
+    await this.openObjectAssetForId(obj, obj?.name || '');
+  }
+
+  async openObjectAssetForId(obj: SceneObject, objectId: string): Promise<void> {
+    if (!obj?.name || !objectId || obj.type === 'Walkbox') return;
+    const assetPath = this.getObjectAssetProjectPath(objectId);
     const content = JSON.stringify(this.buildDefaultObjectAsset(obj), null, 2);
     await this.openFile(assetPath, content);
   }
@@ -610,9 +627,14 @@ export class TextAssetManager {
   }
 
   async deleteObjectAsset(obj: SceneObject): Promise<void> {
-    if (!obj?.name || obj.type === 'Walkbox') return;
-    await this.deleteFile(this.getObjectAssetProjectPath(obj.name));
-    this.objectCache.delete(this.normalizeId(obj.name));
+    await this.deleteObjectAssetById(obj?.name || '');
+  }
+
+  async deleteObjectAssetById(objectId: string): Promise<void> {
+    const normalizedId = this.normalizeId(objectId);
+    if (!normalizedId) return;
+    await this.deleteFile(this.getObjectAssetProjectPath(normalizedId));
+    this.objectCache.delete(normalizedId);
   }
 
   async readSceneAsset(
@@ -624,7 +646,9 @@ export class TextAssetManager {
     if (!forceReload && this.sceneCache.has(sceneId)) {
       return this.sceneCache.get(sceneId) || null;
     }
-    const data = this.normalizeSceneAssetData(await this.fetchJson(this.getSceneAssetUrl(sceneId)));
+    const data = this.normalizeSceneAssetData(
+      await this.fetchJson(this.getSceneAssetUrl(this.normalizePathId(scene.id)))
+    );
     this.sceneCache.set(sceneId, data);
     return data;
   }
@@ -634,23 +658,30 @@ export class TextAssetManager {
     forceReload: boolean = false
   ): Promise<ObjectTextAssetData | null> {
     if (!obj?.name || obj.type === 'Walkbox') return null;
-    const objectId = this.normalizeId(obj?.name || '');
-    if (!objectId) return null;
-    if (!forceReload && this.objectCache.has(objectId)) {
-      return this.objectCache.get(objectId) || null;
+    return this.readObjectAssetById(obj.name, forceReload);
+  }
+
+  async readObjectAssetById(
+    objectId: string,
+    forceReload: boolean = false
+  ): Promise<ObjectTextAssetData | null> {
+    const normalizedId = this.normalizeId(objectId);
+    if (!normalizedId) return null;
+    if (!forceReload && this.objectCache.has(normalizedId)) {
+      return this.objectCache.get(normalizedId) || null;
     }
     const data = this.normalizeObjectAssetData(
-      await this.fetchJson(this.getObjectAssetUrl(objectId))
+      await this.fetchJson(this.getObjectAssetUrl(this.normalizePathId(objectId)))
     );
-    this.objectCache.set(objectId, data);
+    this.objectCache.set(normalizedId, data);
     return data;
   }
 
   async preloadScene(scene: Scene): Promise<void> {
     await this.readSceneAsset(scene, true);
     await Promise.all(
-      [...(scene.entities || []), ...(scene.triggerboxes || [])].map((object: SceneObject) =>
-        this.readObjectAsset(object, true)
+      [...(scene.entities || []), ...(scene.triggerboxes || [])].flatMap((object: SceneObject) =>
+        this.getObjectTextAssetIds(object).map((id) => this.readObjectAssetById(id, true))
       )
     );
   }
@@ -784,17 +815,20 @@ export class TextAssetManager {
     if (obj?.type === 'Walkbox' && field === 'title') {
       return this.getServiceText('engine.floor_label');
     }
-    const objectId = this.normalizeId(obj?.name || '');
-    const asset = objectId ? this.objectCache.get(objectId) : null;
     const fallback = field === 'description' ? (obj as any).description || null : null;
-    return this.resolveField(asset, obj?.textRedirects || null, field, fallback);
+    for (const asset of this.getObjectAssets(obj)) {
+      const value = this.resolveField(asset, obj?.textRedirects || null, field, null);
+      if (value !== null) return value;
+    }
+    return fallback;
+  }
+
+  getResolvedObjectAssetField(objectId: string, field: string): string | null {
+    return this.resolveField(this.objectCache.get(this.normalizeId(objectId)), null, field, null);
   }
 
   hasAuthoredObjectTitle(obj: SceneObject): boolean {
-    const objectId = this.normalizeId(obj?.name || '');
-    const asset = objectId ? this.objectCache.get(objectId) : null;
-    const title = this.resolveField(asset, obj?.textRedirects || null, 'title', null);
-    return !!title?.trim();
+    return !!this.getResolvedObjectField(obj, 'title')?.trim();
   }
 
   getResolvedObjectListField(obj: SceneObject, field: string): string[] {
@@ -805,6 +839,28 @@ export class TextAssetManager {
 
   getResolvedObjectListRevision(obj: SceneObject, field: string): string {
     return JSON.stringify(this.getResolvedObjectListField(obj, field));
+  }
+
+  getResolvedNpcMemory(obj: SceneObject): string[] {
+    const objectId = this.normalizeId(obj?.name || '');
+    const asset = objectId ? this.objectCache.get(objectId) : null;
+    return normalizeNpcMemory(asset?.memory);
+  }
+
+  getResolvedNpcMemoryRevision(obj: SceneObject): string {
+    return JSON.stringify(this.getResolvedNpcMemory(obj));
+  }
+
+  getResolvedNpcObjectives(obj: SceneObject): NpcObjective[] {
+    const objectId = this.normalizeId(obj?.name || '');
+    const asset = objectId ? this.objectCache.get(objectId) : null;
+    return materializeNpcObjectives(normalizeNpcObjectiveDrafts(asset?.objectives));
+  }
+
+  getResolvedNpcObjectivesRevision(obj: SceneObject): string {
+    const objectId = this.normalizeId(obj?.name || '');
+    const asset = objectId ? this.objectCache.get(objectId) : null;
+    return JSON.stringify(normalizeNpcObjectiveDrafts(asset?.objectives));
   }
 
   getResolvedObjectStructuredListField<T>(
@@ -988,8 +1044,9 @@ export class TextAssetManager {
       normalized.details = asset.details as TextAssetTextValue;
     if (this.resolveTextValue(asset.lore) !== null)
       normalized.lore = asset.lore as TextAssetTextValue;
-    if (Array.isArray(asset.objectives))
-      normalized.objectives = asset.objectives.filter((item) => typeof item === 'string');
+    if (asset.memory !== undefined && this.resolveTextValue(asset.memory) !== null)
+      normalized.memory = asset.memory as TextAssetTextValue;
+    if (asset.objectives !== undefined) normalized.objectives = asset.objectives;
     if (this.resolveTextValue(asset.takeFailure) !== null)
       normalized.takeFailure = asset.takeFailure as TextAssetTextValue;
     normalized.synonyms = this.resolveListField(asset, 'synonyms');
@@ -1000,12 +1057,15 @@ export class TextAssetManager {
     try {
       // In Tauri distributions, read from local filesystem instead of bundled assets
       const { isTauriRuntime, readProjectFileExisting } = await import('../platform/fileApi');
+      const projectPath = `public${decodeURIComponent(url.split('?')[0])}`;
       if (isTauriRuntime()) {
-        const path = `public${url.split('?')[0]}`;
         try {
-          const content = await readProjectFileExisting(path);
-          return JSON.parse(content);
-        } catch {
+          const content = await readProjectFileExisting(projectPath);
+          const parsed: unknown = JSON.parse(content);
+          assertTextAssetData(parsed, `TextAsset(${url})`);
+          return parsed;
+        } catch (err) {
+          if (err instanceof ContractValidationError) throw err;
           return null;
         }
       }
@@ -1017,10 +1077,22 @@ export class TextAssetManager {
       }
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
+        if (url.includes('%23')) {
+          const content = await readProjectFileExisting(projectPath);
+          const parsed: unknown = JSON.parse(content);
+          assertTextAssetData(parsed, `TextAsset(${url})`);
+          return parsed;
+        }
         return null;
       }
-      return await response.json();
+      const parsed: unknown = await response.json();
+      assertTextAssetData(parsed, `TextAsset(${url})`);
+      return parsed;
     } catch (error) {
+      if (error instanceof ContractValidationError) {
+        console.error(`[TextAssetManager] invalid asset ${url}:`, error.message);
+        return null;
+      }
       console.error(`[TextAssetManager] error reading ${url}:`, error);
       return null;
     }

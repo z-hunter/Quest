@@ -6,6 +6,7 @@ import {
   type DistanceModelType,
   type PanningModelType,
 } from '../../../systems/SoundManager';
+import { Select } from '../../common/Select';
 
 type NumberDraftInputProps = {
   value: number;
@@ -92,6 +93,7 @@ export const SceneProperties: React.FC = () => {
                 onChange={(e) => {
                   if (scene.camera) {
                     scene.camera.x = parseFloat(e.target.value);
+                    scene.suspendEditorCameraFollow?.();
                     incrementObjectVersion();
                   }
                 }}
@@ -106,6 +108,7 @@ export const SceneProperties: React.FC = () => {
                 onChange={(e) => {
                   if (scene.camera) {
                     scene.camera.y = parseFloat(e.target.value);
+                    scene.suspendEditorCameraFollow?.();
                     incrementObjectVersion();
                   }
                 }}
@@ -134,7 +137,12 @@ export const SceneProperties: React.FC = () => {
                 type="checkbox"
                 style={{ marginRight: '5px' }}
                 checked={!!scene.autoCenter}
-                onChange={(e) => handleChange('autoCenter', e.target.checked)}
+                onChange={(e) => {
+                  handleChange('autoCenter', e.target.checked);
+                  if (e.target.checked) {
+                    scene.resumeEditorCameraFollow?.();
+                  }
+                }}
               />
               Auto-Center on Player
             </label>
@@ -176,6 +184,34 @@ export const SceneProperties: React.FC = () => {
                 onChange={(e) => handleChange('camDeadzoneY', parseFloat(e.target.value), true)}
               />
             </div>
+          </div>
+
+          <div className="e-row" style={{ marginTop: '5px' }}>
+            <label className="e-label">
+              3D Perspective
+              <input
+                aria-label="3D Perspective"
+                type="number"
+                min="0"
+                step="0.1"
+                className="e-input"
+                value={formatPanelNumber(scene.box3dPerspective ?? 1)}
+                onChange={(e) =>
+                  handleChange('box3dPerspective', Math.max(0, Number(e.target.value) || 0), true)
+                }
+              />
+            </label>
+            <label className="e-label">
+              3D Occlusion
+              <Select
+                value={scene.box3dOcclusionMode}
+                onChange={(value) => handleChange('box3dOcclusionMode', value)}
+                options={[
+                  { value: 'exact', label: 'Exact' },
+                  { value: 'fast', label: 'Fast' },
+                ]}
+              />
+            </label>
           </div>
 
           <div className="e-row" style={{ marginTop: '5px' }}>

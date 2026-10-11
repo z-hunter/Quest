@@ -4,6 +4,15 @@ import type { SceneObject } from '../entities/SceneObject';
 import { getInactiveSubsceneAncestors } from '../scene/SceneTextLayer';
 import { ComponentSystem } from './ComponentSystem';
 import type { ExitComponent } from './ComponentSystem';
+import { traceNavigation } from './navigation/navigationDebug';
+import type {
+  NavigationActorProfile,
+  NavigationPlanRequest,
+  NavigationPlanResult,
+  NavigationRect,
+  NavigationSnapshot,
+  NavigationWalkbox,
+} from './navigation/navigationPlanner';
 
 export type ActorApproachStatus = 'already_reachable' | 'route_available' | 'unreachable';
 
@@ -19,15 +28,387 @@ export type ActorLocalTeleportPlan = {
   cost: number;
 };
 
+export type NpcApproachResult = {
+  plan: ActorApproachPlan;
+  route?: { x: number; y: number }[];
+  source: 'worker' | 'fallback';
+};
+
+export type NavigationDiagnostics = {
+  queueDepth: number;
+  active: boolean;
+  snapshotHits: number;
+  snapshotMisses: number;
+  staleResults: number;
+  retries: number;
+  fallbacks: number;
+  workerTimeouts: number;
+  workerDurationMs: number;
+};
+
+export type NpcNavigationWorkerFactory = () => Worker;
+
+type QueuedNpcApproach = {
+  actor: Actor;
+  target: SceneObject;
+  request: NavigationPlanRequest;
+  callback: (result: NpcApproachResult) => void;
+};
+
+const NPC_WORKER_TIMEOUT_MS = 1_500;
+
 export class ActorNavigationService {
   private readonly game: IGame;
+  private readonly npcWorkerFactory?: NpcNavigationWorkerFactory;
   private readonly pendingTeleportPlans = new WeakMap<
     Actor,
     { target: { x: number; y: number }; plan: ActorLocalTeleportPlan }
   >();
+  private npcWorker: Worker | null | undefined;
+  private npcRequestId = 0;
+  private npcQueue: QueuedNpcApproach[] = [];
+  private npcActive: QueuedNpcApproach | null = null;
+  private npcWorkerTimeout: ReturnType<typeof globalThis.setTimeout> | null = null;
+  private npcWorkerStartedAt: number | null = null;
+  private snapshotFingerprint = '';
+  private snapshotRevision = 0;
+  private snapshot: NavigationSnapshot | null = null;
+  private readonly sentSnapshotRevisions = new Set<number>();
+  private readonly diagnostics: NavigationDiagnostics = {
+    queueDepth: 0,
+    active: false,
+    snapshotHits: 0,
+    snapshotMisses: 0,
+    staleResults: 0,
+    retries: 0,
+    fallbacks: 0,
+    workerTimeouts: 0,
+    workerDurationMs: 0,
+  };
 
-  constructor(game: IGame) {
+  constructor(game: IGame, npcWorkerFactory?: NpcNavigationWorkerFactory) {
     this.game = game;
+    this.npcWorkerFactory = npcWorkerFactory;
+  }
+
+  getNavigationDiagnostics(): NavigationDiagnostics {
+    return { ...this.diagnostics, queueDepth: this.npcQueue.length, active: !!this.npcActive };
+  }
+
+  getNavigationSnapshotRevision(scene: {
+    id: string;
+    walkbox: Array<{ disabled?: boolean; mode?: string; poly?: Array<{ x: number; y: number }> }>;
+    entities: SceneObject[];
+  }): number {
+    return this.getNavigationSnapshot(scene).revision;
+  }
+
+  cancelNpcApproach(actor: Actor): void {
+    this.npcQueue = this.npcQueue.filter((entry) => entry.actor !== actor);
+  }
+
+  requestNpcApproach(
+    actor: Actor,
+    target: SceneObject,
+    callback: (result: NpcApproachResult) => void
+  ): void {
+    const scene = actor.scene || this.game.sceneManager.currentScene;
+    const worker = this.getNpcWorker();
+    if (!scene || !worker) {
+      this.deferFallback(actor, target, callback);
+      return;
+    }
+    const snapshot = this.getNavigationSnapshot(scene);
+    const reference = this.getObjectCenter(this.getApproachTarget(target));
+    if (!reference) {
+      this.deferFallback(actor, target, callback);
+      return;
+    }
+    const request: NavigationPlanRequest = {
+      requestId: ++this.npcRequestId,
+      sceneId: scene.id,
+      revision: snapshot.revision,
+      actor: this.getActorProfile(actor),
+      target: reference,
+      interactionRadius: this.getInteractionRange(actor, target) * 2,
+      dynamicBlockers: this.getDynamicBlockers(scene, actor),
+    };
+    this.npcQueue.push({ actor, target, request, callback });
+    this.diagnostics.queueDepth = this.npcQueue.length;
+    this.pumpNpcQueue();
+  }
+
+  private deferFallback(
+    actor: Actor,
+    target: SceneObject,
+    callback: (result: NpcApproachResult) => void
+  ): void {
+    this.diagnostics.fallbacks += 1;
+    callback({ plan: this.planApproach(actor, target), source: 'fallback' });
+  }
+
+  private getNpcWorker(): Worker | null {
+    if (this.npcWorker !== undefined) return this.npcWorker;
+    if (!this.npcWorkerFactory && typeof Worker === 'undefined') {
+      this.npcWorker = null;
+      return null;
+    }
+    try {
+      const worker = this.npcWorkerFactory
+        ? this.npcWorkerFactory()
+        : new Worker(new URL('./navigation/navigation.worker.ts', import.meta.url), {
+            type: 'module',
+          });
+      worker.onmessage = (
+        event: MessageEvent<NavigationPlanResult & { missingSnapshot?: boolean }>
+      ) => this.handleNpcWorkerResult(event.data);
+      worker.onerror = () => {
+        if (this.npcWorker !== worker) return;
+        worker.terminate();
+        this.npcWorker = null;
+        this.clearNpcWorkerTimeout();
+        const active = this.npcActive;
+        this.npcActive = null;
+        if (active) this.deferFallback(active.actor, active.target, active.callback);
+        this.pumpNpcQueue();
+      };
+      this.npcWorker = worker;
+      return worker;
+    } catch {
+      this.npcWorker = null;
+      return null;
+    }
+  }
+
+  private pumpNpcQueue(): void {
+    if (this.npcActive || this.npcQueue.length === 0) return;
+    const worker = this.getNpcWorker();
+    const next = this.npcQueue.shift();
+    this.diagnostics.queueDepth = this.npcQueue.length;
+    if (!next) return;
+    if (!worker) {
+      this.deferFallback(next.actor, next.target, next.callback);
+      this.pumpNpcQueue();
+      return;
+    }
+    this.npcActive = next;
+    this.diagnostics.active = true;
+    const snapshot = this.snapshot;
+    if (!snapshot || snapshot.revision !== next.request.revision) {
+      this.npcActive = null;
+      this.deferFallback(next.actor, next.target, next.callback);
+      this.pumpNpcQueue();
+      return;
+    }
+    if (!this.sentSnapshotRevisions.has(snapshot.revision)) {
+      worker.postMessage({ type: 'snapshot', snapshot });
+      this.sentSnapshotRevisions.add(snapshot.revision);
+    }
+    worker.postMessage({ type: 'plan', request: next.request });
+    this.startNpcWorkerTimeout(next);
+  }
+
+  private startNpcWorkerTimeout(active: QueuedNpcApproach): void {
+    this.clearNpcWorkerTimeout();
+    this.npcWorkerStartedAt = Date.now();
+    this.npcWorkerTimeout = globalThis.setTimeout(() => {
+      if (this.npcActive?.request.requestId !== active.request.requestId) return;
+
+      const elapsedMs = Date.now() - (this.npcWorkerStartedAt || Date.now());
+      this.clearNpcWorkerTimeout();
+      this.npcActive = null;
+      this.diagnostics.active = false;
+      this.diagnostics.workerTimeouts += 1;
+      traceNavigation(this.game, 'navigation_worker_timeout', {
+        actorId: active.actor.name,
+        sceneId: active.request.sceneId,
+        targetId: active.target.name,
+        requestId: active.request.requestId,
+        timeoutMs: NPC_WORKER_TIMEOUT_MS,
+        elapsedMs,
+      });
+
+      // A worker occupied by a stuck route search cannot service the FIFO queue.
+      // Replace it so later NPC routes are not stranded behind this request.
+      this.npcWorker?.terminate();
+      this.npcWorker = undefined;
+      this.sentSnapshotRevisions.clear();
+      this.deferFallback(active.actor, active.target, active.callback);
+      this.pumpNpcQueue();
+    }, NPC_WORKER_TIMEOUT_MS);
+  }
+
+  private clearNpcWorkerTimeout(): void {
+    if (this.npcWorkerTimeout !== null) {
+      globalThis.clearTimeout(this.npcWorkerTimeout);
+      this.npcWorkerTimeout = null;
+    }
+    this.npcWorkerStartedAt = null;
+  }
+
+  private handleNpcWorkerResult(
+    result: NavigationPlanResult & { missingSnapshot?: boolean }
+  ): void {
+    const active = this.npcActive;
+    if (!active || active.request.requestId !== result.requestId) return;
+    this.clearNpcWorkerTimeout();
+    this.npcActive = null;
+    this.diagnostics.active = false;
+    this.diagnostics.workerDurationMs = result.durationMs;
+    traceNavigation(this.game, 'navigation_worker_result', {
+      actorId: active.actor.name,
+      targetId: active.target.name,
+      requestId: result.requestId,
+      durationMs: result.durationMs,
+      bitmapBuilt: result.bitmapBuilt,
+      adaptiveUsed: result.adaptiveUsed,
+      adaptiveFallback: result.adaptiveFallback,
+      iterationsCount: result.iterationsCount,
+      routeLength: result.route?.length ?? 0,
+    });
+    const scene = active.actor.scene || this.game.sceneManager.currentScene;
+    const stale =
+      result.missingSnapshot ||
+      !scene ||
+      scene.id !== result.sceneId ||
+      this.getNavigationSnapshot(scene).revision !== result.revision;
+    if (stale) {
+      this.diagnostics.staleResults += 1;
+      this.diagnostics.retries += 1;
+      this.requestNpcApproach(active.actor, active.target, active.callback);
+      this.pumpNpcQueue();
+      return;
+    }
+    if (
+      result.point &&
+      this.isWorkerPlanValid(active.actor, active.target, result.point, result.route)
+    ) {
+      active.callback({
+        plan: { status: 'route_available', point: result.point, route: result.route },
+        route: result.route,
+        source: 'worker',
+      });
+    } else {
+      this.deferFallback(active.actor, active.target, active.callback);
+    }
+    this.pumpNpcQueue();
+  }
+
+  private isWorkerPlanValid(
+    actor: Actor,
+    target: SceneObject,
+    point: { x: number; y: number },
+    route: { x: number; y: number }[]
+  ): boolean {
+    const scene = actor.scene || this.game.sceneManager.currentScene;
+    if (
+      !scene ||
+      route.length === 0 ||
+      !route.every((routePoint) => scene.isWalkable(routePoint.x, routePoint.y, actor))
+    ) {
+      return false;
+    }
+    return !ComponentSystem.getInteractionDistanceError(
+      target as any,
+      this.createActorProbe(actor, point)
+    );
+  }
+
+  private getActorProfile(actor: Actor): NavigationActorProfile {
+    return {
+      x: actor.x,
+      y: actor.y,
+      width: actor.width,
+      height: actor.height,
+      colliderWidth: actor.colliderWidth,
+      colliderHeight: actor.colliderHeight,
+    };
+  }
+
+  private getNavigationSnapshot(scene: {
+    id: string;
+    walkbox: Array<{ disabled?: boolean; mode?: string; poly?: Array<{ x: number; y: number }> }>;
+    entities: SceneObject[];
+  }): NavigationSnapshot {
+    const walkboxes: NavigationWalkbox[] = [
+      ...(scene.walkbox || [])
+        .filter((walkbox) => !walkbox.disabled)
+        .map((walkbox) => {
+          const mode: NavigationWalkbox['mode'] =
+            walkbox.mode === 'Subtract' || walkbox.mode === 'Add' ? walkbox.mode : 'Invert';
+          return { mode, poly: (walkbox.poly || []).map((point) => ({ x: point.x, y: point.y })) };
+        }),
+      ...scene.entities.flatMap((entity) => {
+        const component = entity.components?.find(
+          (candidate: { type?: string }) => candidate.type === 'WalkBox'
+        ) as { mode?: string } | undefined;
+        const quad = entity as unknown as {
+          vertices?: Array<{ x: number; y: number }>;
+          getEffectiveVertices?: () => Array<{ x: number; y: number }>;
+        };
+        const vertices = quad.getEffectiveVertices?.() || quad.vertices;
+        if (entity.disabled || !component || !vertices?.length) return [];
+        const mode: NavigationWalkbox['mode'] =
+          component.mode === 'Subtract' || component.mode === 'Add' ? component.mode : 'Invert';
+        return [{ mode, poly: vertices.map((point) => ({ x: point.x, y: point.y })) }];
+      }),
+    ];
+    const staticBlockers = scene.entities
+      .filter((entity) => {
+        const record = entity as unknown as { colliderWidth?: number; colliderHeight?: number };
+        return (
+          !(entity instanceof Actor) &&
+          !entity.disabled &&
+          (record.colliderWidth || 0) > 0 &&
+          (record.colliderHeight || 0) > 0
+        );
+      })
+      .map((entity) => this.getEntityRect(entity));
+    const fingerprint = JSON.stringify({ sceneId: scene.id, walkboxes, staticBlockers });
+    if (this.snapshot && this.snapshotFingerprint === fingerprint) {
+      this.diagnostics.snapshotHits += 1;
+      return this.snapshot;
+    }
+    this.diagnostics.snapshotMisses += 1;
+    this.snapshotFingerprint = fingerprint;
+    const nextSnapshot: NavigationSnapshot = {
+      sceneId: scene.id,
+      revision: ++this.snapshotRevision,
+      walkboxes,
+      staticBlockers,
+    };
+    this.snapshot = nextSnapshot;
+    return nextSnapshot;
+  }
+
+  private getDynamicBlockers(scene: { entities: SceneObject[] }, actor: Actor): NavigationRect[] {
+    return scene.entities
+      .filter((entity) => {
+        const record = entity as unknown as { colliderWidth?: number; colliderHeight?: number };
+        return (
+          entity instanceof Actor &&
+          entity !== actor &&
+          !entity.disabled &&
+          (record.colliderWidth || 0) > 0 &&
+          (record.colliderHeight || 0) > 0
+        );
+      })
+      .map((entity) => this.getEntityRect(entity));
+  }
+
+  private getEntityRect(entity: SceneObject): NavigationRect {
+    const record = entity as unknown as {
+      x: number;
+      y: number;
+      colliderWidth: number;
+      colliderHeight: number;
+    };
+    return {
+      x: record.x - record.colliderWidth / 2,
+      y: record.y - record.colliderHeight,
+      w: record.colliderWidth,
+      h: record.colliderHeight,
+    };
   }
 
   isReachable(actor: Actor, target: SceneObject): boolean {
@@ -40,16 +421,12 @@ export class ActorNavigationService {
     const center = this.getObjectCenter(approachTarget);
     const scene = this.game.sceneManager.currentScene;
     if (!center || !scene) return 'unreachable';
-    if (this.getLocalTeleportExits(scene).length > 0) {
-      return 'route_available';
-    }
 
-    const maxRadius = this.getMaxApproachRadius(actor, approachTarget);
-    const walkingApproach =
-      this.findRoutedApproach(actor, approachTarget, center, maxRadius, 16, 12) ||
-      this.findRoutedApproach(actor, approachTarget, center, maxRadius, 4, 12);
-    if (walkingApproach) return 'route_available';
-    return this.planApproach(actor, target).status;
+    // Context/perception construction must never run the legacy synchronous A*
+    // preview. A non-reachable, positioned target is therefore only a potential
+    // route; ActorPlanExecutor asks requestNpcApproach (the worker path) for the
+    // exact answer when an NPC actually chooses MOVE_TO.
+    return 'route_available';
   }
 
   planApproach(actor: Actor, target: SceneObject): ActorApproachPlan {
@@ -226,7 +603,7 @@ export class ActorNavigationService {
         )
         .slice(0, 12);
       for (const candidate of destinationCandidates) {
-        if (probe.previewWalkingRouteTo(candidate.point.x, candidate.point.y)) {
+        if (probe.previewWalkingRouteTo(candidate.point.x, candidate.point.y, true)) {
           this.pendingTeleportPlans.set(actor, {
             target: { ...candidate.point },
             plan: { exits: [exitObject], firstLeg, cost: 0 },
@@ -275,10 +652,25 @@ export class ActorNavigationService {
       const entryPoint = this.getLocalTeleportEntryPoint(actor, exitObject);
       if (!entryPoint) continue;
 
+      const exitPoint = this.getObjectCenter(exitObject) || { x: actor.x, y: actor.y };
+      const maxRadius = this.getMaxApproachRadius(actor, exitObject);
+      const minPossibleCost =
+        Math.max(0, Math.hypot(exitPoint.x - actor.x, exitPoint.y - actor.y) - maxRadius) +
+        Math.hypot(target.x - entryPoint.x, target.y - entryPoint.y);
+      if (best && minPossibleCost >= best.cost) continue;
+      if (minPossibleCost >= directCost) continue;
+
       const firstLeg = this.planWalkingApproach(actor, exitObject);
       if (firstLeg.status === 'unreachable' || !firstLeg.point) continue;
       const probe = this.createActorProbe(actor, entryPoint);
-      const finalRoute = probe.previewWalkingRouteTo(target.x, target.y);
+      const distanceFromEntryToTarget = Math.hypot(
+        target.x - entryPoint.x,
+        target.y - entryPoint.y
+      );
+      const finalRoute =
+        distanceFromEntryToTarget <= 64
+          ? [target]
+          : probe.previewWalkingRouteTo(target.x, target.y);
       if (!finalRoute) continue;
       const cost =
         routeLength({ x: actor.x, y: actor.y }, firstLeg.route) +

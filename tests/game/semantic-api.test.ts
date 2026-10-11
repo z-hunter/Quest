@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { Game } from '../../src/core/Game';
 import { Actor } from '../../src/entities/Actor';
 import { Entity } from '../../src/entities/Entity';
+import { Triggerbox } from '../../src/entities/Triggerbox';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 import { SceneSpatialValidator } from '../../src/scene/SceneSpatialValidator';
+import { NpcWorldModelBuilder } from '../../src/mechanics/NpcWorldModelBuilder';
 
 describe('Game semantic API', () => {
   it('lookScene returns the scene description', () => {
@@ -349,8 +351,8 @@ describe('Game semantic API', () => {
       surfaceCoin,
     ]);
     expect(surfaceCoin.visible).toBe(true);
-    expect(surfaceCoin.x).toBe(12);
-    expect(surfaceCoin.y).toBe(34);
+    expect(surfaceCoin.x).toBe(0);
+    expect(surfaceCoin.y).toBe(0);
     expect((surfaceCoin as any).spatial).toEqual({ parentNodeId: tray.name, relation: 'on' });
     expect(SceneSpatialValidator.validate(fixture.scene, fixture.game as any).ok).toBe(true);
   });
@@ -2199,6 +2201,93 @@ describe('Game semantic API', () => {
     expect(fixture.game.openEntity(drawer).code).toBe('switch_opened');
   });
 
+  it('uses OPEN to list an accessible nested inventory when the semantic anchor has no Switch', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('remote', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    const batterySlot = fixture.addEntity('remote_battery_slot', {
+      title: null,
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+      components: [{ type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] }],
+    });
+    const batteries = fixture.addEntity('aaa_batteries', {
+      title: 'AAA batteries',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.addInventoryEntity(batterySlot, batteries);
+
+    const listed = fixture.game.openEntity(remote);
+
+    expect(listed.status).toBe('ok');
+    expect(listed.code).toBe('relation_contents');
+    expect(listed.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'In',
+        relation: 'in',
+        target: 'TV remote',
+        items: 'AAA batteries',
+      })
+    );
+    expect(listed.data?.discoveredEntityIds).toEqual([batteries.name]);
+  });
+
+  it('uses OPEN to list a held container inventory', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('remote', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    const batterySlot = fixture.addEntity('remote_battery_slot', {
+      title: null,
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+      components: [{ type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] }],
+    });
+    const batteries = fixture.addEntity('aaa_batteries', {
+      title: 'AAA batteries',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.addInventoryEntity(batterySlot, batteries);
+    fixture.game.addInventoryEntity(player, remote);
+
+    const listed = fixture.game.openEntity(remote);
+
+    expect(listed.status).toBe('ok');
+    expect(listed.code).toBe('relation_contents');
+    expect(listed.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'In',
+        relation: 'in',
+        target: 'TV remote',
+        items: 'AAA batteries',
+      })
+    );
+  });
+
+  it('reports an empty accessible nested inventory through OPEN', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('remote', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.addEntity('remote_battery_slot', {
+      title: null,
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+      components: [{ type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] }],
+    });
+    const listed = fixture.game.openEntity(remote);
+
+    expect(listed.status).toBe('ok');
+    expect(listed.code).toBe('relation_empty');
+    expect(listed.message).toBe(
+      fixture.game.text('parser.relation_empty', { relation: 'in', target: 'TV remote' })
+    );
+  });
+
   it('reveals hidden descendants through the same LOOK and EXAMINE runtime for NPC actors', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -2223,11 +2312,14 @@ describe('Game semantic API', () => {
     expect(fixture.game.actorWorld.getObjectPerception(npc, examinable).visibility).toBe('hidden');
 
     expect(fixture.game.lookEntityForActor(npc, desk).status).toBe('ok');
-    expect(fixture.scene.isHiddenEntityRevealed(lookable)).toBe(true);
-    expect(fixture.scene.isHiddenEntityRevealed(examinable)).toBe(false);
+    expect(fixture.scene.isHiddenEntityRevealed(lookable, npc)).toBe(true);
+    expect(fixture.scene.isHiddenEntityRevealed(lookable, fixture.scene.player)).toBe(false);
+    expect(fixture.scene.isHiddenEntityRevealed(examinable, npc)).toBe(false);
+    expect(fixture.game.actorWorld.getObjectPerception(npc, lookable).visibility).toBe('visible');
 
     expect(fixture.game.examineEntityForActor(npc, desk).status).toBe('ok');
-    expect(fixture.scene.isHiddenEntityRevealed(examinable)).toBe(true);
+    expect(fixture.scene.isHiddenEntityRevealed(examinable, npc)).toBe(true);
+    expect(fixture.scene.isHiddenEntityRevealed(examinable, fixture.scene.player)).toBe(false);
   });
 
   it('lets EXAMINE reveal lookable contents and reach nested objects through a nearby ancestor', () => {
@@ -2256,7 +2348,8 @@ describe('Game semantic API', () => {
     const outcome = fixture.game.examineEntityForActor(npc, pillow, { relation: 'under' });
 
     expect(outcome.status).toBe('ok');
-    expect(fixture.scene.isHiddenEntityRevealed(remote)).toBe(true);
+    expect(fixture.scene.isHiddenEntityRevealed(remote, npc)).toBe(true);
+    expect(fixture.scene.isHiddenEntityRevealed(remote, fixture.scene.player)).toBe(false);
   });
 
   it('transparent closed contents use a generic blocked message unless clearly openable is set', () => {
@@ -2712,5 +2805,164 @@ describe('Game semantic API', () => {
     expect(remote.groupID).toBe('#quest_item');
     expect(fixture.scene.subsceneEntities.has(remote)).toBe(false);
     expect(fixture.scene.activeSubscene).toBeNull();
+  });
+
+  it('uses an offscreen NPC scene for Switch access checks', () => {
+    const fixture = createGameSemanticFixture('player_scene');
+    fixture.addPlayer('Hero', 0, 0);
+    const background = fixture.addScene('background', 'Background');
+    const npc = new Actor(fixture.game, 20, 20, 10, 10, 'rick');
+    npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
+    background.addEntity(npc);
+    const drawerZone = new Triggerbox(
+      [
+        { x: 10, y: 10 },
+        { x: 30, y: 10 },
+        { x: 30, y: 30 },
+        { x: 10, y: 30 },
+      ],
+      'DrawerZone'
+    );
+    drawerZone.components = [{ type: 'Subscene', targetGroupId: '#drawer_zone' }];
+    background.addTriggerbox(drawerZone);
+    const drawer = new Triggerbox(
+      [
+        { x: 15, y: 15 },
+        { x: 25, y: 15 },
+        { x: 25, y: 25 },
+        { x: 15, y: 25 },
+      ],
+      'Drawer'
+    );
+    drawer.disabled = true;
+    drawer.groupID = '#drawer_zone';
+    drawer.spatial = { parentNodeId: drawerZone.name, relation: 'in' };
+    drawer.components = [{ type: 'Switch', state: 1, groupId1: 'nil', groupId2: '#drawer_open' }];
+    background.addTriggerbox(drawer);
+    fixture.textAssets.setObject(drawerZone.name, { title: 'Desk close-up' });
+    fixture.textAssets.setObject(drawer.name, { title: 'Middle drawer' });
+
+    expect(fixture.game.sceneManager.currentScene).toBe(fixture.scene);
+    expect(fixture.game.openEntityForActor(npc, drawer).code).toBe('switch_opened');
+    expect((drawer.components[0] as { state: number }).state).toBe(2);
+    expect(background.activeSubscene).toBeNull();
+  });
+  it('gives a held item into a protected Actor inventory and records the observed transfer', () => {
+    const fixture = createGameSemanticFixture();
+    const wakeNpc = vi.fn();
+    fixture.game.wakeNpc = wakeNpc;
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const guard = new Actor(fixture.game, 10, 0, 10, 10, 'guard');
+    guard.components = [
+      { type: 'NPC', enabled: true },
+      { type: 'Inventory', relation: 'in', capacity: 1, groups: [], protected: true, items: [] },
+    ];
+    fixture.scene.addEntity(guard);
+    fixture.textAssets.setObject(guard.name, { title: 'Guard', description: 'A guard.' });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A brass key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.game.addInventoryEntity(player, key, 'in');
+
+    const outcome = fixture.game.giveEntityForActor(player, key, guard);
+
+    expect(outcome).toMatchObject({
+      status: 'ok',
+      code: 'item_given',
+      data: {
+        actionType: 'GIVE',
+        actorId: player.name,
+        recipientId: guard.name,
+        itemId: key.name,
+        worldChanged: true,
+      },
+    });
+    expect(fixture.game.inventory).not.toContain(key);
+    expect(fixture.game.inventoryManager.hasInventoryEntity(guard, key, 'in')).toBe(true);
+    expect(fixture.scene.sceneLog.entries.at(-1)?.payload).toMatchObject({
+      action: 'give',
+      itemId: key.name,
+      targetId: guard.name,
+      outcome: 'item_given',
+      worldChanged: true,
+    });
+    expect(fixture.scene.sceneLog.entries.at(-1)?.knownByActorIds).toContain(guard.name);
+    const guardContext = new NpcWorldModelBuilder(fixture.game)
+      .build(fixture.scene)
+      .npcs.find((npc) => npc.id === guard.name);
+    expect(guardContext?.newEvents.at(-1)?.payload).toMatchObject({
+      action: 'give',
+      itemId: key.name,
+      targetId: guard.name,
+      outcome: 'item_given',
+    });
+    expect(wakeNpc).toHaveBeenCalledWith(guard, 'item_received');
+  });
+
+  it('keeps the item with the giver and notifies the target when GIVE is rejected', () => {
+    const fixture = createGameSemanticFixture();
+    const wakeNpc = vi.fn();
+    fixture.game.wakeNpc = wakeNpc;
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const guard = new Actor(fixture.game, 10, 0, 10, 10, 'guard');
+    guard.components = [
+      { type: 'NPC', enabled: true },
+      { type: 'Inventory', relation: 'in', capacity: 0, groups: [], protected: true, items: [] },
+    ];
+    fixture.scene.addEntity(guard);
+    fixture.textAssets.setObject(guard.name, { title: 'Guard', description: 'A guard.' });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A brass key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.game.addInventoryEntity(player, key, 'in');
+
+    const outcome = fixture.game.giveEntityForActor(player, key, guard);
+
+    expect(outcome.code).toBe('inventory_full');
+    expect(fixture.game.inventory).toContain(key);
+    expect(fixture.game.inventoryManager.hasInventoryEntity(guard, key, 'in')).toBe(false);
+    expect(fixture.scene.sceneLog.entries.at(-1)?.payload).toMatchObject({
+      action: 'give_failed',
+      itemId: key.name,
+      targetId: guard.name,
+    });
+    expect(fixture.scene.sceneLog.entries.at(-1)?.knownByActorIds).toContain(guard.name);
+    const guardContext = new NpcWorldModelBuilder(fixture.game)
+      .build(fixture.scene)
+      .npcs.find((npc) => npc.id === guard.name);
+    expect(guardContext?.newEvents.at(-1)?.payload).toMatchObject({
+      action: 'give_failed',
+      itemId: key.name,
+      targetId: guard.name,
+    });
+    expect(wakeNpc).not.toHaveBeenCalled();
+  });
+
+  it('opens a received item preview for the player with the giver message first', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const guard = new Actor(fixture.game, 10, 0, 10, 10, 'guard');
+    guard.components = [
+      { type: 'NPC', enabled: true },
+      { type: 'Inventory', relation: 'in', capacity: 1, groups: [], protected: true, items: [] },
+    ];
+    fixture.scene.addEntity(guard);
+    fixture.textAssets.setObject(guard.name, { title: 'Guard', description: 'A guard.' });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A brass key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.game.addInventoryEntity(guard, key, 'in');
+
+    const outcome = fixture.game.giveEntityForActor(guard, key, player);
+
+    expect(outcome.code).toBe('item_given');
+    expect(fixture.game.getInventoryPreviewEntity()).toBe(key);
+    expect(fixture.game.getInventoryPreviewText()).toBe('Guard gives you Key.\n\nA brass key.');
   });
 });

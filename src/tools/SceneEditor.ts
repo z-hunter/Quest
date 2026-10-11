@@ -4,15 +4,46 @@ import { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
+import {
+  Box3DObject,
+  type Box3DPoint,
+  getBox3DFrontAxisSegment,
+  getBox3DProjectionFocal,
+  isManagedBox3DFace,
+  projectBox3DPoint,
+} from '../entities/Box3DObject';
 import { Folder } from '../entities/Folder';
 import { Scene } from '../scene/Scene';
 import { useEditorStore } from '../store/editorStore';
+import { getParallaxAxisIntersections } from '../utils/Parallax';
 
 import { EditorUndoManager } from './editor/EditorUndoManager';
 import { EditorSelectionManager } from './editor/EditorSelectionManager';
 import { EditorTransformManager } from './editor/EditorTransformManager';
 import { EditorPersistenceManager } from './editor/EditorPersistenceManager';
 import { EditorUI } from './editor/EditorUI';
+
+function convexHull(points: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
+  const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (a: any, b: any, c: any) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const half = (values: typeof sorted) => {
+    const result: typeof sorted = [];
+    for (const point of values) {
+      while (
+        result.length >= 2 &&
+        cross(result[result.length - 2], result[result.length - 1], point) <= 0
+      )
+        result.pop();
+      result.push(point);
+    }
+    return result;
+  };
+  const lower = half(sorted),
+    upper = half(sorted.reverse());
+  lower.pop();
+  upper.pop();
+  return [...lower, ...upper];
+}
 
 export class SceneEditor {
   undoManager: EditorUndoManager;
@@ -173,8 +204,8 @@ export class SceneEditor {
     // Ctrl+C: Copy Object
     if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'c' || e.code === 'KeyC')) {
       // Only prevent default if we have an object selected,
-      // otherwise let normal copy work (e.g. text in inputs)
-      if (this.selectedObject && !(document.activeElement instanceof HTMLInputElement)) {
+      // otherwise let normal copy work (e.g. text in inputs/textareas)
+      if (this.selectedObject && !isTypingInField) {
         e.preventDefault();
         this.copySelectedObjectToClipboard();
         return;
@@ -183,7 +214,7 @@ export class SceneEditor {
 
     // Ctrl+V: Paste Object
     if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'v' || e.code === 'KeyV')) {
-      if (!(document.activeElement instanceof HTMLInputElement)) {
+      if (!isTypingInField) {
         // e.preventDefault(); // Don't prevent default, let 'paste' event fire
         // We rely on the global 'paste' event listener which calls handleGlobalPaste
         return;
@@ -367,7 +398,12 @@ export class SceneEditor {
           // Spacebar: Select Scene if mouse is over canvas
           const mx = this.lastMousePos.x;
           const my = this.lastMousePos.y;
-          if (mx >= 0 && mx <= this.game.canvas.width && my >= 0 && my <= this.game.canvas.height) {
+          if (
+            mx >= 0 &&
+            mx <= this.game.bufferCanvas.width &&
+            my >= 0 &&
+            my <= this.game.bufferCanvas.height
+          ) {
             e.preventDefault();
             this.selectObject('SCENE');
           }
@@ -399,6 +435,12 @@ export class SceneEditor {
           this.startCreating('Quad', pos?.x, pos?.y);
         }
         break;
+      case 'b':
+        {
+          const pos = this.getMouseWorldPosIfOverCanvas();
+          this.startCreating('Box3D', pos?.x, pos?.y);
+        }
+        break;
       case 'f':
         this.startCreating('Folder');
         break;
@@ -428,6 +470,7 @@ export class SceneEditor {
             s.camera.x = 0;
             s.camera.y = 0;
           }
+          s.suspendEditorCameraFollow?.();
           useEditorStore.getState().incrementObjectVersion();
         }
         break;
@@ -470,7 +513,12 @@ export class SceneEditor {
     for (const pos of candidates) {
       const mx = pos.x;
       const my = pos.y;
-      if (mx >= 0 && mx <= this.game.canvas.width && my >= 0 && my <= this.game.canvas.height) {
+      if (
+        mx >= 0 &&
+        mx <= this.game.bufferCanvas.width &&
+        my >= 0 &&
+        my <= this.game.bufferCanvas.height
+      ) {
         return this.convertScreenToWorld(mx, my);
       }
     }
@@ -495,8 +543,8 @@ export class SceneEditor {
     const camY = scene && scene.camera ? scene.camera.y : 0;
     const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
-    const halfW = this.game.canvas.width / 2;
-    const halfH = this.game.canvas.height / 2;
+    const halfW = this.game.bufferCanvas.width / 2;
+    const halfH = this.game.bufferCanvas.height / 2;
 
     return {
       x: (screenX - halfW) / zoom + camX,
@@ -531,8 +579,10 @@ export class SceneEditor {
         const currentVisH = ent.height;
 
         if (isEnabled) {
-          // Turning ON: Scale = Model * Depth
-          const depthFactor = scene.getScaling(ent.y);
+          // A controller Quad replaces the scene fallback entirely. Always
+          // use the common resolver here, otherwise toggling scene scaling
+          // bakes the fallback factor into controller-managed objects.
+          const depthFactor = scene.getDepthScaleFor(ent);
           const totalScale = ent.modelScale * depthFactor;
           ent.scale = totalScale;
 
@@ -541,8 +591,10 @@ export class SceneEditor {
             ent.baseHeight = currentVisH / totalScale;
           }
         } else {
-          // Turning OFF: Scale = Model * 1.0
-          const totalScale = ent.modelScale;
+          // Scene.getDepthScaleFor() still returns a matching controller
+          // while scene scaling is disabled; only uncontrolled objects become
+          // Model * 1.0.
+          const totalScale = ent.modelScale * scene.getDepthScaleFor(ent);
           ent.scale = totalScale;
 
           if (totalScale !== 0) {
@@ -709,7 +761,9 @@ export class SceneEditor {
 
   private getObjectKey(obj: any): string | null {
     if (!obj) return null;
+    if (obj.type === 'Folder') return `Folder:${obj.name}`;
     if (obj.type === 'Quad') return `Quad:${obj.name}`;
+    if (obj instanceof Box3DObject) return `Box3D:${obj.name}`;
     if (obj instanceof Actor) return `Actor:${obj.name}`;
     if (obj instanceof Entity) return `Entity:${obj.name}`;
     if (obj instanceof Walkbox) return `Walkbox:${obj.name || 'Walkbox'}`;
@@ -741,6 +795,12 @@ export class SceneEditor {
     if (type === 'Quad') {
       return (
         (scene.entities || []).find((obj: any) => obj?.type === 'Quad' && obj?.name === name) ||
+        null
+      );
+    }
+    if (type === 'Box3D') {
+      return (
+        (scene.entities || []).find((obj: any) => obj?.type === 'Box3D' && obj?.name === name) ||
         null
       );
     }
@@ -839,7 +899,7 @@ export class SceneEditor {
     data: any,
     overrideX?: number,
     overrideY?: number,
-    options?: { preserveBindings?: boolean }
+    options?: { preserveBindings?: boolean; skipBoxFaces?: boolean }
   ): any {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return null;
@@ -935,6 +995,8 @@ export class SceneEditor {
             });
           }
         }
+      } else if (type === 'Box3D') {
+        newObj = Box3DObject.fromJSON(this.game, data);
       } else if (
         type === 'Actor' ||
         (Array.isArray(data.components) &&
@@ -966,7 +1028,27 @@ export class SceneEditor {
       } else if (type === 'Folder') {
         scene.addFolder(newObj);
       } else {
-        scene.addEntity(newObj);
+        scene.addEntity(newObj as any);
+        if (newObj instanceof Box3DObject && !options?.skipBoxFaces) {
+          for (let index = 0; index < 6; index++) {
+            const faceTemplate =
+              data.faces?.find((face: any) => face?.box3dFaceIndex === index) || {};
+            const face = QuadObject.fromJSON(this.game, {
+              ...faceTemplate,
+              type: 'Quad',
+              name: `${newObj.name}_face_${index}`,
+              vertices: [],
+              parallax: 1,
+              ignoreScaling: true,
+              perspective: true,
+              perspectiveAmount: 1,
+              spatial: { parentNodeId: newObj.name, relation: 'in' },
+              box3dFaceIndex: index,
+            });
+            scene.addEntity(face);
+          }
+          newObj.syncFaces(scene);
+        }
       }
 
       // Ensure new object is available in console
@@ -993,8 +1075,8 @@ export class SceneEditor {
   getMousePos(e: MouseEvent): { x: number; y: number } {
     const rect = this.game.canvas.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left) * (this.game.canvas.width / rect.width),
-      y: (e.clientY - rect.top) * (this.game.canvas.height / rect.height),
+      x: (e.clientX - rect.left) * (this.game.bufferCanvas.width / rect.width),
+      y: (e.clientY - rect.top) * (this.game.bufferCanvas.height / rect.height),
     };
   }
 
@@ -1010,6 +1092,10 @@ export class SceneEditor {
 
   deleteSelectedObject(): void {
     if (!this.selectedObject) return;
+    if (isManagedBox3DFace(this.selectedObject)) {
+      this.game.showNotification('Box3D faces are managed by their parent');
+      return;
+    }
     this.saveUndoState(); // Save before deletion
     const scene = this.game.sceneManager.currentScene;
     if (scene) {
@@ -1053,7 +1139,24 @@ export class SceneEditor {
         scene.removeWalkbox(this.selectedObject);
       } else if (this.selectedObject instanceof Triggerbox) {
         scene.removeTriggerbox(this.selectedObject);
-      } else if (this.selectedObject instanceof Entity) {
+      } else if (
+        this.selectedObject instanceof Entity ||
+        this.selectedObject instanceof Box3DObject
+      ) {
+        if (this.selectedObject instanceof Box3DObject) {
+          const faces = scene.entities.filter(
+            (entity: any) =>
+              entity.spatial?.parentNodeId === this.selectedObject!.name &&
+              Number.isInteger(entity.box3dFaceIndex)
+          );
+          const descendants = faces.flatMap((face: any) =>
+            scene.getDirectSpatialChildren(face.name)
+          );
+          descendants.forEach((child: any) => {
+            if (!faces.includes(child)) child.spatial = {};
+          });
+          faces.forEach((face: any) => scene.removeEntity(face));
+        }
         scene.removeEntity(this.selectedObject);
       }
     }
@@ -1107,8 +1210,8 @@ export class SceneEditor {
       camY = scene.camera.y;
     }
 
-    const halfW = this.game.canvas.width / 2;
-    const halfH = this.game.canvas.height / 2;
+    const halfW = this.game.bufferCanvas.width / 2;
+    const halfH = this.game.bufferCanvas.height / 2;
 
     // Render current polygon (World Space)
     if (this.transformManager.currentPolygon && this.transformManager.currentPolygon.length > 0) {
@@ -1145,12 +1248,59 @@ export class SceneEditor {
         ? [this.selectedObject]
         : [];
 
+    const selectedQuads = highlighted.filter(
+      (object): object is QuadObject => object instanceof QuadObject
+    );
+    if (
+      this.selectionManager.hasMultiSelection() &&
+      this.selectionManager.get3DAssemblyState().kind === 'prepared' &&
+      selectedQuads.length > 0 &&
+      scene?.camera
+    ) {
+      const zoom = scene.camera.zoom;
+      const group = this.selectionManager.getGroupTransform();
+      const axisScreenX = halfW + zoom * (group.axisX - camX * group.axisP);
+      if (Number.isFinite(axisScreenX) && axisScreenX >= 0 && axisScreenX <= ctx.canvas.width) {
+        let axisEndY = ctx.canvas.height;
+        for (const quad of selectedQuads) {
+          const globalP = quad.parallax ?? 1;
+          const vertices = quad.vertices.map((vertex) => ({
+            x: vertex.x,
+            y: vertex.y,
+            p: (vertex.p ?? 1) * globalP,
+          }));
+          for (const y of getParallaxAxisIntersections(vertices, {
+            x: group.axisX,
+            p: group.axisP,
+          })) {
+            const screenY = halfH + zoom * (y - camY * group.axisP);
+            if (screenY >= 0 && screenY < axisEndY) axisEndY = screenY;
+          }
+        }
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 255, 0, 0.85)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(axisScreenX, 0);
+        ctx.lineTo(axisScreenX, axisEndY);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     // Highlight selected object(s)
     for (const selected of highlighted) {
       ctx.save();
       const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
-      if (selected instanceof Entity) {
+      if (selected instanceof Box3DObject) {
+        this.renderBox3DSelection(ctx, selected, scene, halfW, halfH);
+      } else if (
+        selected instanceof Folder &&
+        this.selectionManager.isCompoundBox3DFolder(selected)
+      ) {
+        this.renderCompoundBox3DSelection(ctx, selected, scene, halfW, halfH);
+      } else if (selected instanceof Entity) {
         if (this.game.inventoryManager?.getInventorySlotForEntity(selected)) {
           ctx.restore();
           continue;
@@ -1160,38 +1310,24 @@ export class SceneEditor {
           // ** QUAD SELECTION RENDERING **
           const quad = selected as QuadObject;
 
+          const globalP = quad.parallax !== undefined ? quad.parallax : 1.0;
+
           ctx.save();
           ctx.translate(halfW, halfH);
           ctx.scale(zoom, zoom);
-          // Do NOT apply global camera translate here the same way,
-          // because each vertex has its own parallax.
-          // We need to project each vertex to "Screen Space relative to Zoom Center"
-          // ScreenX = (Vx - CamX * Vp) * Zoom + HalfW
-          // Here we are in "Zoom Space" (Scale applied).
-          // So we draw at (Vx - CamX * Vp)
+          ctx.translate(-camX * globalP, -camY * globalP);
 
           ctx.beginPath();
           // Draw Outline
           const verts = quad.vertices;
+          const visualVerts = quad.getVisualVertices();
           if (verts.length > 0) {
-            // V_visual = V_world - Cam * (p - 1) - Cam <-- Wait.
-            // Standard Entity: ctx.translate(-camX * p, -camY * p). Draw at 0,0 relative to entity.
-            // Entity Pos on Screen: (Ex - CamX * p)
+            const getDrawPos = (_v: any, index: number) => visualVerts[index];
 
-            // Quad Vertex:
-            // VisualPos = Vx - CamX * (p - 1)  (This IS the visual world position at P=1 plane)
-            // Then we apply standard Camera P=1 offset: - CamX
-            // Total: Vx - CamX*p + CamX - CamX = Vx - CamX * p
-
-            const getDrawPos = (v: any) => ({
-              x: v.x - camX * v.p,
-              y: v.y - camY * v.p,
-            });
-
-            const p0 = getDrawPos(verts[0]);
+            const p0 = getDrawPos(verts[0], 0);
             ctx.moveTo(p0.x, p0.y);
             for (let i = 1; i < verts.length; i++) {
-              const pi = getDrawPos(verts[i]);
+              const pi = getDrawPos(verts[i], i);
               ctx.lineTo(pi.x, pi.y);
             }
             ctx.closePath();
@@ -1204,7 +1340,7 @@ export class SceneEditor {
             ctx.fillStyle = '#00ff00';
             const handleSize = 5 / zoom;
             verts.forEach((v: any, i: number) => {
-              const p = getDrawPos(v);
+              const p = getDrawPos(v, i);
               // Highlight dragging vertex
               if (
                 this.transformManager.isDragging &&
@@ -1223,8 +1359,8 @@ export class SceneEditor {
               // Simple average
               let cx = 0,
                 cy = 0;
-              verts.forEach((vv: any) => {
-                const vp = getDrawPos(vv);
+              verts.forEach((vv: any, vertexIndex: number) => {
+                const vp = getDrawPos(vv, vertexIndex);
                 cx += vp.x;
                 cy += vp.y;
               });
@@ -1410,7 +1546,7 @@ export class SceneEditor {
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, horizonScreenY);
-      ctx.lineTo(this.game.canvas.width, horizonScreenY);
+      ctx.lineTo(this.game.bufferCanvas.width, horizonScreenY);
       ctx.stroke();
       ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
       ctx.fillText(`Horizon(${horizonWorldY})`, 5, horizonScreenY - 2);
@@ -1422,12 +1558,180 @@ export class SceneEditor {
       ctx.strokeStyle = 'rgba(255, 0, 255, 0.5)'; // Magenta, semi-transparent
       ctx.beginPath();
       ctx.moveTo(0, frontScreenY);
-      ctx.lineTo(this.game.canvas.width, frontScreenY);
+      ctx.lineTo(this.game.bufferCanvas.width, frontScreenY);
       ctx.stroke();
       ctx.fillStyle = 'rgba(255, 0, 255, 0.8)';
       ctx.fillText(`Front(${frontWorldY})`, 5, frontScreenY - 2);
 
       ctx.restore();
     }
+  }
+
+  private renderBox3DSelection(
+    ctx: CanvasRenderingContext2D,
+    box: Box3DObject,
+    scene: Scene,
+    halfW: number,
+    halfH: number,
+    showAxes = true
+  ): void {
+    const camera = scene.camera;
+    const perspective =
+      Number.isFinite(scene.box3dPerspective) && scene.box3dPerspective >= 0
+        ? scene.box3dPerspective
+        : 1;
+    const focal = getBox3DProjectionFocal(camera);
+    const toScreen = (point: { x: number; y: number; z: number }) => {
+      const projected = projectBox3DPoint(point, camera, perspective, focal);
+      return {
+        x: halfW + (projected.x - camera.x) * camera.zoom,
+        y: halfH + (projected.y - camera.y) * camera.zoom,
+      };
+    };
+    const worldVertices = box.getWorldVertices();
+    const vertices = worldVertices.map(toScreen);
+    const hull = convexHull(vertices);
+
+    if (showAxes && box.axisMode === 'object') {
+      ctx.save();
+      if (hull.length >= 3) {
+        ctx.beginPath();
+        ctx.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.moveTo(hull[0].x, hull[0].y);
+        hull.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
+        ctx.closePath();
+        ctx.clip('evenodd');
+      }
+      const colors = { x: '#ff4d4d', y: '#55e06f', z: '#4da3ff' };
+      const axes = box.getWorldAxisSegments();
+      ctx.lineWidth = 1;
+      (['x', 'y', 'z'] as const).forEach((axis) => {
+        const [start, end] = axes[axis].map(toScreen);
+        ctx.strokeStyle = colors[axis];
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+      });
+      ctx.restore();
+
+      (['x', 'y', 'z'] as const).forEach((axis) => {
+        const front = getBox3DFrontAxisSegment(axes[axis], worldVertices);
+        if (!front) return;
+        const [start, end] = front.map(toScreen);
+        ctx.strokeStyle = colors[axis];
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+      });
+    }
+
+    if (showAxes && box.axisMode === 'camera') {
+      this.renderCameraAlignedBox3DAxes(ctx, box.getWorldAxisPivots(), scene, halfW, halfH);
+    }
+
+    vertices.forEach((point, index) => {
+      ctx.fillStyle = index < 4 ? '#00e5ff' : '#ff8a3d';
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  private renderCompoundBox3DSelection(
+    ctx: CanvasRenderingContext2D,
+    folder: Folder,
+    scene: Scene,
+    halfW: number,
+    halfH: number
+  ): void {
+    const boxes = this.selectionManager.getCompoundBox3DObjects(folder);
+    boxes.forEach((box) => this.renderBox3DSelection(ctx, box, scene, halfW, halfH, false));
+    const state = this.selectionManager.getCompoundBox3DState(folder);
+    if (!state) return;
+    if (state.axisMode === 'object') {
+      const axes = this.selectionManager.getCompoundBox3DObjectAxisSegments(folder);
+      if (!axes) return;
+      const camera = scene.camera;
+      const perspective =
+        Number.isFinite(scene.box3dPerspective) && scene.box3dPerspective >= 0
+          ? scene.box3dPerspective
+          : 1;
+      const focal = getBox3DProjectionFocal(camera);
+      const toScreen = (point: Box3DPoint) => {
+        const projected = projectBox3DPoint(point, camera, perspective, focal);
+        return {
+          x: halfW + (projected.x - camera.x) * camera.zoom,
+          y: halfH + (projected.y - camera.y) * camera.zoom,
+        };
+      };
+      const colors = { x: '#ff4d4d', y: '#55e06f', z: '#4da3ff' };
+      ctx.lineWidth = 1;
+      (['x', 'y', 'z'] as const).forEach((axis) => {
+        const [start, end] = axes[axis].map(toScreen);
+        ctx.strokeStyle = colors[axis];
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+      });
+      return;
+    }
+    this.renderCameraAlignedBox3DAxes(
+      ctx,
+      { x: state.pivotX, y: state.pivotY, z: state.pivotZ },
+      scene,
+      halfW,
+      halfH
+    );
+  }
+
+  private renderCameraAlignedBox3DAxes(
+    ctx: CanvasRenderingContext2D,
+    pivots: Record<'x' | 'y' | 'z', Box3DPoint>,
+    scene: Scene,
+    halfW: number,
+    halfH: number
+  ): void {
+    const camera = scene.camera;
+    const perspective =
+      Number.isFinite(scene.box3dPerspective) && scene.box3dPerspective >= 0
+        ? scene.box3dPerspective
+        : 1;
+    const focal = getBox3DProjectionFocal(camera);
+    const toScreen = (point: Box3DPoint) => {
+      const projected = projectBox3DPoint(point, camera, perspective, focal);
+      return {
+        x: halfW + (projected.x - camera.x) * camera.zoom,
+        y: halfH + (projected.y - camera.y) * camera.zoom,
+      };
+    };
+    const colors = { x: '#ff4d4d', y: '#55e06f', z: '#4da3ff' };
+    const axisLength = Math.max(50, 100 * camera.zoom);
+    ctx.lineWidth = 1;
+    const pivotX = toScreen(pivots.x);
+    ctx.strokeStyle = colors.x;
+    ctx.beginPath();
+    ctx.moveTo(pivotX.x - axisLength, pivotX.y);
+    ctx.lineTo(pivotX.x + axisLength, pivotX.y);
+    ctx.stroke();
+
+    const pivotY = toScreen(pivots.y);
+    ctx.strokeStyle = colors.y;
+    ctx.beginPath();
+    ctx.moveTo(pivotY.x, pivotY.y - axisLength);
+    ctx.lineTo(pivotY.x, pivotY.y + axisLength);
+    ctx.stroke();
+
+    const pivotZ = toScreen(pivots.z);
+    ctx.strokeStyle = colors.z;
+    ctx.beginPath();
+    ctx.arc(pivotZ.x, pivotZ.y, 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = colors.z;
+    ctx.beginPath();
+    ctx.arc(pivotZ.x, pivotZ.y, 2, 0, Math.PI * 2);
+    ctx.fill();
   }
 }

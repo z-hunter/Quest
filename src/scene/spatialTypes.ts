@@ -3,6 +3,7 @@ export type SpatialRelationType = 'in' | 'on' | 'under' | 'behind' | 'near';
 export type SpatialPlacement = {
   parentNodeId?: string | null;
   relation?: SpatialRelationType | null;
+  surfaceSide?: 'front' | 'back';
 };
 
 export type SpatialSubsceneData = {

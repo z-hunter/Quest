@@ -399,18 +399,22 @@ export class GameSemanticAPI {
     return target.hidden === 'lookable' || target.hidden === 'examinable' ? target.hidden : false;
   }
 
-  private revealHiddenEntityForIntent(entity: SceneObject, intent: 'look' | 'examine'): boolean {
+  private revealHiddenEntityForIntent(
+    entity: SceneObject,
+    intent: 'look' | 'examine',
+    actor: Actor | null
+  ): boolean {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return false;
     const hiddenMode = this.getSemanticHiddenMode(entity);
     if (!hiddenMode) return false;
-    if (scene.isHiddenEntityRevealed(entity)) return false;
+    if (scene.isHiddenEntityRevealed(entity, actor)) return false;
     if (intent === 'look' && hiddenMode !== 'lookable') return false;
-    scene.revealHiddenEntity(entity);
+    scene.revealHiddenEntity(entity, actor);
     return true;
   }
 
-  private revealHiddenDescendantsForExamine(anchor: SceneObject): string[] {
+  private revealHiddenDescendantsForExamine(anchor: SceneObject, actor: Actor | null): string[] {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return [];
     const revealed: string[] = [];
@@ -421,21 +425,24 @@ export class GameSemanticAPI {
         this.game,
         anchor.name,
         relation,
-        { includeHidden: true }
+        {
+          includeHidden: true,
+          revealedHiddenEntities: scene.getRevealedHiddenEntities(actor),
+        }
       ).filter(
         (accessState) =>
           accessState.hiddenReason === 'lookable' || accessState.hiddenReason === 'examinable'
       );
 
       revealableDescendants.forEach((accessState) => {
-        scene.revealHiddenEntity(accessState.object);
+        scene.revealHiddenEntity(accessState.object, actor);
         revealed.push(accessState.object.name);
       });
     }
     return revealed;
   }
 
-  private revealHiddenDescendantsForLook(anchor: SceneObject): string[] {
+  private revealHiddenDescendantsForLook(anchor: SceneObject, actor: Actor | null): string[] {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return [];
     const revealed: string[] = [];
@@ -446,11 +453,14 @@ export class GameSemanticAPI {
         this.game,
         anchor.name,
         relation,
-        { includeHidden: true }
+        {
+          includeHidden: true,
+          revealedHiddenEntities: scene.getRevealedHiddenEntities(actor),
+        }
       ).filter((accessState) => accessState.hiddenReason === 'lookable');
 
       revealableDescendants.forEach((accessState) => {
-        scene.revealHiddenEntity(accessState.object);
+        scene.revealHiddenEntity(accessState.object, actor);
         revealed.push(accessState.object.name);
       });
     }
@@ -488,7 +498,7 @@ export class GameSemanticAPI {
   }
 
   private canExamineObject(entity: SceneObject, actor?: Actor | null): GameActionOutcome | null {
-    const scene = this.game.sceneManager.currentScene;
+    const scene = actor ? this.getActorScene(actor) : this.game.sceneManager.currentScene;
     const activeActor = actor || scene?.player || null;
     if (
       entity instanceof Entity &&
@@ -556,9 +566,9 @@ export class GameSemanticAPI {
     return (component as SwitchComponent | undefined) || null;
   }
 
-  private isSwitchTargetInInactiveSubscene(entity: SceneObject): boolean {
+  private isSwitchTargetInInactiveSubscene(entity: SceneObject, actor?: Actor | null): boolean {
     if (!this.getSwitchComponent(entity)) return false;
-    const scene = this.game.sceneManager.currentScene;
+    const scene = actor ? this.getActorScene(actor) : this.game.sceneManager.currentScene;
     if (!scene) return false;
     return getInactiveSubsceneAncestors(scene, entity).length > 0;
   }
@@ -567,7 +577,7 @@ export class GameSemanticAPI {
     entity: SceneObject,
     actor?: Actor | null
   ): GameActionOutcome | null {
-    const scene = this.game.sceneManager.currentScene;
+    const scene = actor ? this.getActorScene(actor) : this.game.sceneManager.currentScene;
     if (!scene) return null;
 
     const ancestors = getInactiveSubsceneAncestors(scene, entity);
@@ -586,7 +596,7 @@ export class GameSemanticAPI {
     entity: SceneObject,
     actor?: Actor | null
   ): GameActionOutcome | null {
-    if (!this.isSwitchTargetInInactiveSubscene(entity)) return null;
+    if (!this.isSwitchTargetInInactiveSubscene(entity, actor)) return null;
     return this.openInactiveAncestorSubscenes(entity, actor);
   }
 
@@ -594,7 +604,7 @@ export class GameSemanticAPI {
     entity: SceneObject,
     actor?: Actor | null
   ): GameActionOutcome | null {
-    const scene = this.game.sceneManager.currentScene;
+    const scene = actor ? this.getActorScene(actor) : this.game.sceneManager.currentScene;
     const activeActor = actor || scene?.player || null;
     if (
       entity instanceof Entity &&
@@ -627,7 +637,14 @@ export class GameSemanticAPI {
       return null;
     }
 
-    const accessState = getSceneTextLayerAccessState(scene, this.game, entity);
+    const accessState = getSceneTextLayerAccessState(
+      scene,
+      this.game,
+      entity,
+      undefined,
+      undefined,
+      activeActor ? scene.getRevealedHiddenEntities(activeActor) : undefined
+    );
     if (!accessState.blocked && !accessState.hidden) return null;
 
     const closedMessage =
@@ -674,7 +691,10 @@ export class GameSemanticAPI {
     entity: SceneObject,
     desiredState: 1 | 2
   ): GameActionOutcome {
-    const scene = this.game.sceneManager.currentScene;
+    // NPCs may execute in a loaded background scene.  Semantic checks must
+    // use that actor's scene; using currentScene makes a valid offscreen
+    // drawer look inaccessible even when navigation reached its Subscene.
+    const scene = actor ? this.getActorScene(actor) : this.game.sceneManager.currentScene;
     if (!scene) {
       return {
         status: 'failed',
@@ -822,12 +842,12 @@ export class GameSemanticAPI {
   // --- Main Semantic API ---
 
   getSeeMessage(target: SceneObject): string | null {
-    this.revealHiddenEntityForIntent(target, 'look');
     const scene = this.game.sceneManager.currentScene;
+    this.revealHiddenEntityForIntent(target, 'look', scene?.player || null);
     if (
       scene &&
       this.getSemanticHiddenMode(target) === 'examinable' &&
-      !scene.isHiddenEntityRevealed(target)
+      !scene.isHiddenEntityRevealed(target, scene.player)
     ) {
       return null;
     }
@@ -882,14 +902,14 @@ export class GameSemanticAPI {
     const scene = this.game.sceneManager.currentScene;
     const activeActor = actor || scene?.player || null;
     const isPlayerPath = !actor || activeActor === scene?.player;
-    this.revealHiddenEntityForIntent(entity, 'look');
+    this.revealHiddenEntityForIntent(entity, 'look', activeActor);
     const autoOpenOutcome = this.ensureSwitchTargetReady(entity, activeActor);
     if (autoOpenOutcome) return autoOpenOutcome;
 
     const blockedOutcome = this.getBlockedAccessOutcome(entity, activeActor);
     if (blockedOutcome) return blockedOutcome;
 
-    const discoveredEntityIds = this.revealHiddenDescendantsForLook(entity);
+    const discoveredEntityIds = this.revealHiddenDescendantsForLook(entity, activeActor);
     if (activeActor) this.faceActorTowardObservedObject(activeActor, entity);
 
     const interactionId =
@@ -999,7 +1019,7 @@ export class GameSemanticAPI {
     const accessError = this.canExamineObject(entity, activeActor);
     if (accessError) return accessError;
 
-    const discoveredEntityIds = this.revealHiddenDescendantsForExamine(entity);
+    const discoveredEntityIds = this.revealHiddenDescendantsForExamine(entity, activeActor);
 
     const subsceneComponent = entity.components?.find(
       (component: any) => component?.type === 'Subscene'
@@ -1123,7 +1143,10 @@ export class GameSemanticAPI {
     }
 
     const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
-    const anchorTitle = textLayer.entryById.get(anchorNodeId)?.title?.trim() || null;
+    const anchorObject = scene.getObjectByName(anchorNodeId);
+    const anchorTitle =
+      textLayer.entryById.get(anchorNodeId)?.title?.trim() ||
+      (anchorObject ? this.getPlayerFacingObjectTitle(anchorObject) : null);
     if (!anchorTitle) {
       return {
         status: 'escalate',
@@ -1132,7 +1155,6 @@ export class GameSemanticAPI {
       };
     }
 
-    const anchorObject = scene.getObjectByName(anchorNodeId);
     const effectiveRelation = this.isEffectiveRelation(relation) ? relation : null;
     const blockingComponent = anchorObject
       ? getActiveBlockingComponentState(anchorObject, effectiveRelation)
@@ -1377,7 +1399,11 @@ export class GameSemanticAPI {
     return this.takeEntityForActor(actor, entity);
   }
 
-  takeEntityForActor(actor: Actor | null, entity: Entity): GameActionOutcome {
+  takeEntityForActor(
+    actor: Actor | null,
+    entity: Entity,
+    options: { emitAction?: boolean } = {}
+  ): GameActionOutcome {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) {
       return {
@@ -1556,10 +1582,12 @@ export class GameSemanticAPI {
           recoverable: true,
         };
       }
-      this.game.emitActorAction?.(activeActor, 'take', null, {
-        itemId: entity.name,
-        previousLocation: takeSourceTitle || undefined,
-      });
+      if (options.emitAction !== false) {
+        this.game.emitActorAction?.(activeActor, 'take', null, {
+          itemId: entity.name,
+          previousLocation: takeSourceTitle || undefined,
+        });
+      }
       return {
         status: 'ok',
         code: 'item_taken',
@@ -1577,6 +1605,141 @@ export class GameSemanticAPI {
       data: { entityId: entity.name },
       recoverable: authoredTakeFailure ? false : true,
     };
+  }
+
+  giveEntityForActor(actor: Actor | null, entity: Entity, targetActor: Actor): GameActionOutcome {
+    const currentScene = this.game.sceneManager.currentScene;
+    const activeActor = actor || currentScene?.player || null;
+    const scene = activeActor ? this.getActorScene(activeActor) : currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.game.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+    if (!(activeActor instanceof Entity) || activeActor.disabled) {
+      return {
+        status: 'failed',
+        code: 'actor_not_found',
+        message: this.game.text('parser.give_target_not_found'),
+        recoverable: false,
+      };
+    }
+    if (
+      !(targetActor instanceof Entity) ||
+      targetActor.disabled ||
+      scene.getObjectByName(targetActor.name) !== targetActor
+    ) {
+      return {
+        status: 'failed',
+        code: 'give_target_not_found',
+        message: this.game.text('parser.give_target_not_found'),
+        data: { targetId: targetActor?.name },
+        recoverable: true,
+      };
+    }
+    if (targetActor === activeActor) {
+      return {
+        status: 'failed',
+        code: 'give_target_is_source',
+        message: this.game.text('parser.give_self'),
+        data: { entityId: entity.name, targetId: targetActor.name },
+        recoverable: true,
+      };
+    }
+
+    const fail = (outcome: GameActionOutcome): GameActionOutcome => {
+      this.game.emitActorAction?.(activeActor, 'give_failed', targetActor, {
+        itemId: entity.name,
+        targetId: targetActor.name,
+        reason: outcome.message || outcome.code,
+      });
+      return outcome;
+    };
+
+    const targetAccessFailure = this.getPutAccessibilityFailure(
+      targetActor,
+      targetActor,
+      activeActor
+    );
+    if (targetAccessFailure) return fail(targetAccessFailure);
+
+    const destinationPreflight = this.game.inventoryManager.canAddInventoryEntity(
+      targetActor,
+      entity,
+      'in'
+    );
+    if (destinationPreflight) {
+      return fail(
+        this.withPutFailureContext(destinationPreflight, entity, targetActor, 'in', targetActor)
+      );
+    }
+
+    const sourceHeld = this.game.inventoryManager.hasInventoryEntity(activeActor, entity, 'in');
+    if (!sourceHeld) {
+      const takeOutcome = this.takeEntityForActor(activeActor, entity, { emitAction: false });
+      if (takeOutcome.status !== 'ok') return fail(takeOutcome);
+    }
+
+    const moveOutcome = this.game.inventoryManager.addInventoryEntity(targetActor, entity, 'in');
+    if (moveOutcome.status !== 'ok') {
+      return fail(this.withPutFailureContext(moveOutcome, entity, targetActor, 'in', targetActor));
+    }
+
+    const itemTitle = this.getPlayerFacingObjectTitle(entity) || entity.name;
+    const targetTitle = this.getPlayerFacingObjectTitle(targetActor) || targetActor.name;
+    const actorTitle = this.getPlayerFacingObjectTitle(activeActor) || activeActor.name;
+    this.game.emitActorAction?.(activeActor, 'give', targetActor, {
+      itemId: entity.name,
+      targetId: targetActor.name,
+      outcome: 'item_given',
+      worldChanged: true,
+    });
+    this.game.wakeNpc?.(targetActor, 'item_received');
+
+    if (targetActor === scene.player) {
+      const description = this.game.textAssets
+        .getResolvedObjectField(entity as any, 'description')
+        ?.trim();
+      this.game.openInventoryPreview(
+        entity,
+        [
+          this.game.text('parser.give_received_intro', { actor: actorTitle, item: itemTitle }),
+          description,
+        ]
+          .filter((text): text is string => !!text?.trim())
+          .join('\n\n')
+      );
+    }
+
+    return {
+      status: 'ok',
+      code: 'item_given',
+      message: this.game.text('parser.give_success', { item: itemTitle, target: targetTitle }),
+      data: {
+        actionType: 'GIVE',
+        actorId: activeActor.name,
+        recipientId: targetActor.name,
+        entityId: entity.name,
+        itemId: entity.name,
+        ownerId: targetActor.name,
+        targetId: targetActor.name,
+        worldChanged: true,
+      },
+      effects: ['removed_from_inventory', 'moved_to_inventory', 'item_given'],
+    };
+  }
+
+  private getActorScene(actor: Actor): ReturnType<typeof this.game.sceneManager.scenes.get> | null {
+    const current = this.game.sceneManager.currentScene;
+    if (current?.getObjectByName(actor.name) === actor) return current;
+    return (
+      Array.from(this.game.sceneManager.scenes.values()).find(
+        (scene) => scene.getObjectByName(actor.name) === actor
+      ) || null
+    );
   }
 
   canTakeEntity(entity: Entity): GameActionOutcome | null {
@@ -2029,6 +2192,10 @@ export class GameSemanticAPI {
   }
 
   openEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome {
+    if (!this.getSwitchComponent(entity)) {
+      const contentsOutcome = this.getOpenContainerContentsOutcome(actor, entity);
+      if (contentsOutcome) return contentsOutcome;
+    }
     return this.executeSwitchStateChange(actor, entity, 2);
   }
 
@@ -2038,6 +2205,44 @@ export class GameSemanticAPI {
 
   closeEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome {
     return this.executeSwitchStateChange(actor, entity, 1);
+  }
+
+  /**
+   * OPEN is also a convenient explicit inspection of an already accessible
+   * inventory nested inside a titled semantic anchor (for example, batteries
+   * inside a remote). It must not bypass a Switch or another access gate.
+   */
+  private getOpenContainerContentsOutcome(
+    actor: Actor | null,
+    entity: SceneObject
+  ): GameActionOutcome | null {
+    const scene = actor ? this.getActorScene(actor) : this.game.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const activeActor = actor || scene.player || null;
+    const accessError = this.canExamineObject(entity, activeActor);
+    if (accessError) return accessError;
+
+    const storageCandidates = this.game.inventoryManager.findStorageCandidatesForRelation(
+      entity,
+      'in',
+      this.getBlockedAccessOutcome.bind(this),
+      this.getPlayerFacingObjectTitle.bind(this),
+      false
+    );
+    const hasAccessibleInventory = storageCandidates.inventoryOwners.some((storage) =>
+      this.game.inventoryManager.isInventoryAccessibleFromAnchor(
+        storage.owner,
+        entity,
+        this.getBlockedAccessOutcome.bind(this),
+        this.getPlayerFacingObjectTitle.bind(this),
+        storage.relation,
+        activeActor
+      )
+    );
+    if (!hasAccessibleInventory) return null;
+
+    return this.describeSpatialRelation(entity.name, 'in');
   }
 
   goToSceneTarget(target: string): GameActionOutcome {
@@ -2154,7 +2359,7 @@ export class GameSemanticAPI {
   }
 
   playSound(name: string): void {
-    this.game.audio.playSound(name);
+    this.game.playSound(name);
   }
 
   onSceneChange(sceneName: string): void {

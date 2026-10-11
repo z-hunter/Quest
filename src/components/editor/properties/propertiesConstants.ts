@@ -42,9 +42,13 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   Blur: 'Blur radius in pixels. 0 px is sharp; higher values make the object softer.',
   Sprite:
     'Sprite asset used to render this object. Leave empty to keep the plain filled rectangle look.',
+  'Texture Mode':
+    'Stretch maps one sprite frame across the Quad; Tile repeats the frame using Tile X and Tile Y.',
+  'Tile X': 'Horizontal texture scale. 1 fills the Quad once; smaller values create more copies.',
+  'Tile Y': 'Vertical texture scale. 1 fills the Quad once; smaller values create more copies.',
   Mode: 'Selects the behavior mode for this object or component.',
   'Depth Sort mode':
-    'Chooses which quad rule is used for Y sorting, or disables Y sorting so layer order stays fully manual.',
+    'Chooses the same-Layer draw rule. By Y uses rendered Y, By Parallax uses P, and Manual keeps scene order within the Layer.',
   'Grid X': 'Number of vertical subdivisions in the retro grid effect.',
   'Grid Y': 'Number of horizontal subdivisions in the retro grid effect.',
   Width: 'Line width or stroke width used by the current visual effect.',
@@ -116,6 +120,8 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'Def Zoom': 'Default camera zoom used when the scene loads or resets.',
   'Enable Depth Scaling':
     'Turns scene depth scaling on or off so objects can grow or shrink according to their Y position.',
+  'Receive 3d-parallax':
+    'Lets a Quad nested inside a 3d-parallax Quad inherit dynamic per-vertex parallax from that parent surface.',
   Min: 'Minimum depth-scaling factor used at the horizon end of the scene.',
   Max: 'Maximum depth-scaling factor used at the front end of the scene.',
   'Horizon Y': 'Y coordinate treated as the horizon for depth scaling.',
@@ -156,8 +162,17 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'Bezel Glow': 'Adds a glow around the virtual CRT bezel.',
   'Lock Object': 'Prevents accidental editing of this object in the editor. Hotkey: Alt-L.',
   Disabled: 'Disables the object so it does not participate in the scene. Hotkey: Alt-D.',
-  'Retro Grid':
-    'Enables the retro grid line overlay for this quad. It is also useful for alignment, because objects can snap to grid nodes while Alt is held.',
+  Grid: 'Enables the retro grid line overlay for this quad. It is also useful for alignment, because objects can snap to grid nodes while Alt is held.',
+  Perspective:
+    'Enables projective 3D perspective. Grid spacing and Quad textures follow the corresponding vanishing points; parallel edges stay evenly spaced.',
+  Amount:
+    'Controls the intensity of the perspective effect. 0 = flat grid, 1 = standard 3D perspective, higher values increase distortion.',
+  Checkerboard:
+    'Renders the Quad fill as a 2-color alternating checkerboard pattern across grid cells.',
+  'Second Fill Color': 'Secondary color used for alternating checkerboard fill cells.',
+  Collider: 'Teleports the Actor if their collider enters this area.',
+  Portal:
+    'Teleports the Actor if they activate the area (e.g. by clicking on it) while within reachable distance.',
 };
 
 export const normalizeTooltipLabelText = (rawText: string): string => {

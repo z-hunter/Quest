@@ -1,5 +1,6 @@
 import type { TextAssetManager } from '../core/TextAssetManager';
 import type { ILlmProvider, LlmProviderContent, LlmProviderMessage } from './llm/ILlmProvider';
+import { extractJson, parseJson } from './llm/llmJson';
 import type {
   LlmCascadeDebugInfo,
   ParserCascadeEnvelope,
@@ -8,6 +9,7 @@ import type {
   ParserScopeSlice,
   ParserToolAction,
 } from './parserTypes';
+import { assertParserCascadeEnvelope } from '../contracts/runtimeSchemas';
 
 const SYSTEM_PROMPT_URL = '/text/system/parser-llm-system.md';
 const PROMPT_ASSET_DOMAIN = 'parser-llm';
@@ -29,6 +31,7 @@ const ALLOWED_ACTION_TYPES = new Set([
   'examineTarget',
   'examineRelationTarget',
   'takeTarget',
+  'giveTarget',
   'putTarget',
   'openTarget',
   'closeTarget',
@@ -160,8 +163,8 @@ export class LlmCascade {
     }
 
     const rawResponse = response.text;
-    const extractedJson = this.extractJson(rawResponse);
-    const parsed = this.parseJson(extractedJson);
+    const extractedJson = extractJson(rawResponse);
+    const parsed = parseJson(extractedJson);
     if (!parsed) {
       this.lastDebugInfo = {
         ...baseDebug,
@@ -209,7 +212,7 @@ export class LlmCascade {
       return null;
     }
 
-    return {
+    const envelope: ParserCascadeEnvelope = {
       stage: 'llm-v3',
       output: {
         kind: 'plan',
@@ -223,6 +226,8 @@ export class LlmCascade {
         source: undefined,
       },
     };
+    assertParserCascadeEnvelope(envelope);
+    return envelope;
   }
 
   getLastDebugInfo(): LlmCascadeDebugInfo | null {
@@ -727,22 +732,6 @@ export class LlmCascade {
     return result as T;
   }
 
-  private extractJson(text: string): string {
-    const fenceMatch = /```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/.exec(text);
-    if (fenceMatch) return fenceMatch[1].trim();
-    const braceMatch = /\{[\s\S]*\}/.exec(text);
-    if (braceMatch) return braceMatch[0].trim();
-    return text.trim();
-  }
-
-  private parseJson(text: string): unknown | null {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return null;
-    }
-  }
-
   private normalizeResponse(
     parsed: unknown,
     input: string = '',
@@ -1078,6 +1067,12 @@ export class LlmCascade {
           target: this.asNullableString(action.target),
           anchor: this.asNullableString(action.anchor),
           relation: this.asNullableRelation(action.relation),
+        };
+      case 'giveTarget':
+        return {
+          type: 'giveTarget',
+          item: this.asNullableString(action.item),
+          target: this.asNullableString(action.target),
         };
       case 'putTarget':
         return {

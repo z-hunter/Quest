@@ -1,4 +1,136 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+
+// ─── Scrubbing Hook ───────────────────────────────────────────────────────────
+
+export const useNumericScrubbing = (panelRef: React.RefObject<any>) => {
+  useEffect(() => {
+    let activeCleanup: (() => void) | null = null;
+
+    const setInputValue = (input: HTMLInputElement, value: string) => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    const decimalPlaces = (step: number) => {
+      if (!Number.isFinite(step)) return 0;
+      const text = String(step);
+      return text.includes('.') ? text.split('.')[1].length : 0;
+    };
+
+    const handleMouseDown = (event: MouseEvent) => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      if (event.button !== 0) return;
+      const target = event.target as HTMLElement | null;
+      // Native number editing (typing, focus, spinner buttons) must never be
+      // intercepted by label scrubbing.
+      if (target?.closest('input, button, select, textarea')) return;
+
+      const label = target?.closest('label.e-label');
+      if (!label || !panel.contains(label)) return;
+
+      // Most property rows use a label followed by an input. Some compact rows
+      // (such as Depth scaling controller Min/Max) contain the input inside
+      // their label. Prefer the owned field before looking at a sibling.
+      let input = label.querySelector<HTMLInputElement>('input[type="number"]');
+      const nextSibling = label.nextElementSibling;
+      if (!input && nextSibling) {
+        if (
+          nextSibling.tagName === 'INPUT' &&
+          (nextSibling as HTMLInputElement).type === 'number'
+        ) {
+          input = nextSibling as HTMLInputElement;
+        } else {
+          input = nextSibling.querySelector<HTMLInputElement>('input[type="number"]');
+        }
+      }
+
+      if (!input || input.disabled || input.readOnly) return;
+
+      event.preventDefault();
+      const startX = event.clientX;
+      const startValue = Number(input.value || 0);
+      const step = Number(input.step && input.step !== 'any' ? input.step : 1) || 1;
+      const precision = decimalPlaces(step);
+
+      let hasFocused = false;
+
+      const handleMove = (moveEvent: MouseEvent) => {
+        if (!hasFocused) {
+          hasFocused = true;
+          input.focus();
+        }
+
+        const delta = moveEvent.clientX - startX;
+        let currentStep = step;
+        let currentPrecision = precision;
+
+        if (moveEvent.ctrlKey) {
+          currentStep *= 10;
+        } else if (moveEvent.shiftKey) {
+          currentStep /= 10;
+          currentPrecision = Math.max(currentPrecision, decimalPlaces(currentStep));
+        }
+
+        let next = startValue + Math.round(delta / 6) * currentStep;
+
+        const minVal = input.min !== '' ? Number(input.min) : null;
+        const maxVal = input.max !== '' ? Number(input.max) : null;
+        if (minVal !== null && !isNaN(minVal) && next < minVal) {
+          next = minVal;
+        }
+        if (maxVal !== null && !isNaN(maxVal) && next > maxVal) {
+          next = maxVal;
+        }
+
+        setInputValue(
+          input,
+          currentPrecision > 0 ? next.toFixed(currentPrecision) : String(Math.round(next))
+        );
+      };
+
+      const cleanupScrubbing = () => {
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleUp);
+        document.body.classList.remove('is-scrubbing-number');
+        if (hasFocused) {
+          input.blur();
+        }
+        if (activeCleanup === cleanupScrubbing) {
+          activeCleanup = null;
+        }
+      };
+
+      const handleUp = () => {
+        cleanupScrubbing();
+      };
+
+      activeCleanup = cleanupScrubbing;
+      document.body.classList.add('is-scrubbing-number');
+      document.addEventListener('mousemove', handleMove);
+      document.addEventListener('mouseup', handleUp);
+    };
+
+    const handleWindowBlur = () => {
+      if (activeCleanup) {
+        activeCleanup();
+      }
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('blur', handleWindowBlur);
+
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('blur', handleWindowBlur);
+      if (activeCleanup) {
+        activeCleanup();
+      }
+    };
+  }, [panelRef]);
+};
 
 // ─── Number formatting ────────────────────────────────────────────────────────
 
@@ -108,37 +240,130 @@ export const renderOpacityBlurControls = (
 ): React.ReactElement => {
   const normalizedOpacity = opacityValue === '' ? 1 : Number(opacityValue);
   const normalizedBlur = blurValue === '' ? 0 : Number(blurValue);
-  const opacityUi = Math.round((1 - normalizedOpacity) * 100);
-  const blurUi = Math.max(0, Math.min(50, Math.round(normalizedBlur)));
 
   return (
-    <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+    <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
       <div>
-        <label className="e-label">Opacity ({opacityUi}%)</label>
+        <label className="e-label">Opacity</label>
         <input
-          type="range"
+          type="number"
           className="e-input"
-          style={{ width: '100%' }}
           min="0"
-          max="100"
-          step="5"
-          value={opacityUi}
-          onChange={(e) => onOpacityChange(1 - parseInt(e.target.value, 10) / 100)}
+          max="1"
+          step="0.05"
+          value={formatPanelNumber(normalizedOpacity)}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            onOpacityChange(isNaN(v) ? 1 : v);
+          }}
         />
       </div>
       <div>
-        <label className="e-label">Blur ({blurUi}px)</label>
+        <label className="e-label">Blur (px)</label>
         <input
-          type="range"
+          type="number"
           className="e-input"
-          style={{ width: '100%' }}
           min="0"
           max="50"
           step="1"
-          value={blurUi}
-          onChange={(e) => onBlurChange(parseInt(e.target.value, 10))}
+          value={formatPanelNumber(normalizedBlur)}
+          onChange={(e) => {
+            const v = parseInt(e.target.value, 10);
+            onBlurChange(isNaN(v) ? 0 : v);
+          }}
         />
       </div>
     </div>
+  );
+};
+
+export const renderSpriteEffectsControls = (
+  brightnessValue: number | '',
+  saturationValue: number | '',
+  contrastValue: number | '',
+  hueShiftValue: number | '',
+  onBrightnessChange: (val: number) => void,
+  onSaturationChange: (val: number) => void,
+  onContrastChange: (val: number) => void,
+  onHueShiftChange: (val: number) => void
+): React.ReactElement => {
+  const normBrightness = brightnessValue === '' ? 1 : Number(brightnessValue);
+  const normSaturation = saturationValue === '' ? 1 : Number(saturationValue);
+  const normContrast = contrastValue === '' ? 1 : Number(contrastValue);
+  const normHue = hueShiftValue === '' ? 0 : Number(hueShiftValue);
+
+  return (
+    <>
+      <div
+        className="e-row"
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+      >
+        <div>
+          <label className="e-label">Brightness</label>
+          <input
+            type="number"
+            className="e-input"
+            min="0"
+            max="2"
+            step="0.05"
+            value={formatPanelNumber(normBrightness)}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              onBrightnessChange(isNaN(v) ? 1 : v);
+            }}
+          />
+        </div>
+        <div>
+          <label className="e-label">Saturation</label>
+          <input
+            type="number"
+            className="e-input"
+            min="0"
+            max="3"
+            step="0.05"
+            value={formatPanelNumber(normSaturation)}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              onSaturationChange(isNaN(v) ? 1 : v);
+            }}
+          />
+        </div>
+      </div>
+      <div
+        className="e-row"
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+      >
+        <div>
+          <label className="e-label">Contrast</label>
+          <input
+            type="number"
+            className="e-input"
+            min="0"
+            max="2"
+            step="0.05"
+            value={formatPanelNumber(normContrast)}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              onContrastChange(isNaN(v) ? 1 : v);
+            }}
+          />
+        </div>
+        <div>
+          <label className="e-label">Hue Shift (&deg;)</label>
+          <input
+            type="number"
+            className="e-input"
+            min="-180"
+            max="180"
+            step="1"
+            value={formatPanelNumber(normHue)}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              onHueShiftChange(isNaN(v) ? 0 : v);
+            }}
+          />
+        </div>
+      </div>
+    </>
   );
 };

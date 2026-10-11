@@ -25,6 +25,7 @@ export type ActorCommandAffordance = {
   id: string;
   label: string;
   available?: boolean;
+  executable?: boolean;
   requires?: Array<{
     entityId: string;
     scope: string;
@@ -32,6 +33,18 @@ export type ActorCommandAffordance = {
     via?: 'held' | 'reachable' | 'visible' | 'takable';
   }>;
   effects?: Array<{ type: string; stateId?: string; value?: StateValue }>;
+  preconditions?: Array<{
+    type: 'entity_available' | 'contained_group_entity' | 'numeric_state';
+    satisfied: boolean;
+    entityId?: string;
+    containerId?: string;
+    groupId?: string;
+    itemId?: string;
+    stateId?: string;
+    operator?: 'gt' | 'gte' | 'lt' | 'lte' | 'eq';
+    expectedValue?: number;
+    actualValue?: number;
+  }>;
 };
 
 export class ActorCommandExecutor {
@@ -792,6 +805,7 @@ export class ActorCommandExecutor {
       }
     >();
     const effects: ActorCommandAffordance['effects'] = [];
+    const preconditions = actor ? this.evaluatePreconditions(actor, command) : [];
     for (const step of command.plan) {
       if (step.type === 'requireEntityAvailable' && step.entityId !== entity.name) {
         requires.set(step.entityId, {
@@ -819,11 +833,108 @@ export class ActorCommandExecutor {
       id: command.id,
       label: command.phrases[0] || command.id,
       ...(actor
-        ? { available: this.isCommandAvailable(actor, command, getCachedRequirementStatus) }
+        ? {
+            available: this.isCommandAvailable(actor, command, getCachedRequirementStatus),
+            executable: preconditions.every((condition) => condition.satisfied),
+          }
         : {}),
       ...(requirementList.length ? { requires: requirementList } : {}),
       ...(effects.length ? { effects } : {}),
+      ...(preconditions.length ? { preconditions } : {}),
     };
+  }
+
+  private evaluatePreconditions(
+    actor: Actor,
+    command: ParserCommandSpec
+  ): NonNullable<ActorCommandAffordance['preconditions']> {
+    const state: ActorCommandPlanState = {};
+    const preconditions: NonNullable<ActorCommandAffordance['preconditions']> = [];
+    const scene = this.game.sceneManager.currentScene;
+
+    for (const step of command.plan) {
+      if (step.type === 'requireEntityAvailable') {
+        const status = this.getRequirementStatus(actor, step.entityId, step.scopes, true);
+        const entity = scene?.getObjectByName(step.entityId);
+        if (step.saveAs && entity instanceof Entity) state[step.saveAs] = entity;
+        preconditions.push({
+          type: 'entity_available',
+          entityId: step.entityId,
+          satisfied: status.satisfied,
+        });
+        continue;
+      }
+
+      if (step.type === 'requireAnyEntityAvailable') {
+        const matched = step.options.find(
+          (option) =>
+            this.getRequirementStatus(actor, option.entityId, option.scopes, true).satisfied
+        );
+        const entity = matched ? scene?.getObjectByName(matched.entityId) : null;
+        if (step.saveAs && entity instanceof Entity) state[step.saveAs] = entity;
+        for (const option of step.options) {
+          preconditions.push({
+            type: 'entity_available',
+            entityId: option.entityId,
+            satisfied: option === matched,
+          });
+        }
+        continue;
+      }
+
+      if (step.type === 'requireContainedGroupEntity') {
+        const container = state[step.containerRef];
+        const normalizedGroupId = this.normalizeGroupId(step.groupId);
+        const item =
+          container instanceof Entity
+            ? scene?.entities.find(
+                (candidate) =>
+                  candidate.spatial?.parentNodeId === container.name &&
+                  candidate.spatial?.relation === 'in' &&
+                  this.objectHasGroupId(candidate, normalizedGroupId)
+              )
+            : undefined;
+        if (item) state[step.saveAs] = item;
+        preconditions.push({
+          type: 'contained_group_entity',
+          satisfied: !!item,
+          ...(container instanceof Entity ? { containerId: container.name } : {}),
+          groupId: normalizedGroupId,
+          ...(item ? { itemId: item.name } : {}),
+        });
+        continue;
+      }
+
+      if (step.type === 'requireNumericState') {
+        const entity = state[step.entityRef];
+        const actualValue =
+          entity instanceof Entity
+            ? ComponentSystem.getStateValue(entity, step.stateId)
+            : undefined;
+        const satisfied =
+          typeof actualValue === 'number' &&
+          (
+            {
+              gt: actualValue > step.value,
+              gte: actualValue >= step.value,
+              lt: actualValue < step.value,
+              lte: actualValue <= step.value,
+              eq: actualValue === step.value,
+            } as const
+          )[step.operator];
+        preconditions.push({
+          type: 'numeric_state',
+          satisfied,
+          ...(entity instanceof Entity ? { entityId: entity.name } : {}),
+          stateId: step.stateId,
+          operator: step.operator,
+          expectedValue: step.value,
+          ...(typeof actualValue === 'number' ? { actualValue } : {}),
+        });
+      }
+    }
+
+    return preconditions;
   }
 
   private isCommandAvailable(
@@ -909,6 +1020,11 @@ export class ActorCommandExecutor {
           .trim()
           .toLowerCase() === normalizedGroupId
     );
+  }
+
+  private normalizeGroupId(groupId: string): string {
+    const normalized = String(groupId || '').trim();
+    return normalized.startsWith('#') ? normalized : `#${normalized}`;
   }
 
   private getTitle(entity: SceneObject): string {

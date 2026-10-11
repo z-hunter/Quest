@@ -152,4 +152,33 @@ describe('SceneSpatialValidator', () => {
     expect(codes).toContain('spatial_cycle');
     expect(codes).toContain('missing_spatial_parent');
   });
+
+  it('keeps spatial children attached when a parent is renamed', () => {
+    const fixture = createSceneFixture();
+    const parent = fixture.addEntity('Quad_906');
+    const children = [
+      fixture.addEntity('Static_648', {
+        spatial: { parentNodeId: parent.name, relation: 'on' },
+      }),
+      fixture.addEntity('battery_aaa', {
+        spatial: { parentNodeId: parent.name, relation: 'in' },
+      }),
+      fixture.addEntity('door', {
+        spatial: { parentNodeId: parent.name, relation: 'behind' },
+      }),
+      fixture.addEntity('Static_219', {
+        spatial: { parentNodeId: parent.name, relation: 'on' },
+      }),
+    ];
+
+    fixture.scene.renameObject(parent, 'floor');
+
+    expect(children.map((child) => child.spatial.parentNodeId)).toEqual([
+      'floor',
+      'floor',
+      'floor',
+      'floor',
+    ]);
+    expect(SceneSpatialValidator.validate(fixture.scene, fixture.game as any).ok).toBe(true);
+  });
 });

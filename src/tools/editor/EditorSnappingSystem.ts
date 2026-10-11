@@ -19,7 +19,8 @@ export class EditorSnappingSystem {
     selectedObject: Entity,
     shiftKey: boolean,
     altKey: boolean,
-    zoom: number = 1.0
+    zoom: number = 1.0,
+    excludedVertexRefs?: ReadonlySet<string>
   ): { x: number; y: number; binding: QuadVertexBinding | null; p?: number } {
     const result = {
       x: mouseWorldPos.x,
@@ -37,6 +38,7 @@ export class EditorSnappingSystem {
       const prevV = poly[prevIndex];
       const nextV = poly[nextIndex];
 
+      const globalP = (selectedObject as any)?.parallax ?? 1.0;
       // Helper: Resolve effective parallax (Binding Lookup)
       const resolveParallax = (v: any) => {
         if (v.binding && v.binding.targetName) {
@@ -48,7 +50,10 @@ export class EditorSnappingSystem {
               const q = ent as QuadObject;
               if (v.binding.type === 'vertex' && v.binding.index !== undefined) {
                 const targetV = q.vertices[v.binding.index];
-                if (targetV) return targetV.p;
+                if (targetV) {
+                  const qGlobalP = q.parallax !== undefined ? q.parallax : 1.0;
+                  return (targetV.p ?? 1.0) * qGlobalP;
+                }
               }
             }
             return ent.parallax ?? 1.0;
@@ -59,16 +64,16 @@ export class EditorSnappingSystem {
             if (tb) return tb.parallax ?? 1.0;
           }
         }
-        return v.p ?? 1.0;
+        return (v.p ?? 1.0) * globalP;
       };
 
       const pPrev = resolveParallax(prevV);
       const pNext = resolveParallax(nextV);
 
-      // Convert to Visual Space (P=1)
+      // Convert to Visual Space relative to selected object's parallax layer
       const toVisual = (raw: { x: number; y: number }, p: number) => ({
-        x: raw.x - camX * (p - 1.0),
-        y: raw.y - camY * (p - 1.0),
+        x: raw.x - camX * (p - globalP),
+        y: raw.y - camY * (p - globalP),
       });
 
       const prevVis = toVisual(prevV, pPrev);
@@ -200,10 +205,13 @@ export class EditorSnappingSystem {
           const q = ent as QuadObject;
           if (q.disabled || !q.visible) return;
 
+          const qGlobalP = q.parallax !== undefined ? q.parallax : 1.0;
           // Vertices
-          q.vertices.forEach((qv) => {
-            const vx = Math.round(qv.x - camX * (qv.p - 1.0));
-            const vy = Math.round(qv.y - camY * (qv.p - 1.0));
+          q.vertices.forEach((qv, qIndex) => {
+            if (excludedVertexRefs?.has(`${q.name}:${qIndex}`)) return;
+            const effP = (qv.p !== undefined ? qv.p : 1.0) * qGlobalP;
+            const vx = Math.round(qv.x - camX * (effP - qGlobalP));
+            const vy = Math.round(qv.y - camY * (effP - qGlobalP));
 
             const dx = Math.abs(vx - result.x);
             const dy = Math.abs(vy - result.y);
@@ -215,100 +223,101 @@ export class EditorSnappingSystem {
                 type: 'vertex',
                 index: q.vertices.indexOf(qv),
               };
-              snapP = qv.p;
+              snapP = effP;
             }
           });
 
           // Grid
           if (q.isGrid) {
-            const visualVerts = q.vertices.map((v) => ({
-              x: Math.round(v.x - camX * (v.p - 1.0)),
-              y: Math.round(v.y - camY * (v.p - 1.0)),
-              p: v.p,
-            }));
-
-            const v0 = visualVerts[0];
-            const v1 = visualVerts[1];
-            const v2 = visualVerts[2]; // BR
-            const v3 = visualVerts[3]; // BL
+            const selectedGlobalP = (selectedObject as any).parallax ?? 1.0;
+            const gridPoint = (u: number, v: number) => {
+              const point = q.getGridPointAt(u, v, true);
+              return {
+                x: point.x + camX * (selectedGlobalP - qGlobalP),
+                y: point.y + camY * (selectedGlobalP - qGlobalP),
+                p: q.getParallaxAtGrid(u, v),
+              };
+            };
 
             // Horizontal Cuts (Down the shape using GridLinesY)
             for (let i = 1; i <= q.gridLinesY; i++) {
-              const v = i / (q.gridLinesY + 1);
+              const rawV = i / (q.gridLinesY + 1);
+              const v = rawV;
 
               // Left Edge (V0-V3)
-              const lx = v0.x + (v3.x - v0.x) * v;
-              const ly = v0.y + (v3.y - v0.y) * v;
-              const lp = v0.p + (v3.p - v0.p) * v;
+              const left = gridPoint(0, v);
+              const lx = left.x;
+              const ly = left.y;
 
               let d = Math.abs(lx - result.x);
               let d2 = Math.abs(ly - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: lx, y: ly };
-                binding = { targetName: q.name, type: 'grid', gridU: 0, gridV: v };
-                snapP = lp;
+                // Grid snapping is positional only. The vertex must be free to
+                // leave this node when the Quad or the vertex is edited later.
+                binding = null;
+                snapP = left.p;
               }
 
               // Right Edge (V1-V2)
-              const rx = v1.x + (v2.x - v1.x) * v;
-              const ry = v1.y + (v2.y - v1.y) * v;
-              const rp = v1.p + (v2.p - v1.p) * v;
+              const right = gridPoint(1, v);
+              const rx = right.x;
+              const ry = right.y;
 
               d = Math.abs(rx - result.x);
               d2 = Math.abs(ry - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: rx, y: ry };
-                binding = { targetName: q.name, type: 'grid', gridU: 1, gridV: v };
-                snapP = rp;
+                binding = null;
+                snapP = right.p;
               }
             }
 
             // Vertical Cuts (Across the shape using GridLinesX)
             for (let i = 1; i <= q.gridLinesX; i++) {
-              const u = i / (q.gridLinesX + 1);
+              const rawU = i / (q.gridLinesX + 1);
+              const u = rawU;
 
               // Top Edge (V0-V1)
-              const tx = v0.x + (v1.x - v0.x) * u;
-              const ty = v0.y + (v1.y - v0.y) * u;
-              const tp = v0.p + (v1.p - v0.p) * u;
+              const top = gridPoint(u, 0);
+              const tx = top.x;
+              const ty = top.y;
 
               let d = Math.abs(tx - result.x);
               let d2 = Math.abs(ty - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: tx, y: ty };
-                binding = { targetName: q.name, type: 'grid', gridU: u, gridV: 0 };
-                snapP = tp;
+                binding = null;
+                snapP = top.p;
               }
 
               // Bottom Edge (V3-V2)
-              const bx = v3.x + (v2.x - v3.x) * u;
-              const by = v3.y + (v2.y - v3.y) * u;
-              const bp = v3.p + (v2.p - v3.p) * u;
+              const bottom = gridPoint(u, 1);
+              const bx = bottom.x;
+              const by = bottom.y;
 
               d = Math.abs(bx - result.x);
               d2 = Math.abs(by - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: bx, y: by };
-                binding = { targetName: q.name, type: 'grid', gridU: u, gridV: 1 };
-                snapP = bp;
+                binding = null;
+                snapP = bottom.p;
               }
 
               // Internal Nodes
               for (let j = 1; j <= q.gridLinesY; j++) {
-                const v = j / (q.gridLinesY + 1);
-                const nx =
-                  (1 - u) * (1 - v) * v0.x + u * (1 - v) * v1.x + (1 - u) * v * v3.x + u * v * v2.x;
-                const ny =
-                  (1 - u) * (1 - v) * v0.y + u * (1 - v) * v1.y + (1 - u) * v * v3.y + u * v * v2.y;
-                const np =
-                  (1 - u) * (1 - v) * v0.p + u * (1 - v) * v1.p + (1 - u) * v * v3.p + u * v * v2.p;
+                const rawV = j / (q.gridLinesY + 1);
+                const v = rawV;
+                const node = gridPoint(u, v);
+                const nx = node.x;
+                const ny = node.y;
 
                 const dx = Math.abs(nx - result.x);
                 const dy = Math.abs(ny - result.y);
                 if (dx < bestDist && dy < bestDist) {
                   snapTarget = { x: nx, y: ny };
-                  binding = { targetName: q.name, type: 'grid', gridU: u, gridV: v };
-                  snapP = np;
+                  binding = null;
+                  snapP = node.p;
                 }
               }
             }
@@ -381,10 +390,12 @@ export class EditorSnappingSystem {
     const quads = scene.entities.filter((e: any) => e.type === 'Quad') as QuadObject[];
     quads.forEach((q) => {
       if (q.disabled || !q.visible) return;
+      const qGlobalP = q.parallax !== undefined ? q.parallax : 1.0;
 
       q.vertices.forEach((v) => {
-        const vx = v.x - camX * (v.p - 1.0);
-        const vy = v.y - camY * (v.p - 1.0);
+        const effP = (v.p !== undefined ? v.p : 1.0) * qGlobalP;
+        const vx = v.x - camX * (effP - qGlobalP);
+        const vy = v.y - camY * (effP - qGlobalP);
         const dx = Math.abs(vx - mouseVisualPos.x);
         const dy = Math.abs(vy - mouseVisualPos.y);
         if (dx < bestDist && dy < bestDist) {

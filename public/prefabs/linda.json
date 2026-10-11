@@ -1,0 +1,87 @@
+{
+  "name": "NPC",
+  "type": "Actor",
+  "locked": false,
+  "disabled": false,
+  "groupID": null,
+  "customName": "",
+  "textRedirects": {},
+  "interactions": {},
+  "components": [
+    {
+      "type": "Actor"
+    },
+    {
+      "type": "NPC",
+      "enabled": true,
+      "memory": ["Rick, who works on electronics, lives on this floor."],
+      "objectives": [
+        {
+          "id": "npc-objective-mrsebgt7-2",
+          "text": "TV is ON",
+          "subtasks": []
+        }
+      ],
+      "objectivesInitializedFromTA": true,
+      "memoryInitializedFromTA": true,
+      "memoryTARevision": "[]"
+    },
+    {
+      "type": "Inventory",
+      "relation": "in",
+      "capacity": 5,
+      "groups": [],
+      "protected": true,
+      "items": []
+    }
+  ],
+  "layer": 0,
+  "visible": true,
+  "hidden": false,
+  "parallax": 1,
+  "x": 1216,
+  "y": 295,
+  "width": 96.782,
+  "height": 292.13,
+  "baseWidth": 217,
+  "baseHeight": 655,
+  "spriteName": "linda_idle_down.json",
+  "color": "#36d87fff",
+  "scale": 0.446,
+  "refScale": 0.446,
+  "modelScale": 0.446,
+  "depthSortMode": "y",
+  "ignoreScaling": false,
+  "animationSpeed": 80,
+  "opacity": 1,
+  "blendMode": "source-over",
+  "blur": 0,
+  "brightness": 1,
+  "saturation": 1,
+  "contrast": 1,
+  "hueShift": 0,
+  "flipX": false,
+  "flipY": false,
+  "isPlayer": false,
+  "speed": 0.23,
+  "perceptionRadius": 800,
+  "direction": "down",
+  "animSets": {
+    "idle": {
+      "id": "idle",
+      "up": "linda_idle_up.json",
+      "down": "linda_idle_down.json",
+      "left": null,
+      "right": "linda_idle_right.json"
+    },
+    "walk": {
+      "id": "walk",
+      "up": "linda_walk_up.json",
+      "down": "linda_walk_down.json",
+      "left": "linda_walk_left.json",
+      "right": null
+    }
+  },
+  "colliderWidth": 67.43161992954968,
+  "colliderHeight": 15.029586483237711
+}

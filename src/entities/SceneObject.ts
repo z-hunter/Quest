@@ -43,8 +43,11 @@ export class SceneObject {
   layer: number = 0;
   visible: boolean = true; // Controls rendering only (optimization/culling)
   hidden: false | 'lookable' | 'examinable' = false;
-  spatial: { parentNodeId?: string | null; relation?: 'in' | 'on' | 'under' | 'behind' | null } =
-    {};
+  spatial: {
+    parentNodeId?: string | null;
+    relation?: 'in' | 'on' | 'under' | 'behind' | null;
+    surfaceSide?: 'front' | 'back';
+  } = {};
 
   /**
    * List of properties to be serialized to/from JSON.
@@ -95,6 +98,10 @@ export class SceneObject {
     props.forEach((prop) => {
       const value = (this as any)[prop];
       if (value !== undefined) {
+        if (prop === 'disabled' && (this as any).__box3dInheritedDisabled) {
+          json[prop] = !!(this as any).__box3dInheritedDisabled.authoredDisabled;
+          return;
+        }
         // Skip null folder — no need to serialize default
         if (prop === 'folder' && value === null) return;
         // Serialize inheritedProps Set as array, skip if empty
@@ -106,6 +113,15 @@ export class SceneObject {
         }
         if (prop === 'groupID' && typeof value === 'string') {
           json[prop] = normalizeGroupIdList(value);
+          return;
+        }
+        if (prop === 'components' && Array.isArray(value)) {
+          const components = JSON.parse(JSON.stringify(value));
+          for (const component of components) {
+            if (component?.type !== 'Surface' || !Array.isArray(component.items)) continue;
+            component.items = component.items.map((item: any) => ({ id: item?.id }));
+          }
+          json[prop] = components;
           return;
         }
         if (

@@ -5,6 +5,7 @@ import { Select } from '../../common/Select';
 interface SectionMiscProps {
   isTriggerbox: boolean;
   isQuad: boolean;
+  isBox3D: boolean;
 }
 
 interface EditorObject {
@@ -13,10 +14,9 @@ interface EditorObject {
   hidden?: boolean | 'lookable' | 'examinable';
 }
 
-export const SectionMisc: React.FC<SectionMiscProps> = ({ isTriggerbox, isQuad }) => {
+export const SectionMisc: React.FC<SectionMiscProps> = ({ isTriggerbox, isQuad, isBox3D }) => {
   const { game, obj, handleChange, mode, setSectionRef } = usePropertiesContext();
   const o = obj as EditorObject;
-  const hasTitle = !!game.textAssets.getResolvedObjectField(o as any, 'title')?.trim();
 
   return (
     <div
@@ -62,13 +62,31 @@ export const SectionMisc: React.FC<SectionMiscProps> = ({ isTriggerbox, isQuad }
         </div>
       )}
 
+      {isBox3D && (
+        <div
+          className="e-label ui-text-dim"
+          style={{
+            marginTop: '10px',
+            fontSize: '10px',
+            fontStyle: 'italic',
+            paddingTop: '5px',
+          }}
+        >
+          Drag: move. Hold SHIFT: resize bottom; ALT: resize top; CTRL: scale.
+          <br />
+          Middle-drag: rotate. CTRL + middle-drag: rotate Z / move depth.
+          <br />
+          CTRL + wheel: top offset X. SHIFT + wheel: top offset Z.
+        </div>
+      )}
+
       <div
         className="e-row"
         style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
           gap: '6px',
-          marginTop: isTriggerbox || isQuad ? '10px' : 0,
+          marginTop: isTriggerbox || isQuad || isBox3D ? '10px' : 0,
         }}
       >
         <label
@@ -100,25 +118,23 @@ export const SectionMisc: React.FC<SectionMiscProps> = ({ isTriggerbox, isQuad }
         </label>
       </div>
 
-      {hasTitle && (
-        <div className="e-row" style={{ marginTop: '8px' }}>
-          <label className="e-label" style={{ fontSize: '10px' }}>
-            Hidden
-          </label>
-          <Select
-            value={o.hidden === 'lookable' || o.hidden === 'examinable' ? o.hidden : 'false'}
-            onChange={(value) =>
-              handleChange('hidden', value === 'lookable' || value === 'examinable' ? value : false)
-            }
-            options={[
-              { value: 'false', label: 'False' },
-              { value: 'lookable', label: 'Lookable' },
-              { value: 'examinable', label: 'Examinable' },
-            ]}
-            style={{ width: '100%' }}
-          />
-        </div>
-      )}
+      <div className="e-row" style={{ marginTop: '8px' }}>
+        <label className="e-label" style={{ fontSize: '10px' }}>
+          Hidden
+        </label>
+        <Select
+          value={o.hidden === 'lookable' || o.hidden === 'examinable' ? o.hidden : 'false'}
+          onChange={(value) =>
+            handleChange('hidden', value === 'lookable' || value === 'examinable' ? value : false)
+          }
+          options={[
+            { value: 'false', label: 'False' },
+            { value: 'lookable', label: 'Lookable' },
+            { value: 'examinable', label: 'Examinable' },
+          ]}
+          style={{ width: '100%' }}
+        />
+      </div>
     </div>
   );
 };

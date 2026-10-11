@@ -78,7 +78,17 @@ export type ParserSpatialRelationContext = {
 };
 
 export type ParserPendingState = {
-  intent: 'look' | 'examine' | 'take' | 'put' | 'open' | 'close' | 'quit' | 'goTo' | 'custom';
+  intent:
+    | 'look'
+    | 'examine'
+    | 'take'
+    | 'give'
+    | 'put'
+    | 'open'
+    | 'close'
+    | 'quit'
+    | 'goTo'
+    | 'custom';
   question: string;
   originalInput: string;
   pendingEnvelopeJson?: string;
@@ -312,6 +322,11 @@ export type ParserToolAction =
       target: string | null;
       anchor?: string | null;
       relation?: ParserRelationType | null;
+    }
+  | {
+      type: 'giveTarget';
+      item: string | null;
+      target: string | null;
     }
   | {
       type: 'parserFailure';
@@ -568,6 +583,10 @@ export type LlmCascadeDebugInfo = {
     | 'api_error'
     | 'invalid_response'
     | 'timeout'
+    | 'authentication'
+    | 'rate_limited'
+    | 'unavailable'
+    | 'network_error'
     | 'disabled'
     | 'fallback';
 };

@@ -1,4 +1,6 @@
 import { Entity } from '../entities/Entity';
+import { QuadObject } from '../entities/QuadObject';
+import { Box3DObject } from '../entities/Box3DObject';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import { SceneObject } from '../entities/SceneObject';
 import { Actor } from '../entities/Actor';
@@ -10,7 +12,11 @@ import { Geometry } from '../utils/Geometry';
 import { SceneRenderer } from '../graphics/SceneRenderer';
 import type { IGame } from '../core/IGame';
 import { toVisualPosition } from '../utils/Parallax';
-import { updateSceneCamera } from './SceneCamera';
+import {
+  ThreeDParallaxSystem,
+  type ThreeDParallaxComponent,
+} from '../systems/ThreeDParallaxSystem';
+import { getPlayerCameraOffsetY, updateSceneCamera } from './SceneCamera';
 import { resolveSceneTargets, cleanupClosingSubscene } from './SceneSubscene';
 import {
   handleSceneClick,
@@ -28,7 +34,7 @@ import type {
 import type { SubsceneComponent } from '../systems/ComponentSystem';
 import type { ParserSceneTurnContext } from '../mechanics/parserTypes';
 import type { SceneSoundEnv } from '../systems/SoundManager';
-import { SceneLog, type SceneLogData } from './SceneLog';
+import { SceneLog } from './SceneLog';
 
 interface PickupAnimation {
   entity: Entity;
@@ -61,6 +67,8 @@ export interface SceneScaling {
   correctionalScale?: number;
 }
 
+export type Box3DOcclusionMode = 'exact' | 'fast';
+
 export interface SceneData {
   id: string;
   name: string;
@@ -87,12 +95,13 @@ export interface SceneData {
   cameraSpeed?: number;
   camDeadzoneX?: number;
   camDeadzoneY?: number;
+  box3dPerspective?: number;
+  box3dOcclusionMode?: Box3DOcclusionMode;
   camMinX?: number;
   camMaxX?: number;
   camMinY?: number;
   camMaxY?: number;
   soundEnv?: Partial<SceneSoundEnv>;
-  sceneLog?: SceneLogData;
 }
 
 export class Scene {
@@ -107,6 +116,7 @@ export class Scene {
   entities: Entity[];
   folders: Folder[] = [];
   displayOrder: string[] = [];
+  loadWarnings: string[] = [];
   pickupAnimations: PickupAnimation[] = [];
   dropAnimations: DropAnimation[] = [];
   walkbox: Walkbox[];
@@ -121,6 +131,10 @@ export class Scene {
   cameraSpeed: number;
   camDeadzoneX: number = 50;
   camDeadzoneY: number = 30;
+  box3dPerspective: number = 1;
+  box3dOcclusionMode: Box3DOcclusionMode = 'exact';
+  editorCameraSuspended: boolean = false;
+  editorCameraAnchorPlayerPos: { x: number; y: number } | null = null;
 
   soundEnv: SceneSoundEnv = {
     audioMaxDistance: 10000,
@@ -151,12 +165,70 @@ export class Scene {
   private _activeSubscene: string | null = null;
   public subsceneEntities: Set<SceneObject> = new Set();
   public revealedHiddenEntities: Set<string> = new Set();
+  public revealedHiddenEntitiesByActor: Map<string, Set<string>> = new Map();
   public parserNote: string = '';
   public entityParserNotes: Record<string, string> = {};
   public parserNoteNeedsCheck: boolean = false;
   public entityParserNoteNeedsCheck: Record<string, boolean> = {};
   public sceneLog: SceneLog = new SceneLog();
   private parserRecentTurns: ParserSceneTurnContext[] = [];
+
+  private _walkboxEntitiesCache: Entity[] | null = null;
+  private _physicalExitsCache: Triggerbox[] | null = null;
+  private surfaceRelationsInitialized = false;
+
+  getWalkboxEntities(): Entity[] {
+    if (!this._walkboxEntitiesCache) {
+      this._walkboxEntitiesCache = this.entities.filter(
+        (e) => !e.disabled && e.components?.some((c) => c.type === 'WalkBox')
+      );
+    }
+    return this._walkboxEntitiesCache;
+  }
+
+  /** Current visual polygons for authored and component WalkBoxes. */
+  getActiveWalkboxes(): Array<{
+    name: string;
+    poly: { x: number; y: number }[];
+    mode: 'Invert' | 'Add' | 'Subtract';
+    disabled: boolean;
+  }> {
+    const active = (this.walkbox || [])
+      .filter((walkbox) => !walkbox.disabled)
+      .map((walkbox) => ({
+        name: walkbox.name,
+        poly: walkbox.poly.map((point) => ({ x: point.x, y: point.y })),
+        mode: (walkbox.mode === 'Subtract' || walkbox.mode === 'Add' ? walkbox.mode : 'Invert') as
+          | 'Invert'
+          | 'Add'
+          | 'Subtract',
+        disabled: false,
+      }));
+    for (const entity of this.getWalkboxEntities()) {
+      const component = entity.components?.find(
+        (candidate: any) => candidate.type === 'WalkBox'
+      ) as { mode?: 'Invert' | 'Add' | 'Subtract' } | undefined;
+      if (!component || entity.disabled || !(entity instanceof QuadObject)) continue;
+      active.push({
+        name: entity.name,
+        poly: entity.getVisualVertices(),
+        mode: component.mode === 'Subtract' || component.mode === 'Add' ? component.mode : 'Invert',
+        disabled: false,
+      });
+    }
+    return active;
+  }
+
+  getPhysicalExits(): Triggerbox[] {
+    if (!this._physicalExitsCache) {
+      this._physicalExitsCache = this.triggerboxes.filter((tb) => {
+        if (tb.disabled || !tb.poly || tb.poly.length < 3) return false;
+        const exit = tb.components?.find((c: any) => c.type === 'Exit') as any;
+        return exit && !ComponentSystem.isNavigationOnlyExit(tb as any);
+      });
+    }
+    return this._physicalExitsCache;
+  }
 
   get activeSubscene(): string | null {
     return this._activeSubscene;
@@ -186,10 +258,8 @@ export class Scene {
     // Use current coordinates directly
     const pX = this.player.x;
     const pY = this.player.y;
-    const pHeight = this.player.height || 0;
-
     let targetX = pX;
-    let targetY = pY - pHeight / 2;
+    let targetY = pY - getPlayerCameraOffsetY(this.player);
 
     if (this.camMinX !== undefined && targetX < this.camMinX) targetX = this.camMinX;
     if (this.camMaxX !== undefined && targetX > this.camMaxX) targetX = this.camMaxX;
@@ -202,6 +272,20 @@ export class Scene {
     // Explicitly reset any cached centering state
     this._centeringDirX = 0;
     this._centeringDirY = 0;
+  }
+
+  suspendEditorCameraFollow(): void {
+    this.editorCameraSuspended = true;
+    if (this.player) {
+      this.editorCameraAnchorPlayerPos = { x: this.player.x, y: this.player.y };
+    } else {
+      this.editorCameraAnchorPlayerPos = null;
+    }
+  }
+
+  resumeEditorCameraFollow(): void {
+    this.editorCameraSuspended = false;
+    this.editorCameraAnchorPlayerPos = null;
   }
 
   private normalizeSpatialPlacement(
@@ -222,6 +306,7 @@ export class Scene {
     return {
       parentNodeId: parentNodeId || null,
       relation,
+      ...(value.surfaceSide === 'back' ? { surfaceSide: 'back' as const } : {}),
     };
   }
 
@@ -314,20 +399,62 @@ export class Scene {
     return Array.from(result);
   }
 
+  getNearestSpatialQuadWithComponent(
+    entity: SceneObject,
+    componentType: string
+  ): QuadObject | null {
+    const visited = new Set<string>([entity.name]);
+    let parentId = this.normalizeSpatialPlacement((entity as any).spatial)?.parentNodeId || null;
+
+    for (let depth = 0; parentId && depth < 16; depth++) {
+      if (visited.has(parentId)) return null;
+      visited.add(parentId);
+      const parent = this.getObjectByName(parentId);
+      if (!parent) return null;
+      if (
+        parent.type === 'Quad' &&
+        !parent.disabled &&
+        parent.components?.some((component: any) => component?.type === componentType)
+      ) {
+        return parent as QuadObject;
+      }
+      parentId = this.normalizeSpatialPlacement((parent as any).spatial)?.parentNodeId || null;
+    }
+
+    return null;
+  }
+
   getSpatialPlacementForObject(obj: SceneObject): SpatialPlacement | null {
     return this.normalizeSpatialPlacement((obj as any).spatial);
   }
 
-  isHiddenEntityRevealed(object: SceneObject | null | undefined): boolean {
-    if (!object) return false;
-    return this.revealedHiddenEntities.has(object.name);
+  getRevealedHiddenEntities(actor?: Actor | null): Set<string> {
+    if (!actor) return this.revealedHiddenEntities;
+    let revealed = this.revealedHiddenEntitiesByActor.get(actor.name);
+    if (!revealed) {
+      revealed = new Set();
+      this.revealedHiddenEntitiesByActor.set(actor.name, revealed);
+    }
+    return revealed;
   }
 
-  revealHiddenEntity(object: SceneObject | null | undefined): boolean {
+  isHiddenEntityRevealed(object: SceneObject | null | undefined, actor?: Actor | null): boolean {
     if (!object) return false;
-    if (this.revealedHiddenEntities.has(object.name)) return false;
-    this.revealedHiddenEntities.add(object.name);
+    return this.getRevealedHiddenEntities(actor).has(object.name);
+  }
+
+  revealHiddenEntity(object: SceneObject | null | undefined, actor?: Actor | null): boolean {
+    if (!object) return false;
+    const revealed = this.getRevealedHiddenEntities(actor);
+    if (revealed.has(object.name)) return false;
+    revealed.add(object.name);
+    if (actor === this.player) this.revealedHiddenEntities.add(object.name);
     return true;
+  }
+
+  forgetHiddenEntityReveal(id: string): void {
+    this.revealedHiddenEntities.delete(id);
+    this.revealedHiddenEntitiesByActor.forEach((revealed) => revealed.delete(id));
   }
 
   getParserNote(): string {
@@ -387,6 +514,13 @@ export class Scene {
 
   clearParserRecentTurns(): void {
     this.parserRecentTurns = [];
+  }
+
+  restoreParserRecentTurns(turns: ParserSceneTurnContext[]): void {
+    this.parserRecentTurns = [];
+    for (const turn of Array.isArray(turns) ? turns : []) {
+      this.addParserRecentTurn(turn?.command || '', turn?.response || '');
+    }
   }
 
   addParserRecentTurn(command: string, response: string): void {
@@ -470,7 +604,7 @@ export class Scene {
       if (staleEntities.length > 0) {
         this.entities = this.entities.filter((candidate) => candidate.name !== id);
         for (const stale of staleEntities) {
-          this.revealedHiddenEntities.delete(stale.name);
+          this.forgetHiddenEntityReveal(stale.name);
           this.subsceneEntities.delete(stale);
           if (this.player === stale) {
             this.player = null;
@@ -480,6 +614,7 @@ export class Scene {
     }
 
     this.entities.push(entity);
+    this._walkboxEntitiesCache = null;
     // @ts-ignore
     entity.scene = this;
     // If this entity is the player, store a reference
@@ -505,6 +640,7 @@ export class Scene {
     this.triggerboxes.push(triggerbox);
     // @ts-ignore
     triggerbox.scene = this;
+    this._physicalExitsCache = null;
   }
 
   addWalkbox(walkbox: Walkbox): void {
@@ -518,13 +654,14 @@ export class Scene {
     const index = this.entities.indexOf(entity);
     if (index > -1) {
       this.entities.splice(index, 1);
-      this.revealedHiddenEntities.delete(entity.name);
+      this.forgetHiddenEntityReveal(entity.name);
       if (this.subsceneEntities.has(entity)) {
         this.subsceneEntities.delete(entity);
       }
       if (this.player === entity) {
         this.player = null;
       }
+      this._walkboxEntitiesCache = null;
     }
   }
 
@@ -532,13 +669,14 @@ export class Scene {
     const index = this.triggerboxes.indexOf(triggerbox);
     if (index > -1) {
       this.triggerboxes.splice(index, 1);
-      this.revealedHiddenEntities.delete(triggerbox.name);
+      this.forgetHiddenEntityReveal(triggerbox.name);
       if (this.subsceneEntities.has(triggerbox)) {
         this.subsceneEntities.delete(triggerbox);
       }
       if (this.activeSubscene && triggerbox.name === this.activeSubscene) {
         this.activeSubscene = null;
       }
+      this._physicalExitsCache = null;
     }
   }
 
@@ -546,7 +684,7 @@ export class Scene {
     const index = this.walkbox.indexOf(walkbox);
     if (index > -1) {
       this.walkbox.splice(index, 1);
-      this.revealedHiddenEntities.delete(walkbox.name);
+      this.forgetHiddenEntityReveal(walkbox.name);
       if (this.subsceneEntities.has(walkbox)) {
         this.subsceneEntities.delete(walkbox);
       }
@@ -566,6 +704,44 @@ export class Scene {
       this.walkbox.find((obj) => obj.name === normalized) ||
       null
     );
+  }
+
+  renameObject(object: SceneObject, name: string): void {
+    const previousName = String(object.name || '').trim();
+    const nextName = String(name || '').trim();
+    if (!nextName || previousName === nextName) return;
+
+    const existing = this.getObjectByName(nextName);
+    if (existing && existing !== object) return;
+
+    object.name = nextName;
+    const allObjects = [...this.entities, ...this.walkbox, ...this.triggerboxes, ...this.folders];
+    allObjects.forEach((candidate) => {
+      if (candidate === object || candidate.spatial?.parentNodeId !== previousName) return;
+      candidate.spatial = {
+        ...(candidate.spatial || {}),
+        parentNodeId: nextName,
+      };
+    });
+
+    if (object instanceof Entity || this.entities.some((candidate) => candidate === object)) {
+      if (previousName in this.entityParserNotes) {
+        this.entityParserNotes[nextName] = this.entityParserNotes[previousName];
+        delete this.entityParserNotes[previousName];
+      }
+      if (previousName in this.entityParserNoteNeedsCheck) {
+        this.entityParserNoteNeedsCheck[nextName] = this.entityParserNoteNeedsCheck[previousName];
+        delete this.entityParserNoteNeedsCheck[previousName];
+      }
+    }
+
+    if (this.revealedHiddenEntities.delete(previousName)) {
+      this.revealedHiddenEntities.add(nextName);
+    }
+    this.revealedHiddenEntitiesByActor.forEach((revealed) => {
+      if (revealed.delete(previousName)) revealed.add(nextName);
+    });
+    if (this._activeSubscene === previousName) this._activeSubscene = nextName;
   }
 
   playPickupAnimation(entity: Entity): void {
@@ -676,6 +852,49 @@ export class Scene {
     return this.scaling.min + t * (this.scaling.max - this.scaling.min);
   }
 
+  getDepthScaleFor(entity: Entity): number {
+    if (entity.ignoreScaling) return 1;
+
+    const visualAnchor =
+      entity.type === 'Quad'
+        ? (() => {
+            const vertices = (entity as QuadObject).getVisualVertices(false);
+            return vertices.reduce(
+              (sum, vertex) => ({
+                x: sum.x + vertex.x / vertices.length,
+                y: sum.y + vertex.y / vertices.length,
+              }),
+              { x: 0, y: 0 }
+            );
+          })()
+        : toVisualPosition(
+            { x: entity.x, y: entity.y },
+            this.camera,
+            entity.parallax !== undefined ? entity.parallax : 1
+          );
+
+    const getScale = (controller: { min?: number; max?: number }, v: number) => {
+      const min = Number.isFinite(controller.min) ? controller.min! : 0.5;
+      const max = Number.isFinite(controller.max) ? controller.max! : 1;
+      return min + v * (max - min);
+    };
+    const owner = this.getNearestSpatialQuadWithComponent(entity, 'Depth scaling controller');
+    const controller = owner?.components?.find(
+      (component: any) => component?.type === 'Depth scaling controller'
+    ) as { min?: number; max?: number } | undefined;
+    const metrics = owner?.getSurfaceMetricsAt(visualAnchor.x, visualAnchor.y, true, false);
+    if (controller && metrics) return getScale(controller, metrics.v);
+
+    // Scene Depth Scaling is world-space fallback behavior. Unlike a Quad
+    // controller, it must not react to camera motion or an Entity's P layer.
+    const sceneScalingY =
+      entity.type === 'Quad'
+        ? (entity as QuadObject).vertices.reduce((sum, vertex) => sum + vertex.y, 0) /
+          (entity as QuadObject).vertices.length
+        : entity.y;
+    return this.scaling.enabled ? this.getScaling(sceneScalingY) : 1;
+  }
+
   getCorrectionalScale(): number {
     const value = this.scaling?.correctionalScale;
     return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 1;
@@ -776,7 +995,79 @@ export class Scene {
     });
   }
 
-  isWalkable(x: number, y: number, sourceEntity?: Entity): boolean {
+  getWalkabilityDiagnostics(x: number, y: number, sourceEntity?: Entity): Record<string, unknown> {
+    const cam = this.collisionCamera || this.camera;
+    const collider = sourceEntity
+      ? { width: sourceEntity.colliderWidth, height: sourceEntity.colliderHeight }
+      : null;
+    let sourceRect: { x: number; y: number; w: number; h: number } | null = null;
+    if (sourceEntity && sourceEntity.colliderWidth > 0 && sourceEntity.colliderHeight > 0) {
+      const parallax = sourceEntity.parallax !== undefined ? sourceEntity.parallax : 1.0;
+      const visualOffset = (sourceEntity as any).visualOffset || { x: 0, y: 0 };
+      const visual = toVisualPosition({ x, y }, cam, parallax, visualOffset);
+      sourceRect = {
+        x: visual.x - sourceEntity.colliderWidth / 2,
+        y: visual.y - sourceEntity.colliderHeight,
+        w: sourceEntity.colliderWidth,
+        h: sourceEntity.colliderHeight,
+      };
+    }
+    const entityBlockers = sourceRect
+      ? this.entities
+          .filter(
+            (other) =>
+              other !== sourceEntity &&
+              !other.disabled &&
+              other.colliderWidth > 0 &&
+              other.colliderHeight > 0
+          )
+          .flatMap((other) => {
+            const parallax = other.parallax !== undefined ? other.parallax : 1.0;
+            const visualOffset = (other as any).visualOffset || { x: 0, y: 0 };
+            const visual = toVisualPosition(
+              { x: other.x, y: other.y },
+              cam,
+              parallax,
+              visualOffset
+            );
+            const rect = {
+              x: visual.x - other.colliderWidth / 2,
+              y: visual.y - other.colliderHeight,
+              w: other.colliderWidth,
+              h: other.colliderHeight,
+            };
+            return Geometry.rectIntersectsRect(sourceRect, rect)
+              ? [
+                  {
+                    id: other.name,
+                    rect,
+                    collider: { width: other.colliderWidth, height: other.colliderHeight },
+                  },
+                ]
+              : [];
+          })
+      : [];
+    const walkboxes = (this.walkbox || [])
+      .filter((walkbox) => !walkbox.disabled)
+      .map((walkbox) => ({ id: walkbox.name, mode: walkbox.mode || 'Invert' }));
+    return {
+      point: { x, y },
+      walkable: this.isWalkable(x, y, sourceEntity),
+      source: sourceEntity?.name,
+      collider,
+      sourceRect,
+      collisionCamera: cam ? { x: cam.x, y: cam.y } : null,
+      entityBlockers,
+      walkboxes,
+    };
+  }
+
+  isWalkable(
+    x: number,
+    y: number,
+    sourceEntity?: Entity,
+    ignorePhysicalExits: boolean = false
+  ): boolean {
     // console.log(`[Scene] isWalkable(${x}, ${y}) source=${sourceEntity?.name} Collider=${sourceEntity?.colliderWidth}x${sourceEntity?.colliderHeight}`);
 
     // 0. Zero Collider / Check
@@ -786,14 +1077,44 @@ export class Scene {
       return true;
     }
 
+    const wbEntities = this.getWalkboxEntities();
+    // Quad WalkBox polygons are projected with the current render camera.
+    // Using collisionCamera only for the Actor produces two different visual
+    // spaces while auto-centering is smoothing, which can falsely reject a
+    // player standing near a Quad edge.
+    const hasQuadWalkbox = wbEntities.some(
+      (entity) =>
+        !entity.disabled &&
+        !!entity.components?.some((component: any) => component?.type === 'WalkBox') &&
+        !!(entity as any).vertices
+    );
     let sourceRect = null;
-    const cam = this.collisionCamera || this.camera;
+    const cam = hasQuadWalkbox ? this.camera : this.collisionCamera || this.camera;
     if (sourceEntity && sourceEntity.colliderWidth > 0 && sourceEntity.colliderHeight > 0) {
       // Apply Source Parallax & Visual correction to Source Rect (Visual Collider)
       const sp = sourceEntity.parallax !== undefined ? sourceEntity.parallax : 1.0;
       const svOx = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.x : 0;
       const svOy = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.y : 0;
-      const sourceVisual = toVisualPosition({ x, y }, cam, sp, { x: svOx, y: svOy });
+      const surfaceBinding = (sourceEntity as any).__surfaceParallaxBinding as
+        | { quadName?: string; u?: number; v?: number; worldX?: number; worldY?: number }
+        | undefined;
+      const surfaceQuad = surfaceBinding?.quadName
+        ? (this.getObjectByName(surfaceBinding.quadName) as QuadObject | null)
+        : null;
+      const surfacePoint =
+        surfaceQuad &&
+        Number.isFinite(surfaceBinding?.u) &&
+        Number.isFinite(surfaceBinding?.v) &&
+        Number.isFinite(surfaceBinding?.worldX) &&
+        Number.isFinite(surfaceBinding?.worldY)
+          ? surfaceQuad.getGridPointAt(surfaceBinding?.u ?? 0, surfaceBinding?.v ?? 0, true)
+          : null;
+      const sourceVisual = surfacePoint
+        ? {
+            x: surfacePoint.x + (x - (surfaceBinding?.worldX ?? x)) + svOx,
+            y: surfacePoint.y + (y - (surfaceBinding?.worldY ?? y)) + svOy,
+          }
+        : toVisualPosition({ x, y }, cam, sp, { x: svOx, y: svOy });
 
       sourceRect = {
         x: sourceVisual.x - sourceEntity.colliderWidth / 2,
@@ -831,39 +1152,27 @@ export class Scene {
       }
     }
 
-    // Filter out disabled walkboxes first
-    const activeWalkboxes = this.walkbox ? this.walkbox.filter((wb) => !wb.disabled) : [];
-
-    // Integrated WalkBox Components (Quads)
-    // We look for entities with 'WalkBox' component and treat them as walkboxes
-    // Optimization: In a large scene, we might want to cache this list.
-    this.entities.forEach((entity) => {
-      if (entity.disabled) return;
-      if (entity.components) {
-        const wbComp = entity.components.find((c: any) => c.type === 'WalkBox');
-        if (wbComp && (entity as any).vertices) {
-          const vertices = (entity as any).vertices.map((v: any) => {
-            const p = v.p !== undefined ? v.p : (entity as any).parallax || 1.0;
-            let vx = v.x;
-            let vy = v.y;
-            if (cam && p !== 1.0) {
-              vx = v.x - cam.x * (p - 1.0);
-              vy = v.y - cam.y * (p - 1.0);
+    if (!ignorePhysicalExits) {
+      const isPlayer = !sourceEntity || (sourceEntity as any).isPlayer === true;
+      if (!isPlayer) {
+        const physicalExits = this.getPhysicalExits();
+        for (const tb of physicalExits) {
+          if (sourceRect) {
+            if (Geometry.rectIntersectsPolygon(sourceRect, tb.poly)) {
+              return false;
             }
-            return { x: vx, y: vy };
-          });
-
-          activeWalkboxes.push({
-            name: entity.name,
-            poly: vertices, // Corrected Visual Vertices
-            mode: wbComp.mode || 'Invert',
-            disabled: false,
-          } as any);
+          } else {
+            if (Geometry.isPointInPolygonWithEpsilon({ x, y }, tb.poly)) {
+              return false;
+            }
+          }
         }
       }
-    });
+    }
 
-    // If no active walkboxes, everything is walkable
+    const activeWalkboxes = this.getActiveWalkboxes();
+
+    // If no active walkboxes, everything is walkable (unless blocked by entities or physical exits checked above)
     if (activeWalkboxes.length === 0) return true;
 
     if (sourceRect) {
@@ -1077,7 +1386,78 @@ export class Scene {
     }
   }
 
+  /**
+   * Surface tracking has to run at fixed points in the frame, not merely when
+   * an individual Quad happens to update. This keeps actor movement independent
+   * from the order of entities in the scene array.
+   */
+  private updateSurfaceParallax(): void {
+    for (const entity of this.entities) {
+      if (entity.disabled || entity.type !== 'Quad') continue;
+      const component = entity.components?.find((item: any) => item?.type === '3d-parallax');
+      if (component) {
+        ThreeDParallaxSystem.update(entity as QuadObject, component as ThreeDParallaxComponent);
+      }
+    }
+  }
+
+  private getWalkboxQuad(object: SceneObject | null | undefined): QuadObject | null {
+    if (
+      !object ||
+      object.type !== 'Quad' ||
+      object.disabled ||
+      !object.components?.some((component: any) => component?.type === 'WalkBox')
+    ) {
+      return null;
+    }
+    const walkbox = object.components.find(
+      (component: any) => component?.type === 'WalkBox'
+    ) as any;
+    return walkbox?.mode === 'Subtract' ? null : (object as QuadObject);
+  }
+
+  private syncActorSurfaceRelations(): void {
+    for (const actor of this.entities) {
+      if (!(actor instanceof Actor) || actor.disabled) continue;
+
+      const visual = toVisualPosition(
+        { x: actor.x, y: actor.y },
+        this.camera,
+        actor.parallax !== undefined ? actor.parallax : 1
+      );
+      const placement = this.normalizeSpatialPlacement(actor.spatial);
+      const current =
+        placement?.relation === 'on'
+          ? this.getWalkboxQuad(this.getObjectByName(placement.parentNodeId || ''))
+          : null;
+      let next =
+        current && Geometry.isPointInPolygonWithEpsilon(visual, current.getVisualVertices(), 2)
+          ? current
+          : null;
+
+      if (!next) {
+        for (let index = this.entities.length - 1; index >= 0; index--) {
+          const candidate = this.getWalkboxQuad(this.entities[index]);
+          if (candidate?.getSurfaceMetricsAt(visual.x, visual.y, true)) {
+            next = candidate;
+            break;
+          }
+        }
+      }
+
+      if (next) {
+        if (placement?.parentNodeId === next.name && placement.relation === 'on') continue;
+        actor.spatial = { parentNodeId: next.name, relation: 'on' };
+      } else if (current) {
+        actor.spatial = {};
+      }
+    }
+  }
+
   update(deltaTime: number): void {
+    (this.entities as any[])
+      .filter((entity) => entity instanceof Box3DObject)
+      .forEach((box: Box3DObject) => box.syncFaces(this));
     // Run Component System Logic (Shadows, Parallax, etc.)
     ComponentSystem.update(this, deltaTime);
     ComponentSystem.checkTriggerboxCollisions(this);
@@ -1089,15 +1469,26 @@ export class Scene {
     });
     this._centeringDirX = cameraState.centeringDirX;
     this._centeringDirY = cameraState.centeringDirY;
+    (this.entities as any[])
+      .filter((entity) => entity instanceof Box3DObject)
+      .forEach((box: Box3DObject) => box.syncFaces(this));
+    if (!this.surfaceRelationsInitialized) {
+      this.syncActorSurfaceRelations();
+      this.surfaceRelationsInitialized = true;
+    }
+    this.updateSurfaceParallax();
 
     this.entities.forEach((entity) => {
       if (entity.disabled) return;
+      if (entity instanceof Box3DObject) return;
       if (entity instanceof Actor) {
         entity.update(deltaTime, (x: number, y: number) => this.isWalkable(x, y, entity));
       } else {
         entity.update(deltaTime);
       }
     });
+    this.syncActorSurfaceRelations();
+    this.updateSurfaceParallax();
 
     if (this.pickupAnimations.length > 0) {
       const nextAnimations: PickupAnimation[] = [];
@@ -1144,6 +1535,30 @@ export class Scene {
     }
   }
 
+  /**
+   * Advance NPC actors in a cached scene that is not currently rendered.
+   * Scene-level systems, camera, player input, and visual-only animations stay
+   * paused; autonomous NPC movement still needs Actor.update to resolve PM
+   * MOVE_TO steps and emit their completion callbacks.
+   */
+  updateAutonomousNpcs(deltaTime: number): void {
+    this.entities.forEach((entity) => {
+      if (entity.disabled || !(entity instanceof Actor) || entity.isPlayer) return;
+      if (!ComponentSystem.getNpcComponent(entity)?.enabled) return;
+      entity.update(deltaTime, (x: number, y: number) => this.isWalkable(x, y, entity));
+    });
+  }
+
+  hasAutonomousNpcs(): boolean {
+    return this.entities.some(
+      (entity) =>
+        !entity.disabled &&
+        entity instanceof Actor &&
+        !entity.isPlayer &&
+        ComponentSystem.getNpcComponent(entity)?.enabled
+    );
+  }
+
   // -----------------------------------------------------
   // RENDER LOOP
   // -----------------------------------------------------
@@ -1176,12 +1591,13 @@ export class Scene {
       cameraSpeed: this.cameraSpeed,
       camDeadzoneX: this.camDeadzoneX,
       camDeadzoneY: this.camDeadzoneY,
+      box3dPerspective: this.box3dPerspective,
+      box3dOcclusionMode: this.box3dOcclusionMode,
       camMinX: this.camMinX,
       camMaxX: this.camMaxX,
       camMinY: this.camMinY,
       camMaxY: this.camMaxY,
       soundEnv: this.soundEnv,
-      sceneLog: this.sceneLog.toJSON(),
     };
   }
 }

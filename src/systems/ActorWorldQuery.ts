@@ -2,6 +2,7 @@ import type { IGame } from '../core/IGame';
 import { Actor } from '../entities/Actor';
 import { Entity } from '../entities/Entity';
 import type { SceneObject } from '../entities/SceneObject';
+import type { Scene } from '../scene/Scene';
 import {
   getSceneTextLayerAccessState,
   type SceneTextLayerAccessState,
@@ -33,26 +34,45 @@ export type ActorSwitchAffordance = {
   requiredKeyId?: string;
 };
 
+export type ActorInventoryItemKnowledge = {
+  id: string;
+  title: string;
+  containerId: string;
+  relation: EffectiveRelation;
+  groupIds?: string[];
+  states?: Array<{ id: string; value: string | number | boolean }>;
+};
+
+export type ActorInventoryKnowledge = {
+  available: boolean;
+  itemIds: string[];
+  items?: ActorInventoryItemKnowledge[];
+};
+
 export class ActorWorldQuery {
   readonly navigation: ActorNavigationService;
   private readonly game: IGame;
 
   constructor(game: IGame) {
     this.game = game;
-    this.navigation = new ActorNavigationService(game);
+    this.navigation = game.actorNavigation;
   }
 
-  getKnownObjects(actor: Actor): SceneObject[] {
-    const scene = this.game.sceneManager.currentScene;
+  getKnownObjects(
+    actor: Actor,
+    scene: Scene | null = actor.scene || this.game.sceneManager.currentScene
+  ): SceneObject[] {
     if (!scene) return [];
     return scene
       .getAllSceneObjects()
       .filter((object) => object !== actor)
-      .filter((object) => this.getObjectPerception(actor, object, true).visibility === 'visible');
+      .filter(
+        (object) => this.getObjectPerception(actor, object, true, scene).visibility === 'visible'
+      );
   }
 
   getActionObservers(source: Actor, subject?: SceneObject | null): Actor[] {
-    const scene = this.game.sceneManager.currentScene;
+    const scene: Scene | null = source.scene || this.game.sceneManager.currentScene;
     if (!scene) return [];
     const focus = subject || source;
     const focusPoint = this.game.inventoryManager.getSceneObjectReferencePoint(focus);
@@ -77,8 +97,10 @@ export class ActorWorldQuery {
     });
   }
 
-  getActorListeners(source: Actor): Actor[] {
-    const scene = this.game.sceneManager.currentScene;
+  getActorListeners(
+    source: Actor,
+    scene: Scene | null = (source.scene as Scene | null) || this.game.sceneManager.currentScene
+  ): Actor[] {
     if (!scene) return [];
     return scene.entities.filter((entity): entity is Actor => {
       if (
@@ -89,16 +111,17 @@ export class ActorWorldQuery {
       ) {
         return false;
       }
-      return this.getObjectPerception(entity, source, true).visibility === 'visible';
+      return this.getObjectPerception(entity, source, true, scene).visibility === 'visible';
     });
   }
 
   getObjectPerception(
     actor: Actor,
     object: SceneObject,
-    fast: boolean = false
+    fast: boolean = false,
+    sceneOverride?: Scene | null
   ): ActorObjectPerception {
-    const scene = this.game.sceneManager.currentScene;
+    const scene = sceneOverride || actor.scene || this.game.sceneManager.currentScene;
     if (!scene) {
       return { visibility: 'unknown', interaction: 'blocked', approach: 'unreachable' };
     }
@@ -114,8 +137,15 @@ export class ActorWorldQuery {
       return { visibility: 'unknown', interaction: 'blocked', approach: 'unreachable' };
     }
 
-    const accessState = getSceneTextLayerAccessState(scene, this.game, object);
-    const location = this.getLocation(accessState);
+    const accessState = getSceneTextLayerAccessState(
+      scene,
+      this.game,
+      object,
+      undefined,
+      undefined,
+      scene.getRevealedHiddenEntities(actor)
+    );
+    const location = this.getLocation(accessState, scene);
     if (held) {
       const visibility = accessState.hidden ? 'hidden' : 'visible';
       return {
@@ -185,14 +215,66 @@ export class ActorWorldQuery {
     };
   }
 
-  getInventoryKnowledge(actor: Actor): { available: boolean; itemIds: string[] } {
+  getInventoryKnowledge(actor: Actor, scene?: Scene): ActorInventoryKnowledge {
+    const getInventoryEntities = (owner: Entity, relation: EffectiveRelation) =>
+      scene
+        ? this.game.inventoryManager.getInventoryEntitiesInScene(owner, scene, relation)
+        : this.game.inventoryManager.getInventoryEntities(owner, relation);
+    const getTitle = (item: Entity) =>
+      this.game.textAssets.getResolvedObjectField(item, 'title')?.trim() || null;
+    const topLevelItems = getInventoryEntities(actor, 'in').filter(
+      (item) => !item.disabled && !!getTitle(item)
+    );
+    const items: ActorInventoryItemKnowledge[] = [];
+    const visited = new Set<string>();
+    const visit = (container: Entity) => {
+      for (const component of ComponentSystem.getInventoryComponents(container)) {
+        const relation = ComponentSystem.normalizeInventoryRelation(component);
+        for (const item of getInventoryEntities(container, relation)) {
+          if (item.disabled || visited.has(item.name)) continue;
+          visited.add(item.name);
+          const title = getTitle(item);
+          const perception = this.getObjectPerception(actor, item, true, scene);
+          const groupIds = this.getObjectGroupIds(item);
+          const states = ComponentSystem.getStateComponents(item).map((state) => ({
+            id: state.id,
+            value: ComponentSystem.getStateValue(item, state.id) ?? state.initialValue,
+          }));
+          if (title && perception.visibility === 'visible') {
+            items.push({
+              id: item.name,
+              title,
+              containerId: container.name,
+              relation,
+              ...(groupIds.length ? { groupIds } : {}),
+              ...(states.length ? { states } : {}),
+            });
+          }
+          visit(item);
+        }
+      }
+    };
+    visit(actor);
     return {
       available: this.game.inventoryManager.hasMainInventory(actor),
-      itemIds: this.game.inventoryManager
-        .getInventoryEntities(actor, 'in')
-        .filter((item) => !item.disabled)
-        .map((item) => item.name),
+      itemIds: topLevelItems.map((item) => item.name),
+      ...(items.length ? { items } : {}),
     };
+  }
+
+  private getObjectGroupIds(object: SceneObject): string[] {
+    const rawGroupIds = [
+      ...(Array.isArray((object as any).groupIds) ? (object as any).groupIds : []),
+      (object as any).groupID,
+    ];
+    return Array.from(
+      new Set(
+        rawGroupIds
+          .flatMap((value) => String(value || '').split(','))
+          .map((value) => value.trim())
+          .filter(Boolean)
+      )
+    );
   }
 
   getInspectionAffordance(object: SceneObject): {
@@ -208,16 +290,21 @@ export class ActorWorldQuery {
     };
   }
 
-  getSwitchAffordance(actor: Actor, object: SceneObject): ActorSwitchAffordance | undefined {
+  getSwitchAffordance(
+    actor: Actor,
+    object: SceneObject,
+    scene: Scene | null = actor.scene || this.game.sceneManager.currentScene
+  ): ActorSwitchAffordance | undefined {
     const component = this.game.getSwitchComponent(object);
     if (!component) return undefined;
     const state = component.state === 2 ? 'open' : 'closed';
     const keyId = String(component.idKey || component.keyId || '').trim();
-    const key = keyId ? this.game.sceneManager.currentScene?.getObjectByName(keyId) : null;
+    const key = keyId ? scene?.getObjectByName(keyId) : null;
     const keyHeld =
       key instanceof Entity && this.game.inventoryManager.hasInventoryEntity(actor, key, 'in');
     const keyKnown =
-      key instanceof Entity && this.getObjectPerception(actor, key, true).visibility === 'visible';
+      key instanceof Entity &&
+      this.getObjectPerception(actor, key, true, scene).visibility === 'visible';
     const locked = !!keyId && !keyHeld;
     return {
       state,
@@ -230,12 +317,11 @@ export class ActorWorldQuery {
   }
 
   private getLocation(
-    accessState: SceneTextLayerAccessState
+    accessState: SceneTextLayerAccessState,
+    scene: Scene
   ): ActorObjectPerception['location'] | undefined {
     if (!accessState.effectiveParentId || !accessState.effectiveRelation) return undefined;
-    const target = this.game.sceneManager.currentScene?.getObjectByName(
-      accessState.effectiveParentId
-    );
+    const target = scene.getObjectByName(accessState.effectiveParentId);
     const targetTitle = target
       ? this.game.textAssets.getResolvedObjectField(target as any, 'title')?.trim()
       : undefined;

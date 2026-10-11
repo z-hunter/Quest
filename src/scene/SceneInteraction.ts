@@ -3,17 +3,14 @@ import { SceneObject } from '../entities/SceneObject';
 import { Triggerbox } from '../entities/Triggerbox';
 import { Actor } from '../entities/Actor';
 import { ComponentSystem } from '../systems/ComponentSystem';
-import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../core/Resolution';
+import { getGameDesignResolution } from '../core/Resolution';
 import { getSceneTextLayerAccessState } from './SceneTextLayer';
+import { isManagedBox3DFace, raycastBox3DFace } from '../entities/Box3DObject';
 
 export type HoverCursor = 'eye' | 'hand' | 'back';
 
-function getScreenSize(scene: Scene): { width: number; height: number } {
-  const canvas = scene.game?.canvas;
-  return {
-    width: canvas?.width || GAME_DESIGN_WIDTH,
-    height: canvas?.height || GAME_DESIGN_HEIGHT,
-  };
+function getScreenSize(_scene: Scene): { width: number; height: number } {
+  return getGameDesignResolution();
 }
 
 function toWorld(scene: Scene, x: number, y: number): { x: number; y: number } {
@@ -111,18 +108,36 @@ function containsScreenPoint(
   return obj.containsPoint(worldPos.x, worldPos.y);
 }
 
+export function isWalkboxObject(obj: SceneObject | null | undefined): boolean {
+  if (!obj) return false;
+  if (obj.type === 'Walkbox') return true;
+  if (obj.components && obj.components.length > 0) {
+    return obj.components.some((c: any) => c && (c.type === 'WalkBox' || c.type === 'Walkbox'));
+  }
+  return false;
+}
+
 function getClickableTypePriority(obj: SceneObject): number {
-  if (obj.type === 'Walkbox') return 30;
+  if (isWalkboxObject(obj)) return 30;
   if (obj.type === 'Triggerbox') return 10;
   return 0;
+}
+
+function getEffectiveLayer(obj: SceneObject): number {
+  return (obj as any).__box3dSurfaceAnchor?.quad.layer ?? obj.layer ?? 0;
 }
 
 function sortClickableCandidates(candidates: SceneObject[]): SceneObject[] {
   const sorted = [...candidates];
   sorted.sort((a, b) => {
-    const layerA = a.layer || 0;
-    const layerB = b.layer || 0;
+    const layerA = getEffectiveLayer(a);
+    const layerB = getEffectiveLayer(b);
     if (layerA !== layerB) return layerB - layerA;
+
+    const depthA = (a as any).box3dDepth;
+    const depthB = (b as any).box3dDepth;
+    if (Number.isFinite(depthA) && Number.isFinite(depthB) && Math.abs(depthA - depthB) > 0.000001)
+      return depthA - depthB;
 
     const typePriorityA = getClickableTypePriority(a);
     const typePriorityB = getClickableTypePriority(b);
@@ -132,6 +147,8 @@ function sortClickableCandidates(candidates: SceneObject[]): SceneObject[] {
     const hasXYB = 'x' in (b as any) && 'y' in (b as any);
     if (hasXYA && !hasXYB) return -1;
     if (!hasXYA && hasXYB) return 1;
+    if (isWalkboxObject(a) && !isWalkboxObject(b)) return 1;
+    if (!isWalkboxObject(a) && isWalkboxObject(b)) return -1;
     return 0;
   });
 
@@ -140,7 +157,9 @@ function sortClickableCandidates(candidates: SceneObject[]): SceneObject[] {
 
 function getSortedClickableCandidates(scene: Scene): SceneObject[] {
   return sortClickableCandidates([
-    ...scene.entities.filter((e) => !e.disabled && e.visible && !(e as any).isPlayer),
+    ...scene.entities.filter(
+      (e) => !e.disabled && e.visible && !(e as any).isPlayer && !(e as any).box3dHidden
+    ),
     ...(scene.triggerboxes?.filter((t) => !t.disabled && t.visible) || []),
     ...(scene.walkbox?.filter((w) => !w.disabled && w.visible) || []),
   ]);
@@ -152,7 +171,12 @@ function findTopHitInCandidates(
   screenX: number,
   screenY: number
 ): SceneObject | null {
+  const boxHit = raycastBox3DFace(scene, screenX, screenY, candidates);
   for (const candidate of sortClickableCandidates(candidates)) {
+    if (isManagedBox3DFace(candidate)) {
+      if (candidate === boxHit) return candidate;
+      continue;
+    }
     if (isHitAtScreenPoint(scene, candidate, screenX, screenY)) {
       return candidate;
     }
@@ -187,6 +211,7 @@ function resolveSubtriggerTarget(scene: Scene, obj: SceneObject): SceneObject {
 }
 
 function canActivateOnClick(obj: SceneObject): boolean {
+  if (isWalkboxObject(obj)) return false;
   if (obj instanceof Triggerbox && obj.script) return true;
   if (ComponentSystem.hasClickInteractionKeys(obj)) return true;
   if (!obj.components || obj.components.length === 0) return false;
@@ -199,6 +224,9 @@ function canActivateOnClick(obj: SceneObject): boolean {
 }
 
 function hasClickOutput(scene: Scene, obj: SceneObject): boolean {
+  if (isWalkboxObject(obj)) {
+    return false;
+  }
   const titleOwner = resolveSubtriggerTarget(scene, obj);
   const accessState = getSceneTextLayerAccessState(scene, scene.game, titleOwner);
   if (accessState.hiddenReason === 'examinable') {
@@ -265,6 +293,9 @@ function getSubsceneClickCandidates(scene: Scene): SceneObject[] {
 }
 
 function getHoverCursorForObject(scene: Scene, obj: SceneObject): HoverCursor | null {
+  if (isWalkboxObject(obj)) {
+    return null;
+  }
   if (obj.components) {
     const sub = obj.components.find((c) => c.type === 'Subscene') as any;
     if (sub) {
@@ -308,7 +339,7 @@ function findTopLayerHitCandidatesAtScreenPoint(
 
   for (const candidate of sortClickableCandidates(candidates)) {
     if (!isHitAtScreenPoint(scene, candidate, screenX, screenY)) continue;
-    const candidateLayer = candidate.layer || 0;
+    const candidateLayer = getEffectiveLayer(candidate);
     if (topLayer === null) {
       topLayer = candidateLayer;
     }
@@ -452,7 +483,7 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
 
     if (subsceneHitRaw) {
       const subsceneHit = resolveSubtriggerTarget(scene, subsceneHitRaw);
-      if (subsceneHit.type === 'Walkbox') {
+      if (isWalkboxObject(subsceneHit)) {
         movePlayerToClick(scene, x, y);
         return;
       }
@@ -485,7 +516,7 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
 
   if (rawHitObj) {
     const hitObj = resolveSubtriggerTarget(scene, rawHitObj);
-    if (hitObj.type === 'Walkbox') {
+    if (isWalkboxObject(hitObj)) {
       movePlayerToClick(scene, x, y);
       return;
     }
@@ -514,6 +545,10 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
   const rawVisibleHitObj = findVisibleHitObject(scene, x, y);
   if (rawVisibleHitObj) {
     const visibleHitObj = resolveSubtriggerTarget(scene, rawVisibleHitObj);
+    if (isWalkboxObject(visibleHitObj)) {
+      movePlayerToClick(scene, x, y);
+      return;
+    }
     revealLookableByClick(scene, visibleHitObj);
     const seeMessage = scene.game.getSeeMessage(visibleHitObj);
     const title = shouldSuppressTitleByHiddenState(scene, visibleHitObj)

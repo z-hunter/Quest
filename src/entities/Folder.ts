@@ -1,5 +1,6 @@
 import type { IGame } from '../core/IGame';
 import { Entity } from './Entity';
+import type { Box3DAxisMode, Box3DPoint } from './Box3DObject';
 
 let _folderCounter = 0;
 function generateFolderId(): string {
@@ -16,12 +17,42 @@ export interface FolderData {
   disabled?: boolean;
   spatial?: { parentNodeId?: string | null; relation?: string | null };
   defaults?: Record<string, any>;
+  compoundBox3D?: CompoundBox3DState;
+  folder?: string | null;
+}
+
+export interface CompoundBox3DState {
+  x: number;
+  y: number;
+  z: number;
+  rotationX: number;
+  rotationY: number;
+  rotationZ: number;
+  uniformScale: number;
+  scaleX: number;
+  scaleY: number;
+  scaleZ: number;
+  bottomWidth: number;
+  bottomDepth: number;
+  topWidth: number;
+  topDepth: number;
+  height: number;
+  topOffsetX: number;
+  topOffsetZ: number;
+  pivotX: Box3DPoint;
+  pivotY: Box3DPoint;
+  pivotZ: Box3DPoint;
+  axisMode: Box3DAxisMode;
+  axisRotationX: number;
+  axisRotationY: number;
+  axisRotationZ: number;
 }
 
 export class Folder extends Entity {
   folderId: string;
   collapsed: boolean = false;
   defaults: Record<string, any> = {};
+  compoundBox3D?: CompoundBox3DState;
 
   static SERIALIZABLE_PROPS: string[] = [
     'name',
@@ -30,9 +61,11 @@ export class Folder extends Entity {
     'locked',
     'disabled',
     'groupID',
+    'folder',
     'collapsed',
     'spatial',
     'defaults',
+    'compoundBox3D',
   ];
 
   constructor(game: IGame, name: string) {
@@ -88,10 +121,14 @@ export class Folder extends Entity {
     if (data.folderId !== undefined) folder.folderId = data.folderId;
     if (data.collapsed !== undefined) folder.collapsed = data.collapsed;
     if (data.groupID !== undefined) folder.groupID = data.groupID;
+    if (data.folder !== undefined) folder.folder = data.folder;
     if (data.locked !== undefined) folder.locked = data.locked;
     if (data.disabled !== undefined) folder.disabled = data.disabled;
     if (data.spatial !== undefined) folder.spatial = JSON.parse(JSON.stringify(data.spatial));
     if (data.defaults !== undefined) folder.defaults = JSON.parse(JSON.stringify(data.defaults));
+    if (data.compoundBox3D !== undefined) {
+      folder.compoundBox3D = JSON.parse(JSON.stringify(data.compoundBox3D));
+    }
     return folder;
   }
 }

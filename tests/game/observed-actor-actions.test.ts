@@ -8,16 +8,48 @@ function addActor(
   fixture: ReturnType<typeof createGameSemanticFixture>,
   name: string,
   x: number,
-  npc = false
+  npc = false,
+  scene = fixture.scene
 ): Actor {
   const actor = new Actor(fixture.game, x, 0, 10, 10, name);
   actor.components = npc ? [{ type: 'NPC', enabled: true }] : [{ type: 'Actor' }];
-  fixture.scene.addEntity(actor);
+  scene.addEntity(actor);
   fixture.textAssets.setObject(name, { title: name, description: `${name} actor` });
   return actor;
 }
 
 describe('observed Actor actions', () => {
+  it('routes offscreen NPC speech to listeners in the speaker scene', async () => {
+    const fixture = createGameSemanticFixture('player_scene');
+    fixture.addPlayer('Hero', 0, 0);
+    const playerSceneNpc = addActor(fixture, 'PlayerSceneNpc', 20, true);
+    const corridor = fixture.addScene('corridor', 'Corridor');
+    const linda = addActor(fixture, 'Linda', 0, true, corridor);
+    const rick = addActor(fixture, 'Rick', 20, true, corridor);
+    const scheduleScene = vi.fn().mockResolvedValue(undefined);
+    (fixture.game as any).npcWorldModelBuilder = new NpcWorldModelBuilder(fixture.game);
+    (fixture.game as any).npcPuppetMaster = { scheduleScene };
+    const log = vi.fn();
+    (fixture.game as any).console = { log };
+
+    await Game.prototype.sayAsActor.call(fixture.game, linda, 'Rick, can you help me?', {
+      triggerPuppetMaster: true,
+    });
+
+    expect(fixture.scene.sceneLog.entries).toEqual([]);
+    expect(corridor.sceneLog.entries).toEqual([
+      expect.objectContaining({
+        actorId: linda.name,
+        text: 'Rick, can you help me?',
+        knownByActorIds: [rick.name],
+      }),
+    ]);
+    expect(corridor.sceneLog.entries[0].knownByActorIds).not.toContain(playerSceneNpc.name);
+    expect(scheduleScene).toHaveBeenCalledTimes(1);
+    expect(scheduleScene).toHaveBeenCalledWith(corridor, { resetRateBudget: false });
+    expect(log).not.toHaveBeenCalled();
+  });
+
   it('records an action for every nearby Actor without waking Puppet Master', () => {
     const fixture = createGameSemanticFixture();
     const player = fixture.addPlayer('Hero', 0, 0);
@@ -105,6 +137,7 @@ describe('observed Actor actions', () => {
     Game.prototype.emitActorAction.call(fixture.game, npc, 'traverse_exit', door, {
       targetId: door.name,
     });
+    Game.prototype.emitActorAction.call(fixture.game, npc, 'left_immediate_area');
 
     expect(log.mock.calls.map(([text]) => text)).toEqual([
       '[ Linda takes Cassette ]',
@@ -112,7 +145,11 @@ describe('observed Actor actions', () => {
       '[ Linda puts Cassette in Recorder ]',
       '[ Linda uses Cassette on Recorder ]',
       '[ Linda goes through Door ]',
+      '[ Linda left the immediate area ]',
     ]);
+    expect(fixture.scene.sceneLog.entries.at(-1)?.payload).toEqual({
+      action: 'left_immediate_area',
+    });
   });
 
   it('keeps an observed action unread until the NPC next processes its scene log', () => {

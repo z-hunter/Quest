@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
+import { atomicWrite } from './scripts/atomicWrite';
 
 function ensureFile(targetPath: string, content: string) {
   const dir = path.dirname(targetPath);
@@ -27,7 +28,7 @@ export default defineConfig({
             req.on('data', (chunk) => {
               body += chunk.toString();
             });
-            req.on('end', () => {
+            req.on('end', async () => {
               try {
                 const { path: relativePath, content } = JSON.parse(body);
                 // Resolve path relative to project root
@@ -48,7 +49,7 @@ export default defineConfig({
                     throw new Error('Invalid base64 data URL');
                   }
                 }
-                fs.writeFileSync(targetPath, fileContent);
+                await atomicWrite(targetPath, fileContent);
                 console.log(`[Vite] Saved file: ${targetPath}`);
 
                 res.statusCode = 200;
@@ -203,6 +204,35 @@ export default defineConfig({
                 );
               } catch (err) {
                 console.error('[Vite] Read file error:', err);
+                res.statusCode = 500;
+                res.end(JSON.stringify({ error: String(err) }));
+              }
+            });
+          } else {
+            next();
+          }
+        });
+        server.middlewares.use('/api/read-file-existing', (req, res, next) => {
+          if (req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk.toString();
+            });
+            req.on('end', () => {
+              try {
+                const { path: relativePath } = JSON.parse(body);
+                const targetPath = path.resolve(__dirname, relativePath);
+                if (!fs.existsSync(targetPath) || !fs.statSync(targetPath).isFile()) {
+                  res.statusCode = 404;
+                  res.end(JSON.stringify({ error: `File not found: ${relativePath}` }));
+                  return;
+                }
+                res.statusCode = 200;
+                res.end(
+                  JSON.stringify({ success: true, content: fs.readFileSync(targetPath, 'utf-8') })
+                );
+              } catch (err) {
+                console.error('[Vite] Read existing file error:', err);
                 res.statusCode = 500;
                 res.end(JSON.stringify({ error: String(err) }));
               }

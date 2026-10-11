@@ -185,10 +185,5 @@
     "pannerRolloffFactor": 0.7,
     "panningModel": "HRTF",
     "distanceModel": "linear"
-  },
-  "sceneLog": {
-    "entries": [],
-    "lastPmProcessedAt": 0,
-    "lastPmProcessedAtByNpc": {}
   }
 }

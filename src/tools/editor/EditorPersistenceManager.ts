@@ -208,51 +208,31 @@ export class EditorPersistenceManager {
   // --- Prefab Saving ---
 
   async saveObject(): Promise<void> {
-    let selection = this.editor.selectionManager.hasMultiSelection()
-      ? this.editor.selectionManager.getSelectedObjects()
-      : this.editor.selectedObject instanceof SceneObject
-        ? [this.editor.selectedObject]
-        : [];
-
-    if (!selection.length) {
+    const payload = this.editor.selectionManager.buildSelectionPayload('prefab-save');
+    if (!payload) {
       this.editor.game.showNotification('Select an Object to Save');
       return;
     }
-
-    // If selection includes folders, also include their contents
-    const scene = this.editor.game.sceneManager.currentScene;
-    if (scene) {
-      const folderIds = selection
-        .filter((obj) => obj.type === 'Folder')
-        .map((obj) => (obj as any).folderId)
-        .filter(Boolean);
-      if (folderIds.length > 0) {
-        const result = new Set<SceneObject>(selection);
-        const allObjects: SceneObject[] = [
-          ...scene.entities,
-          ...scene.walkbox,
-          ...scene.triggerboxes,
-        ];
-        for (const obj of allObjects) {
-          if ((obj as any).folder && folderIds.includes((obj as any).folder)) {
-            result.add(obj);
-          }
-        }
-        selection = Array.from(result);
-      }
-    }
-
     this.editor.game.openFileBrowser('save', 'public/prefabs', (filename: string) => {
-      this.performSaveObject(filename, selection);
+      this.performSaveObject(
+        filename,
+        [],
+        payload.items.length === 1 ? payload.items[0] : { ...payload, kind: 'group_prefab' }
+      );
     });
   }
 
-  async performSaveObject(filename: string, selection: SceneObject[]): Promise<void> {
-    if (!selection.length) return;
+  async performSaveObject(
+    filename: string,
+    selection: SceneObject[],
+    preparedData?: any
+  ): Promise<void> {
+    if (!selection.length && !preparedData) return;
 
     const serialized = selection.map((obj) => obj.toJSON());
     const data =
-      serialized.length === 1
+      preparedData ||
+      (serialized.length === 1
         ? serialized[0]
         : {
             kind: 'group_prefab',
@@ -261,7 +241,7 @@ export class EditorPersistenceManager {
             order: serialized.map((item) => `${item.type || 'Entity'}:${item.name || 'Object'}`),
             anchorKey: `${serialized[0]?.type || 'Entity'}:${serialized[0]?.name || 'Object'}`,
             meta: { source: 'prefab-save', timestamp: Date.now() },
-          };
+          });
 
     const json = JSON.stringify(data, null, 2);
     const filePath = `public/prefabs/${filename}`;

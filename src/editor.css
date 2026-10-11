@@ -241,6 +241,49 @@
     box-shadow 160ms ease;
 }
 
+.quest-svs-settings .svs-field select {
+  min-height: 24px;
+  padding: 2px 4px;
+}
+
+.quest-svs-settings .svs-settings-section,
+.quest-svs-settings .svs-knob-group {
+  box-sizing: border-box;
+}
+
+.quest-svs-settings .svs-knob {
+  width: 40px;
+  height: 40px;
+  font-size: 9px;
+  box-shadow: inset 0 0 0 4px #0b130e;
+}
+
+.quest-svs-settings .svs-knob span {
+  width: 24px;
+  height: 24px;
+}
+
+.quest-svs-settings .svs-switch-track {
+  box-sizing: border-box;
+  width: 30px;
+  height: 18px;
+  padding: 1.5px;
+}
+
+.quest-svs-settings .svs-switch-thumb {
+  width: 12px;
+  height: 12px;
+}
+
+.quest-svs-settings .svs-switch input:checked + .svs-switch-track .svs-switch-thumb {
+  transform: translateX(12.5px);
+}
+
+textarea.e-input,
+textarea {
+  resize: vertical;
+}
+
 .e-select {
   background: var(--ui-dropdown-bg);
   border: 1px solid var(--ui-input-border);
@@ -275,13 +318,15 @@
   user-select: none;
 }
 
-.e-row:has(input[type='number']) > .e-label,
-.e-row > div:has(input[type='number']) > .e-label {
+label.e-label:has(+ input[type='number']),
+label.e-label:has(+ div input[type='number']),
+label.e-label:has(+ .custom-select-container input[type='number']) {
   cursor: ew-resize;
 }
 
-.e-row:has(input[type='number']) > .e-label:hover,
-.e-row > div:has(input[type='number']) > .e-label:hover {
+label.e-label:has(+ input[type='number']):hover,
+label.e-label:has(+ div input[type='number']):hover,
+label.e-label:has(+ .custom-select-container input[type='number']):hover {
   color: var(--ui-main-color);
 }
 

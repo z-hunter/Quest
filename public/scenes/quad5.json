@@ -75,8 +75,6 @@
       "height": 1442.4479999999999,
       "baseWidth": 1264,
       "baseHeight": 848,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "window-view.json",
       "color": "#AAAAAA",
       "scale": 1.7009999999999998,
@@ -86,7 +84,13 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sunbeam1",
@@ -104,7 +108,8 @@
       "parallax": 1,
       "x": 38.75,
       "y": -61.5,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 98,
@@ -127,6 +132,12 @@
           "p": 0.64
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#c95618",
       "sortMode": "ignore",
       "opacity": 0.1,
@@ -137,7 +148,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Static_3",
@@ -155,22 +174,26 @@
       "parallax": 0.65,
       "x": 288,
       "y": 97,
-      "width": 506.4428571428572,
-      "height": 364.40387755102046,
+      "width": 514.8668571428572,
+      "height": 370.4652489795919,
       "baseWidth": 1170,
       "baseHeight": 841.8571428571429,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "wall-window.json",
       "color": "#AAAAAA",
-      "scale": 0.4328571428571429,
+      "scale": 0.44005714285714287,
       "refScale": 0.2,
       "modelScale": 0.54,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Static_4",
@@ -188,22 +211,26 @@
       "parallax": 0.65,
       "x": -114,
       "y": 97,
-      "width": 506.4428571428572,
-      "height": 364.40387755102046,
+      "width": 514.8668571428572,
+      "height": 370.4652489795919,
       "baseWidth": 1170,
       "baseHeight": 841.8571428571429,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "wall-window.json",
       "color": "#AAAAAA",
-      "scale": 0.4328571428571429,
+      "scale": 0.44005714285714287,
       "refScale": 0.2,
       "modelScale": 0.54,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "glass",
@@ -221,7 +248,8 @@
       "parallax": 1,
       "x": 75.75,
       "y": -63.5,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -359,
@@ -249,6 +277,12 @@
           "p": 0.65
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#827c3a",
       "sortMode": "ignore",
       "opacity": 0.9,
@@ -259,7 +293,15 @@
       "lineWidth": 1.6,
       "gridColor": "#1d1616",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_72",
@@ -277,7 +319,8 @@
       "parallax": 1,
       "x": -17,
       "y": -287,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -466,
@@ -300,6 +343,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#947171",
       "sortMode": "v2",
       "opacity": 1,
@@ -310,7 +359,15 @@
       "lineWidth": 0.5,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "wall_2",
@@ -328,7 +385,8 @@
       "parallax": 1,
       "x": 550.5,
       "y": -52.75,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 616,
@@ -356,6 +414,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#855d38",
       "sortMode": "v1",
       "opacity": 1,
@@ -366,7 +430,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sunbeam3",
@@ -384,7 +456,8 @@
       "parallax": 1,
       "x": 271.25,
       "y": 37.5,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 340,
@@ -407,6 +480,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#c95618",
       "sortMode": "v0",
       "opacity": 0.1,
@@ -417,7 +496,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Static_2",
@@ -435,22 +522,26 @@
       "parallax": 0.7,
       "x": 232,
       "y": 84,
-      "width": 162.6062298950786,
-      "height": 41.34751952439104,
+      "width": 165.050415396633,
+      "height": 41.969027124757666,
       "baseWidth": 79.20971532815241,
       "baseHeight": 20.141450011881506,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#4a1215",
-      "scale": 2.052857142857143,
+      "scale": 2.0837142857142856,
       "refScale": 1,
       "modelScale": 2.7,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "tabletop1_2",
@@ -468,7 +559,8 @@
       "parallax": 1,
       "x": 91.5,
       "y": 40.5,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 70,
@@ -491,6 +583,12 @@
           "p": 0.75
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#1c495e",
       "sortMode": "v3",
       "opacity": 1,
@@ -501,7 +599,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_1",
@@ -529,7 +635,8 @@
       "parallax": 1,
       "x": -558,
       "y": 232.5,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 540,
@@ -562,6 +669,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#283743",
       "sortMode": "v1",
       "opacity": 1,
@@ -572,7 +685,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "floor",
@@ -598,7 +719,8 @@
       "parallax": 1,
       "x": -213.75,
       "y": 183.5,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -823,
@@ -621,6 +743,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#5b3a1a",
       "sortMode": "v0",
       "opacity": 1,
@@ -631,7 +759,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "shadow_3",
@@ -649,7 +785,8 @@
       "parallax": 1,
       "x": 230,
       "y": 123.25,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 216,
@@ -672,6 +809,12 @@
           "p": 0.77
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#535246",
       "sortMode": "v1",
       "opacity": 1,
@@ -682,7 +825,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 5
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 5,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "lightspot1_1",
@@ -700,7 +851,8 @@
       "parallax": 1,
       "x": -777.25,
       "y": 184,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -823,
@@ -733,6 +885,12 @@
           }
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#c95618",
       "sortMode": "v1",
       "opacity": 0.2,
@@ -743,7 +901,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 2
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 2,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "lightspot2",
@@ -761,7 +927,8 @@
       "parallax": 1,
       "x": 201.5,
       "y": 179.75,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 104,
@@ -784,6 +951,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#c95618",
       "sortMode": "v1",
       "opacity": 0.2,
@@ -794,7 +967,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 2
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 2,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "lightspot1",
@@ -812,7 +993,8 @@
       "parallax": 1,
       "x": -246.75,
       "y": 182,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -304,
@@ -835,6 +1017,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#c95618",
       "sortMode": "v0",
       "opacity": 0.2,
@@ -845,7 +1033,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 2
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 2,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_303",
@@ -863,7 +1059,8 @@
       "parallax": 1,
       "x": 525,
       "y": -2.25,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 498,
@@ -886,6 +1083,12 @@
           "p": 0.685
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#1d2272",
       "sortMode": "v3",
       "opacity": 1,
@@ -896,7 +1099,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Static_231",
@@ -918,8 +1129,6 @@
       "height": 81.21309764453962,
       "baseWidth": 382.3479923762471,
       "baseHeight": 334.210278372591,
-      "colliderWidth": 32,
-      "colliderHeight": 38,
       "spriteName": "weird.json",
       "color": "#381a1a",
       "scale": 0.24300000000000002,
@@ -929,7 +1138,13 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 32,
+      "colliderHeight": 38
     },
     {
       "name": "shadow_2",
@@ -947,7 +1162,8 @@
       "parallax": 1,
       "x": -264.5,
       "y": 120.25,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -272,
@@ -970,6 +1186,12 @@
           "p": 0.7
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#535246",
       "sortMode": "v2",
       "opacity": 1,
@@ -980,7 +1202,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 5
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 5,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "shadow_1",
@@ -998,7 +1228,8 @@
       "parallax": 1,
       "x": 224.25,
       "y": 114.5,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 168,
@@ -1021,6 +1252,12 @@
           "p": 0.77
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#535246",
       "sortMode": "v3",
       "opacity": 1,
@@ -1031,7 +1268,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 5
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 5,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_2",
@@ -1054,12 +1299,13 @@
         }
       ],
       "layer": 0,
-      "visible": false,
+      "visible": true,
       "hidden": false,
       "parallax": 1,
       "x": -339,
       "y": -60.75,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -366,
@@ -1082,6 +1328,12 @@
           "p": 0.75
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#ba814b",
       "sortMode": "v3",
       "opacity": 1,
@@ -1092,7 +1344,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_891",
@@ -1110,7 +1370,8 @@
       "parallax": 1,
       "x": -390.5,
       "y": -59,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -415,
@@ -1133,6 +1394,12 @@
           "p": 0.75
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#474747",
       "sortMode": "v2",
       "opacity": 1,
@@ -1143,7 +1410,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_204",
@@ -1179,12 +1454,13 @@
         }
       ],
       "layer": 0,
-      "visible": true,
+      "visible": false,
       "hidden": false,
       "parallax": 1,
       "x": -387.5,
       "y": -61.25,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -415,
@@ -1207,6 +1483,12 @@
           "p": 0.75
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#636363",
       "sortMode": "v3",
       "opacity": 1,
@@ -1217,7 +1499,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_4",
@@ -1245,7 +1535,8 @@
       "parallax": 1,
       "x": -453.5,
       "y": -50.25,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -489,
@@ -1268,6 +1559,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#888888",
       "sortMode": "v2",
       "opacity": 1,
@@ -1278,7 +1575,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "shadow_hero",
@@ -1296,7 +1601,8 @@
       "parallax": 1,
       "x": -324.75,
       "y": 235,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -172,
@@ -1319,6 +1625,12 @@
           "p": 0.9971687824531933
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#535246",
       "sortMode": "v2",
       "opacity": 0.5,
@@ -1329,7 +1641,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 5
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 5,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_8",
@@ -1352,12 +1672,13 @@
         }
       ],
       "layer": 1,
-      "visible": false,
+      "visible": true,
       "hidden": false,
       "parallax": 1,
       "x": -391.5,
       "y": -216,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -417,
@@ -1380,6 +1701,12 @@
           "p": 0.85
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#ba814b",
       "sortMode": "ignore",
       "opacity": 1,
@@ -1390,7 +1717,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_9",
@@ -1418,7 +1753,8 @@
       "parallax": 1,
       "x": -455,
       "y": -196.25,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -480,
@@ -1441,6 +1777,12 @@
           "p": 0.85
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#646464",
       "sortMode": "ignore",
       "opacity": 1,
@@ -1451,7 +1793,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_225",
@@ -1469,7 +1819,8 @@
       "parallax": 1,
       "x": -426.5,
       "y": -139.75,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -487,
@@ -1492,6 +1843,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#292828",
       "sortMode": "ignore",
       "opacity": 1,
@@ -1502,7 +1859,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_6",
@@ -1520,7 +1885,8 @@
       "parallax": 1,
       "x": 525.5,
       "y": -133.75,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 496,
@@ -1543,6 +1909,12 @@
           "p": 0.67
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#191d5d",
       "sortMode": "v3",
       "opacity": 1,
@@ -1553,7 +1925,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "tabletop1",
@@ -1571,7 +1951,8 @@
       "parallax": 1,
       "x": 130.5,
       "y": 25.5,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 112,
@@ -1594,6 +1975,12 @@
           "p": 0.75
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#2c647d",
       "sortMode": "v1",
       "opacity": 1,
@@ -1604,7 +1991,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "table-top-dice",
@@ -1626,8 +2021,6 @@
       "height": 13.5,
       "baseWidth": 93.08752650809443,
       "baseHeight": 7.142857142857143,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#1d4853",
       "scale": 1.89,
@@ -1637,7 +2030,13 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "tabletop1_1",
@@ -1655,7 +2054,8 @@
       "parallax": 1,
       "x": 251.5,
       "y": 16.5,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 174,
@@ -1678,6 +2078,12 @@
           "p": 0.7
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#2c647d",
       "sortMode": "v3",
       "opacity": 1,
@@ -1688,7 +2094,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Static_386",
@@ -1706,22 +2120,26 @@
       "parallax": 0.75,
       "x": 121,
       "y": 84,
-      "width": 97.31154375082349,
-      "height": 19.26098062560257,
+      "width": 98.530477493005,
+      "height": 19.502245518616384,
       "baseWidth": 47.402978862614084,
       "baseHeight": 9.382523617203757,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#1d4853",
-      "scale": 2.052857142857143,
+      "scale": 2.0785714285714287,
       "refScale": 1,
       "modelScale": 2.7,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sunbeam_fuse",
@@ -1739,7 +2157,8 @@
       "parallax": 1,
       "x": -147.5,
       "y": -24,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -283,
@@ -1762,6 +2181,12 @@
           "p": 0.7
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#c95618",
       "sortMode": "v3",
       "opacity": 0.2,
@@ -1772,7 +2197,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 5
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 5,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "shadow",
@@ -1790,7 +2223,8 @@
       "parallax": 1,
       "x": 121.75,
       "y": 131,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 112,
@@ -1813,6 +2247,12 @@
           "p": 0.77
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#535246",
       "sortMode": "v1",
       "opacity": 1,
@@ -1823,7 +2263,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 5
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 5,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "plant",
@@ -1841,22 +2289,26 @@
       "parallax": 0.648,
       "x": -252,
       "y": 109,
-      "width": 195.88114285714286,
-      "height": 204.04285714285714,
+      "width": 199.0093165714286,
+      "height": 207.30137142857146,
       "baseWidth": 432,
       "baseHeight": 450,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "office-plant",
       "color": "#AAAAAA",
-      "scale": 0.45342857142857146,
+      "scale": 0.46066971428571435,
       "refScale": 0.2,
       "modelScale": 0.54,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "chair",
@@ -1878,8 +2330,6 @@
       "height": 193.23360000000002,
       "baseWidth": 167,
       "baseHeight": 284,
-      "colliderWidth": 33,
-      "colliderHeight": 9,
       "spriteName": "chair",
       "color": "#AAAAAA",
       "scale": 0.6804000000000001,
@@ -1889,7 +2339,13 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 33,
+      "colliderHeight": 9
     },
     {
       "name": "Quad_7",
@@ -1917,7 +2373,8 @@
       "parallax": 1,
       "x": -523.5,
       "y": -52.25,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -553,
@@ -1940,6 +2397,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#666666",
       "sortMode": "v2",
       "opacity": 1,
@@ -1950,7 +2413,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_5",
@@ -1978,7 +2449,8 @@
       "parallax": 1,
       "x": -453.5,
       "y": -50.25,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -489,
@@ -2001,6 +2473,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#b47e4b",
       "sortMode": "v2",
       "opacity": 1,
@@ -2011,7 +2489,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_3",
@@ -2029,7 +2515,8 @@
       "parallax": 1,
       "x": -532.5,
       "y": -52.5,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -576,
@@ -2052,6 +2539,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#474747",
       "sortMode": "v2",
       "opacity": 1,
@@ -2062,7 +2555,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "w4_1",
@@ -2080,7 +2581,8 @@
       "parallax": 1,
       "x": 27.5,
       "y": -399.5,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -698,
@@ -2103,6 +2605,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#0a0a0a",
       "sortMode": "ignore",
       "opacity": 1,
@@ -2113,7 +2621,15 @@
       "lineWidth": 1,
       "gridColor": "#1c9245",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "bas1",
@@ -2131,7 +2647,8 @@
       "parallax": 1,
       "x": -190.5,
       "y": 344.25,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -1130,
@@ -2154,6 +2671,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#0a0a0a",
       "sortMode": "ignore",
       "opacity": 1,
@@ -2164,7 +2687,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "bas2",
@@ -2182,7 +2713,8 @@
       "parallax": 1,
       "x": 683,
       "y": -42.5,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 616,
@@ -2205,6 +2737,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#0a0a0a",
       "sortMode": "ignore",
       "opacity": 1,
@@ -2215,7 +2753,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Quad_521",
@@ -2243,7 +2789,8 @@
       "parallax": 1,
       "x": -398.5,
       "y": -224,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": -485,
@@ -2266,6 +2813,12 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#855d38",
       "sortMode": "ignore",
       "opacity": 0.75,
@@ -2276,7 +2829,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 2
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 2,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sunbeam2",
@@ -2294,7 +2855,8 @@
       "parallax": 1,
       "x": 309.5,
       "y": -24,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 323,
@@ -2317,6 +2879,12 @@
           "p": 0.64
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#c95618",
       "sortMode": "v3",
       "opacity": 0.5,
@@ -2327,7 +2895,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 10
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 10,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "exit1",
@@ -2355,7 +2931,8 @@
       "parallax": 1,
       "x": 526.75,
       "y": 121.75,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
           "x": 488,
@@ -2388,6 +2965,12 @@
           }
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
       "color": "#52779aff",
       "sortMode": "ignore",
       "opacity": 0,
@@ -2398,7 +2981,15 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Hero_1",
@@ -2432,15 +3023,13 @@
       "layer": 1,
       "visible": true,
       "hidden": false,
-      "parallax": 0.7727213747436679,
-      "x": -928.8248173132807,
-      "y": 159.65664684322715,
+      "parallax": 0.8600182530647523,
+      "x": -493.8409430814447,
+      "y": 189.65533900434588,
       "width": 71.03999999999999,
       "height": 290.08,
       "baseWidth": 96,
       "baseHeight": 392,
-      "colliderWidth": 88,
-      "colliderHeight": 4,
       "spriteName": "miles_ds-idle-right.json",
       "color": "#00ffff",
       "scale": 0.74,
@@ -2451,8 +3040,13 @@
       "opacity": 1,
       "blendMode": "source-over",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "isPlayer": true,
       "speed": 0.24,
+      "perceptionRadius": 600,
       "direction": "right",
       "animSets": {
         "idle": {
@@ -2469,7 +3063,9 @@
           "left": null,
           "right": "miles_ds-walk-right.json"
         }
-      }
+      },
+      "colliderWidth": 88,
+      "colliderHeight": 4
     },
     {
       "name": "test",
@@ -2493,14 +3089,12 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": -928.8248173132807,
-      "y": 159.65664684322715,
+      "x": -493.8409430814447,
+      "y": 189.65533900434588,
       "width": 14.183901773533426,
       "height": 20.156070941336974,
       "baseWidth": 19.69986357435198,
       "baseHeight": 27.994542974079128,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.7200000000000001,
@@ -2510,7 +3104,13 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     }
   ],
   "folders": [],

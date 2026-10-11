@@ -1,8 +1,0 @@
-- generic [ref=e7]:
-  - generic:
-    - generic:
-      - textbox [active]
-  - complementary:
-    - generic [ref=e12]:
-      - button "Orange paper" [ref=e13] [cursor=pointer]
-      - button "Yellow paper" [ref=e15] [cursor=pointer]

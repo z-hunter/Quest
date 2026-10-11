@@ -97,6 +97,19 @@ export class SpriteEditor {
         parserInput.disabled = false;
         // Optional: focus it back? Maybe not if we just closed editor.
       }
+
+      // Fix: Blur any active inputs to prevent them from swallowing keys after editor unmounts
+      if (
+        document.activeElement instanceof HTMLElement &&
+        document.activeElement.id !== 'parser-input'
+      ) {
+        document.activeElement.blur();
+      }
+
+      // Fix: Reset UI mouse hover state in case editor was closed via hotkey while mouse was over it
+      if (this.game) {
+        this.game.isMouseOverUI = false;
+      }
     }
   }
 
@@ -115,7 +128,10 @@ export class SpriteEditor {
     // If not active, let it propagate (e.g. to SceneEditor)
     if (!this.active) return;
 
-    const isInputFocused = document.activeElement instanceof HTMLInputElement;
+    const isInputFocused =
+      document.activeElement instanceof HTMLInputElement ||
+      document.activeElement instanceof HTMLTextAreaElement ||
+      document.activeElement instanceof HTMLSelectElement;
 
     // AGGRESSIVE HOTKEY HANDLING
     // We check keys first and return immediately if handled, bypassing input focus checks for specific keys.

@@ -41,6 +41,10 @@ export const SLM_TOKENS = {
   DYNAMIC_ENTITY_BASE: 100,
 } as const;
 
+export const SLM_VOCABULARY_VERSION = 'slm-v1';
+export const SLM_VOCABULARY_SHA256 =
+  '932e0c7ad289a3f258e78f1cf0ef3b192615224733e4a14f8e3893b87246ceeb';
+
 export type SlmTokenName = keyof typeof SLM_TOKENS;
 export type SlmTokenValue = (typeof SLM_TOKENS)[SlmTokenName] | number;
 

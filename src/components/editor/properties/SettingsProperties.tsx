@@ -1,37 +1,24 @@
 import React from 'react';
+import { CRTSettingsSection, DisplaySettingsSection } from 'scanline-virtual-screen/react';
+import 'scanline-virtual-screen/react/styles.css';
 import { usePropertiesContext } from './PropertiesContext';
-import { Select } from '../../common/Select';
 import { isTauriRuntime } from '../../../platform/fileApi';
 import { useEditorStore } from '../../../store/editorStore';
 import { SoundManager } from '../../../systems/SoundManager';
-
-interface GameSettings {
-  editor?: {
-    uiScale?: number;
-    viewportZoom?: 'fit' | '1' | '1.5' | '2';
-  };
-  audio?: {
-    attachedVolume?: number;
-  };
-  crt?: {
-    enabled: boolean;
-    curvature: number;
-    vignette: number;
-    scanlineCount: number;
-    scanlineIntensity: number;
-    aberration: number;
-    bloom: number;
-    phosphor?: number;
-    bezelGlow: boolean;
-  };
-}
+import { QUEST_SCREEN_MODES, type QuestSettings } from '../../../core/displaySettings';
+import type { ScreenProfile } from 'scanline-virtual-screen/core';
 
 export const SettingsProperties: React.FC = () => {
-  const { obj, formatPanelNumber, incrementObjectVersion } = usePropertiesContext<GameSettings>();
+  const { obj, game, formatPanelNumber, incrementObjectVersion } =
+    usePropertiesContext<QuestSettings>();
   const isDesktopRuntime = React.useMemo(() => isTauriRuntime(), []);
-
-  // obj = game.settings in the parent
   const settings = obj;
+  const svsScale = settings.editor.uiScale || 1.0;
+
+  const updateScreenProfile = (profile: ScreenProfile): void => {
+    game.setScreenProfile(profile);
+    incrementObjectVersion();
+  };
 
   return (
     <>
@@ -44,10 +31,9 @@ export const SettingsProperties: React.FC = () => {
         </label>
       </div>
 
-      {/* UI Scale */}
       <div className="e-row">
         <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-          UI Scale <span>{formatPanelNumber(settings.editor?.uiScale || 1.0)}x</span>
+          UI Scale <span>{formatPanelNumber(settings.editor.uiScale || 1.0)}x</span>
         </label>
         <input
           type="number"
@@ -55,10 +41,11 @@ export const SettingsProperties: React.FC = () => {
           min="0.5"
           max="2.0"
           step="0.1"
-          value={formatPanelNumber(settings.editor?.uiScale || 1.0)}
-          onChange={(e) => {
-            if (!settings.editor) settings.editor = { uiScale: 1.0 };
-            settings.editor.uiScale = parseFloat(e.target.value);
+          value={formatPanelNumber(settings.editor.uiScale || 1.0)}
+          onChange={(event) => {
+            const value = parseFloat(event.target.value);
+            if (!Number.isFinite(value)) return;
+            settings.editor.uiScale = value;
             incrementObjectVersion();
             useEditorStore.getState().incrementHierarchyVersion();
           }}
@@ -68,21 +55,20 @@ export const SettingsProperties: React.FC = () => {
       {isDesktopRuntime && (
         <div className="e-row">
           <label className="e-label">Game Zoom</label>
-          <Select
-            value={settings.editor?.viewportZoom || 'fit'}
-            onChange={(value) => {
-              if (!settings.editor) settings.editor = { uiScale: 1.0, viewportZoom: 'fit' };
-              settings.editor.viewportZoom = value as 'fit' | '1' | '1.5' | '2';
+          <select
+            className="e-input"
+            value={settings.editor.viewportZoom}
+            onChange={(event) => {
+              settings.editor.viewportZoom = event.target
+                .value as QuestSettings['editor']['viewportZoom'];
               incrementObjectVersion();
             }}
-            options={[
-              { value: 'fit', label: 'Fit to Window' },
-              { value: '1', label: '100%' },
-              { value: '1.5', label: '150%' },
-              { value: '2', label: '200%' },
-            ]}
-            style={{ width: '100%' }}
-          />
+          >
+            <option value="fit">Fit to Window</option>
+            <option value="1">100%</option>
+            <option value="1.5">150%</option>
+            <option value="2">200%</option>
+          </select>
         </div>
       )}
 
@@ -97,7 +83,7 @@ export const SettingsProperties: React.FC = () => {
 
       <div className="e-row">
         <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-          Attached Volume <span>{formatPanelNumber(settings.audio?.attachedVolume ?? 1.0)}x</span>
+          Attached Volume <span>{formatPanelNumber(settings.audio.attachedVolume ?? 1.0)}x</span>
         </label>
         <input
           type="number"
@@ -105,15 +91,13 @@ export const SettingsProperties: React.FC = () => {
           min="0"
           max="10"
           step="0.05"
-          value={formatPanelNumber(settings.audio?.attachedVolume ?? 1.0)}
-          onChange={(e) => {
-            if (!settings.audio) settings.audio = { attachedVolume: 1.0 };
-            const val = parseFloat(e.target.value);
-            if (Number.isFinite(val)) {
-              settings.audio.attachedVolume = Math.max(0, Math.min(10, val));
-              SoundManager.getInstance().setAttachedVolume(settings.audio.attachedVolume);
-              incrementObjectVersion();
-            }
+          value={formatPanelNumber(settings.audio.attachedVolume ?? 1.0)}
+          onChange={(event) => {
+            const value = parseFloat(event.target.value);
+            if (!Number.isFinite(value)) return;
+            settings.audio.attachedVolume = Math.max(0, Math.min(10, value));
+            SoundManager.getInstance().setAttachedVolume(settings.audio.attachedVolume);
+            incrementObjectVersion();
           }}
         />
       </div>
@@ -123,178 +107,24 @@ export const SettingsProperties: React.FC = () => {
           className="e-label ui-text-accent-green ui-font-bold"
           style={{ marginBottom: '10px' }}
         >
-          CRT EFFECT SETTINGS
+          DISPLAY SETTINGS
         </label>
       </div>
 
-      {/* Enabled Toggle */}
-      <div className="e-row">
-        <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
-          <input
-            type="checkbox"
-            style={{ marginRight: '5px' }}
-            checked={settings.crt?.enabled ?? true}
-            onChange={(e) => {
-              if (settings.crt) {
-                settings.crt.enabled = e.target.checked;
-                incrementObjectVersion();
-              }
-            }}
-          />
-          Enable CRT Filter
-        </label>
+      <div className="quest-svs-settings" style={{ zoom: svsScale }}>
+        <DisplaySettingsSection
+          value={settings.screenProfile}
+          modes={QUEST_SCREEN_MODES}
+          onChange={updateScreenProfile}
+        />
+        <CRTSettingsSection value={settings.screenProfile} onChange={updateScreenProfile} />
       </div>
-
-      {/* Controls (Only if enabled) */}
-      {settings.crt?.enabled && (
-        <>
-          <div className="e-row">
-            <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              Curvature <span>{formatPanelNumber(settings.crt.curvature)}</span>
-            </label>
-            <input
-              type="range"
-              className="e-input"
-              min="0"
-              max="0.5"
-              step="0.01"
-              value={formatPanelNumber(settings.crt.curvature)}
-              onChange={(e) => {
-                settings.crt!.curvature = parseFloat(e.target.value);
-                incrementObjectVersion();
-              }}
-            />
-          </div>
-          <div className="e-row">
-            <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              Vignette <span>{formatPanelNumber(settings.crt.vignette)}</span>
-            </label>
-            <input
-              type="range"
-              className="e-input"
-              min="0"
-              max="1"
-              step="0.05"
-              value={formatPanelNumber(settings.crt.vignette)}
-              onChange={(e) => {
-                settings.crt!.vignette = parseFloat(e.target.value);
-                incrementObjectVersion();
-              }}
-            />
-          </div>
-          <div className="e-row">
-            <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              Scanline Count <span>{formatPanelNumber(settings.crt.scanlineCount)}</span>
-            </label>
-            <input
-              type="range"
-              className="e-input"
-              min="100"
-              max="2000"
-              step="50"
-              value={formatPanelNumber(settings.crt.scanlineCount)}
-              onChange={(e) => {
-                settings.crt!.scanlineCount = parseFloat(e.target.value);
-                incrementObjectVersion();
-              }}
-            />
-          </div>
-          <div className="e-row">
-            <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              Scanline Intensity <span>{formatPanelNumber(settings.crt.scanlineIntensity)}</span>
-            </label>
-            <input
-              type="range"
-              className="e-input"
-              min="0"
-              max="1"
-              step="0.05"
-              value={formatPanelNumber(settings.crt.scanlineIntensity)}
-              onChange={(e) => {
-                settings.crt!.scanlineIntensity = parseFloat(e.target.value);
-                incrementObjectVersion();
-              }}
-            />
-          </div>
-          <div className="e-row">
-            <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              RGB Split <span>{formatPanelNumber(settings.crt.aberration)}</span>
-            </label>
-            <input
-              type="range"
-              className="e-input"
-              min="0"
-              max="5"
-              step="0.1"
-              value={formatPanelNumber(settings.crt.aberration)}
-              onChange={(e) => {
-                settings.crt!.aberration = parseFloat(e.target.value);
-                incrementObjectVersion();
-              }}
-            />
-          </div>
-          <div className="e-row">
-            <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              Bloom <span>{formatPanelNumber(settings.crt.bloom)}</span>
-            </label>
-            <input
-              type="range"
-              className="e-input"
-              min="0"
-              max="1"
-              step="0.05"
-              value={formatPanelNumber(settings.crt.bloom)}
-              onChange={(e) => {
-                settings.crt!.bloom = parseFloat(e.target.value);
-                incrementObjectVersion();
-              }}
-            />
-          </div>
-          <div className="e-row">
-            <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              Phosphor / Grain <span>{formatPanelNumber(settings.crt.phosphor || 0)}</span>
-            </label>
-            <input
-              type="range"
-              className="e-input"
-              min="0"
-              max="1"
-              step="0.05"
-              value={formatPanelNumber(settings.crt.phosphor || 0)}
-              onChange={(e) => {
-                settings.crt!.phosphor = parseFloat(e.target.value);
-                incrementObjectVersion();
-              }}
-            />
-          </div>
-          <div className="e-row">
-            <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
-              <input
-                type="checkbox"
-                style={{ marginRight: '5px' }}
-                checked={settings.crt.bezelGlow}
-                onChange={(e) => {
-                  settings.crt!.bezelGlow = e.target.checked;
-                  incrementObjectVersion();
-                }}
-              />
-              Bezel Glow
-            </label>
-          </div>
-        </>
-      )}
 
       <div className="e-row ui-divider-neutral" style={{ marginTop: '20px', paddingTop: '10px' }}>
         <button
           className="e-btn"
           style={{ width: '100%', padding: '8px' }}
-          onClick={() => {
-            // Access game via window for settings panel - same pattern as before
-            const g = (window as any).__QUEST_DEBUG__?.game;
-            if (g && g.saveSettings) {
-              g.saveSettings();
-            }
-          }}
+          onClick={() => game.saveSettings()}
         >
           SAVE SETTINGS
         </button>

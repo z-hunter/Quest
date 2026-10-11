@@ -1,3 +1,9 @@
+# Disclaimer
+
+**ATTENTION**!
+**THIS DOCUMENT MAY NOT REFLECT THE CURRENT STATE OF THE PROJECT**.
+**This is a historical timeline, not the definitive source for the current architecture**.
+
 ## Session Entry - 2026-04-15 18:16 Europe/Warsaw
 
 # Session Summary
@@ -2848,8 +2854,6 @@ The small local model used was unable to produce an adequate output in  the test
 1. Verify and test the tool with real MP4 animation assets in a web browser at `/vetool.html`.
 2. Integrate a link/button inside Scanline Sprite Editor (F5) to open the Video Export Tool in a new tab if desired.
 
-
-
 ## Session Entry - 2026-06-30 23:45 +02:00
 
 ### Session Goals
@@ -2873,7 +2877,7 @@ The small local model used was unable to produce an adequate output in  the test
 #### 2. Двусторонняя интеграция Sprite Editor и VETOOL
 
 - **Переход из Sprite Editor (F6):** В Sprite Editor добавлены горячая клавиша `F6` и пункт меню `F6 VETOOL` для перехода на страницу `/vetool.html`. Для браузерной версии (вне Tauri) добавлена поддержка `Ctrl+F6` для открытия VETOOL в новой вкладке.
-- **Возврат из VETOOL по F5:** 
+- **Возврат из VETOOL по F5:**
   - На главной странице (`App.tsx`) реализовано чтение хэша URL (`#sprite-editor`) на mount и событии `hashchange` с переключением в режим редактора спрайтов.
   - Устранена критическая ошибка рендеринга (White Screen of Death) при загрузке страницы: рендер боковых панелей и меню редактора теперь откладывается до полной инициализации синглтона `Game`.
   - В VETOOL обработчик клавиш переведен на фазу перехвата (`useCapture = true`) с вызовом `e.stopPropagation()` для надежной блокировки дефолтной перезагрузки страницы браузером при нажатии `F5`.
@@ -2906,7 +2910,6 @@ The small local model used was unable to produce an adequate output in  the test
 - `9967220` — `feat(vetool): remove redundant F7/F9 loop set buttons, support F-key style hotkeys inside standard e-btn`
 - `2d7304d` — `feat(vetool): darken e-btn hotkeys for better contrast, flash buttons on hotkey press`
 
-
 ## Session Entry - 2026-07-02 20:48 +02:00
 
 ### Session Goal
@@ -2922,8 +2925,8 @@ The small local model used was unable to produce an adequate output in  the test
 
 **Логика handleExit в ComponentSystem.ts:**
 
-- 	ransferActorToScene(activator, targetSceneId, { targetEntryId, activateScene: activator === currentScene.player })
-- Пустой 	argetSceneId → локальная телепортация внутри текущей сцены (scene.id как fallback)
+- ransferActorToScene(activator, targetSceneId, { targetEntryId, activateScene: activator === currentScene.player })
+- Пустой  argetSceneId → локальная телепортация внутри текущей сцены (scene.id как fallback)
 - Флаг ctivateScene = true только если активатор это scene.player; NPC переносится молча
 
 **Передача activator из handleSceneClick:**
@@ -2932,37 +2935,40 @@ The small local model used was unable to produce an adequate output in  the test
 
 **Кнопка Check в редакторе (SectionComponents.tsx):**
 
-- Проверяет 	argetSceneId → targetEntryId с поддержкой незагруженных сцен (sceneRegistry)
+- Проверяет  argetSceneId → targetEntryId с поддержкой незагруженных сцен (sceneRegistry)
 - Нормализует ID сцены: обрезает .json, понимает пустой ID как текущую сцену
-- Ищет Entry-объект по 
-ame во всех объектах: entities, 	riggerboxes (и Quad через entities)
+- Ищет Entry-объект по
+ame во всех объектах: entities,  riggerboxes (и Quad через entities)
 
 **ParserWorldModelBuilder.ts:**
 
 - Добавлено поле exit в ParserEntityContext: { targetSceneId, targetEntryId, targetSceneTitle }
-- 	argetSceneTitle берётся из загруженной сцены или из sceneRegistry.descriptor.title
-- Пустой 	argetSceneId раскрывается до currentScene.id для корректного отображения в LLM-контексте
+- argetSceneTitle берётся из загруженной сцены или из sceneRegistry.descriptor.title
+- Пустой  argetSceneId раскрывается до currentScene.id для корректного отображения в LLM-контексте
 
-**Тесты (	ests/scene/scene-transition.test.ts):**
+**Тесты ( ests/scene/scene-transition.test.ts):**
 
 - Создан новый тестовый файл с 4 сценариями: обычный переход, локальный (пустой targetSceneId), Exit на Entity, Exit на Quad с parallax
 - В тестах actor корректно назначен как scene.player (isPlayer = true), что соответствует семантике — ctivateScene срабатывает только для player
 
 ### Architecture/Runtime Decisions
 
-- **ctivateScene: actor === currentScene.player** вместо ctivateScene: true — ключевое решение: NPC должен переноситься в фон без переключения камеры/сцены. Параметр передаётся в 	ransferActorToScene в ComponentSystem.handleExit и в ActorCommandExecutor.goToScene использовался аналогичный паттерн.
-- **Entry — это имя объекта, а не свойство компонента** — Entry может быть на Triggerbox, Entity или Quad; идентифицируется по 
+- **ctivateScene: actor === currentScene.player** вместо ctivateScene: true — ключевое решение: NPC должен переноситься в фон без переключения камеры/сцены. Параметр передаётся в  ransferActorToScene в ComponentSystem.handleExit и в ActorCommandExecutor.goToScene использовался аналогичный паттерн.
+- **Entry — это имя объекта, а не свойство компонента** — Entry может быть на Triggerbox, Entity или Quad; идентифицируется по
 ame объекта.
-- **SceneManager scene keys без .json** — ID сцен хранятся без расширения; входной 	argetSceneId нужно нормализовать перед любым lookup.
+- **SceneManager scene keys без .json** — ID сцен хранятся без расширения; входной  argetSceneId нужно нормализовать перед любым lookup.
 - **Два источника данных о сценах**: sceneManager.scenes (загруженные) и sceneManager.sceneRegistry (все), оба нужно проверять.
 
 ### Tests Run
 
-- 
+-
+
 pm run typecheck — чисто (исправлены 2 ошибки Actor | null vs Actor | undefined через ?? undefined)
-- 
+-
+
 px vitest run tests/scene/scene-transition.test.ts — 4/4 pass
-- 
+-
+
 px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, не связаны с этой сессией)
 
 ### Files Changed
@@ -2971,7 +2977,7 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 - src/scene/SceneInteraction.ts — передача scene.player ?? undefined в ctivateSceneObject при кликах
 - src/components/editor/properties/SectionComponents.tsx — UI чекбоксов Collider/Portal, кнопка Check
 - src/mechanics/ParserWorldModelBuilder.ts — поле exit в entity context, нормализация targetSceneId
-- 	ests/scene/scene-transition.test.ts — новый тестовый файл (4 теста)
+- ests/scene/scene-transition.test.ts — новый тестовый файл (4 теста)
 - GDD.md — обновлено описание компонента Exit с полной спецификацией
 
 ### Remaining Work / Next Steps
@@ -2979,7 +2985,6 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 - Pre-existing 4 фейла в puppet-master.test.ts требуют отдельного разбора
 - Collider-режим для NPC не тестируется автоматически — потенциальная зона для дополнительных тестов
 - Поддержка GO TO <exit-object> через parser (Portal + автоподход) — описана в GDD как планируемая функциональность
-
 
 ## Session Entry - 2026-07-02 21:21 +02:00
 
@@ -3345,11 +3350,13 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 ## Session Entry - 2026-07-07 00:35 Europe/Warsaw
 
 ### Session Goals
+
 - Implement a Small Language Model (SLM) offline inference system and dataset logging (Shadow Mode) for the NPC Puppet Master.
 - Add diagnostic console commands for Shadow Mode configuration.
 - Audit and update `tech-spec.md` to match the current state of the engine.
 
 ### What Was Implemented
+
 - **Phase 1 (Shadow Mode)**: Created `ShadowLogger.ts` which records successful LLM plans in `logs/slm_shadow_dataset.jsonl` as a Gold Standard dataset, ignoring failures, loops, and strategy reflections. Bypasses file writing in testing environments.
 - **Phase 2 (SLM Stack)**: Created `SlmVocabulary.ts`, `SlmInputAdapter.ts`, `SlmOutputAdapter.ts`, and `SlmInferenceEngine.ts` to tokenize context, perform client-side WASM inference via `onnxruntime-web`, and decode/validate model plans.
 - **Phase 3 (Hybrid Routing)**: Integrated SLM inference directly into `NpcPuppetMaster.ts`. Routine requests resolve instantly in <5ms; complex cases (e.g. SAY, COMMAND, validation failures) safely escalate back to LLM.
@@ -3358,22 +3365,1581 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 - **Durable Memory**: Updated `.agent/context.md` and `.agent/current_task.md` with SLM/Shadow Mode facts and completion state.
 
 ### Important Architecture or Runtime Decisions
+
 - **Scope Gating**: The SLM is trained solely on Puppet Master (NPC) actions, completely separate from player parsing.
 - **Strict Validation**: Decoded plan steps are validated before execution, forcing LLM escalation on any invalid model outputs.
 - **Diagnostics Controls**: Allows disabling logging via console (`#SLMLOG-OFF`) during debugging and robustness test phases to avoid contaminating training logs.
 
 ### Parser / Mechanics / Scene Changes
+
 - No scenes were modified. Hybrid routing hooks and logging callbacks are wired inside `NpcPuppetMaster.ts`.
 - Integrated `#SLMLOG` commands into `Console.ts`.
 
 ### Tests and Validation
+
 - Created `tests/npc/slm-adapters.test.ts` providing unit coverage for vocabulary mappings, adapters, and model fallback.
 - Ran TypeScript verification and confirmed Vitest suite passes.
 
 ### Commit
+
 - Staged all changes and initiated commit. Modified files include `NpcPuppetMaster.ts`, `fileApi.ts`, `Console.ts`, `tech-spec.md`, and new files under `src/mechanics/slm/` and `tests/npc/slm-adapters.test.ts`.
 
 ### Remaining Work / Next Steps
+
 - Accumulate shadow logs in production until the training threshold is reached.
 - Train the model using the PyTorch template defined in the documentation and place the output `slm_routine_v1.onnx` file in `public/models/`.
 - Commit remaining workspace files (`.agent/context.md`, `.agent/current_task.md`, `Sessions.md`) after the initial pre-commit tasks complete.
+
+## Session Entry - 2026-07-17 15:07 +02:00
+
+### Session Goals
+
+- Finish P1 production readiness work for Scanline Engine.
+- Add contract validation around runtime data that crosses parser, scene, text asset, and LLM boundaries.
+- Harden the LLM provider layer so failures are typed, bounded, and better isolated.
+- Make NPC continuation state explicit instead of implicit.
+- Build the full SLM pipeline from export through ONNX packaging and compatibility metadata.
+- Leave a durable handoff in repo docs, memory, and NotebookLM.
+
+### What Was Implemented
+
+- Added `src/contracts/runtimeSchemas.ts` with reusable validators and a dedicated `ContractValidationError`.
+- Wired schema validation into runtime boundaries for:
+  - scene loading and scene instantiation,
+  - parser envelope/tool action handling,
+  - LLM cascade normalization,
+  - NPC Puppet Master plan acceptance,
+  - text asset JSON loading.
+- Added regression coverage for authored scene schema conformance and runtime contract validation cases.
+- Hardened the LLM provider layer with typed failure reasons, retry/backoff policy, HTTP classification, Retry-After parsing, and circuit-breaker behavior.
+- Converted NPC continuation handling to an explicit state machine with snapshot/restore support.
+- Built the SLM pipeline tooling for export, cleaning, splitting, training, evaluation, ONNX export, and compatibility manifest generation.
+- Updated docs for the production-readiness work, including the engine architecture notes and SLM/neural runtime documentation.
+
+### Important Architecture or Runtime Decisions
+
+- Runtime contracts are now enforced at the boundaries where bad data becomes engine state, instead of relying on downstream code to notice malformed inputs.
+- The LLM provider layer now treats transport, authentication, rate limit, timeout, and invalid-response cases as distinct operational states.
+- NPC continuation is modeled explicitly so save/restore and pending-plan handling no longer depend on hidden implicit flags.
+- The SLM pipeline is treated as an offline artifact pipeline with an explicit compatibility manifest, not just a model file dropped into the project.
+- `SaveState` from the previous session remained the persistence foundation for the runtime changes; this pass focused on making the surrounding contracts production-safe.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Parser:
+  - validated parser tool actions and cascade envelopes at runtime,
+  - tightened the parser boundary contract around structured plan data.
+- Mechanics:
+  - NPC plan handling now restores and serializes explicit continuation states,
+  - LLM provider retries and circuit breaking are now policy-driven rather than ad hoc.
+- Scene:
+  - scene data now validates before instantiation, reducing the chance of corrupted authored data reaching runtime.
+- Text assets:
+  - malformed JSON assets now fail safely instead of poisoning the whole load path.
+
+### Tests and Validation
+
+- Added focused tests for runtime contract validation and authored scene schema coverage.
+- Updated parser/LLM provider tests around retry policy and failure classification.
+- Validated the broader repository state before commit with the standard checks used during the P1 pass.
+- The main feature branch changes were committed after verification.
+
+### Commits Created
+
+- `069bf1d` - `feat: complete P1 production readiness`
+
+### Remaining Work / Next Recommended Steps
+
+- Finish the NotebookLM wrap-up sync so the current root Markdown set and curated `AgentMemory.md` are mirrored in the Scanline notebook.
+- Continue with any follow-up hardening that emerges from runtime use of the new schema checks and provider policy.
+- Train and evaluate the SLM pipeline on real shadow data once enough routine logs exist.
+
+### Risks, Caveats, Open Questions, or Non-committed Changes
+
+- The SLM training/export path is scaffolded, but model quality still depends on actual dataset volume and evaluation results.
+- The new contract validation raises the quality floor, but any authored-data drift will now surface earlier and more explicitly.
+- The NotebookLM sync portion of this wrap-up depends on successful CLI authentication; if auth is stale, the source replacement step has to be retried after recovery.
+
+## Session Entry - 2026-07-17 17:33 +02:00
+
+### Session Goals
+
+- Verify SaveState persistence of runtime NPC/parser context.
+- Expose runtime entity Parser Notes in the scene editor Properties panel.
+- Harden the new PN editor path and leave durable testing context for future sessions.
+
+### What Was Implemented
+
+- Audited SaveState v1 against `revealedHiddenEntities`, NPC `knownEntities`/objectives, scene/entity Parser Notes, stale flags, parser history, evicted scenes, and cross-scene NPC movement. The production serializer already covered these contracts; regression coverage was added for the JSON boundary and cross-scene/evicted-scene round-trip.
+- Added `SectionParserNote` at the bottom of single-object Properties. It appears only for entity-like objects with a non-empty runtime PN, is expanded by default, supports Properties section shortcut `7`, and uses a vertically resizable textarea.
+- PN edits go through `Scene.setEntityParserNote` and invalidate the Properties view without entering authored scene serialization.
+- Fixed follow-up review findings: the Properties render is gated by `isEntityLike`, and the first PN edit records an undo snapshot using the existing `lastUndoObjectKeyRef`/`saveUndoState()` pattern.
+- Added `happy-dom` as a dev dependency and converted the PN test to an interaction-capable React DOM render. The helper mounts with `react-dom/client`, exercises native textarea input events, and makes future interactive editor-component tests possible without production DOM dependencies.
+
+### Architecture / Runtime Decisions
+
+- Parser Notes remain runtime-only scene state; editor edits must use Scene runtime APIs rather than mutate authored scene JSON.
+- PN undo grouping follows the existing per-object Properties undo key, so a sequence of edits produces one initial snapshot per selected object.
+- `happy-dom` is test-only infrastructure for DOM-backed React interactions; it is not part of the shipped runtime.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Parser/runtime: no contract changes; PN setter behavior and whitespace omission remain unchanged.
+- Editor: runtime PN display/editing and undo integration were added in the Properties panel.
+- SaveState: verified existing runtime snapshot and structural-delta coverage; no production SaveState changes were needed.
+- Inventory/NPC movement: verified as part of the SaveState regression path; no new runtime changes.
+
+### Tests and Validation
+
+- Editor, StateEvent, and PN tests: 31 tests passed.
+- PN interaction test now covers empty/whitespace omission, rendered textarea, `setEntityParserNote`, and `incrementObjectVersion`.
+- `npm run typecheck` passed.
+- Targeted ESLint and Prettier checks passed.
+- `git diff --check` passed.
+
+### Commits Created
+
+- No commits were created during this session.
+
+### Remaining Work / Next Recommended Steps
+
+- Consider reusing the `happy-dom` interactive render helper for other Properties components that need event-level coverage.
+- Keep `happy-dom` isolated to tests and avoid introducing browser-global assumptions into production components.
+- Review/commit the current worktree changes when ready.
+
+### Risks, Caveats, Open Questions, or Non-committed Changes
+
+- The worktree contains intentional uncommitted changes in the Properties PN implementation, its test, `package.json`, `package-lock.json`, and this session log.
+- Installing `happy-dom` reported existing npm audit findings; no automatic audit fixes were applied.
+
+## Session Entry - 2026-07-17 18:42 +02:00
+
+### Session Goals
+
+- Remove the NPC navigation frame-drop bottleneck by moving heavy MOVE_TO route planning off the main thread.
+- Keep the solution compatible with both Vite web builds and Tauri 2 production builds.
+- Resolve the Tauri version mismatch that was blocking `npm run tauri:build`.
+- Leave a durable handoff in repo memory, session logs, and NotebookLM sources.
+
+### What Was Implemented
+
+- Introduced a pure TypeScript navigation planner in `src/systems/navigation/navigationPlanner.ts` with serializable snapshot/request types, binary-heap A*, approach-point selection, route smoothing, and WalkBox/collider geometry handling.
+- Added a Vite module worker entry at `src/systems/navigation/navigation.worker.ts` and wired it to load only through `new Worker(new URL(..., import.meta.url), { type: 'module' })`.
+- Extended `ActorNavigationService` with a single worker-backed client, FIFO NPC request queueing, request IDs, stale-result cancellation, snapshot fingerprinting, revision-aware cache reuse, and synchronous fallback when the worker fails.
+- Updated `ActorPlanExecutor` so NPC `MOVE_TO` can return `scheduled: npc_route_planning` and resume the normal move completion lifecycle after the worker response arrives.
+- Added `Actor.startPlannedRoute(target, route)` to start a precomputed route without rerunning the synchronous pathfinder.
+- Added targeted tests for the pure planner and the worker client, covering routing behavior, cache reuse, stale revision handling, retry behavior, and fallback on worker failure.
+- Resolved the Tauri build gate by pinning `@tauri-apps/api` and Rust `tauri` to matching `2.11.1` versions, then fixing a watcher ownership issue in `src-tauri/src/main.rs` that surfaced during the production build.
+
+### Important Architecture or Runtime Decisions
+
+- NPC route planning is asynchronous; player navigation and `Actor.moveTo()` remain synchronous, so the user-facing control path stays unchanged.
+- The worker is Vite/Tauri compatible because it relies on module-worker semantics and avoids Node-only imports, absolute paths, and Tauri-specific globals.
+- Correctness still depends on main-thread validation: stale scene/revision results are rejected, routes are rechecked against the current scene, and the existing unreachable/blocked semantics are preserved.
+- Tauri build compatibility is handled entirely in the Vite/Rust package versions and app code; no separate Rust-side navigation service or sidecar was introduced.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Mechanics:
+  - NPC MOVE_TO planning is now offloaded to a worker-backed route planner.
+  - Route planning includes geometry snapshot caching and stale-result protection so bursts of NPC wakeups do not block the frame.
+- Scene:
+  - Main-thread scene validation still guards worker output before a route is accepted.
+- Parser / Inventory:
+  - No direct parser or inventory contract changes were needed for this pass.
+
+### Tests and Validation
+
+- `npm run typecheck` passed.
+- `npm test` passed with the navigation changes in place.
+- `npm run build` passed and emitted the worker asset in the Vite bundle.
+- `npm run tauri:build` passed after the version pin and watcher fix, producing both MSI and NSIS bundles.
+- The Tauri build used a temporary `CARGO_TARGET_DIR` because the workspace drive was nearly full and the default target directory had historical ACL issues.
+
+### Commits Created
+
+- No commits were created during this session.
+
+### Remaining Work / Next Recommended Steps
+
+- If the temporary Tauri target directory is no longer needed, it can be cleaned up separately to reclaim disk space.
+- Keep an eye on any future scene or WalkBox geometry regressions, especially if the navigation data model changes.
+- If more build machines need to be supported, revisit whether the `CARGO_TARGET_DIR` workaround should be documented as a local-machine note only.
+
+### Risks, Caveats, Open Questions, or Non-committed Changes
+
+- The worker path is robust, but the synchronous fallback is still the safety net for unexpected runtime failures.
+- The `tauri:build` fix is now validated locally, but it depends on the pinned API/runtime version pair remaining in sync.
+- The worktree still contains the broader navigation and Tauri version-alignment changes from the implementation session, plus this session log update.
+
+## Session Entry - 2026-07-18 04:43 +02:00
+
+### Session Goals
+
+- Fix the technical teleport area behavior that started with `Ex3` in `Corridor`.
+- Keep navigation-only areas out of the semantic text layer and PM reasoning.
+- Tighten NPC context so protected, hidden, or merely remembered items do not leak into available targets.
+- Move `SceneLog` out of authored scene JSON and into runtime SaveState only.
+- Leave a durable handoff in the repo, memory, and NotebookLM.
+
+### What Was Implemented
+
+- Reworked the `Ex3` technical teleport path so it behaves as a navigation-only runtime area instead of a semantic scene object.
+- Updated the PM and world-model context so navigation-only exits do not appear as normal titled entities, and NPCs reason about them only through movement/arrival outcomes.
+- Fixed item-location tracking so when an item is picked up, the known location is replaced and the item is now treated as being held by an actor rather than still lying in the scene.
+- Tightened NPC target visibility rules so hidden or protected-inventory items do not become selectable just because they exist in static scene data.
+- Added runtime `SceneLog` persistence to SaveState and removed authored `sceneLog` serialization from scene JSON.
+- Cleaned legacy scene assets that still contained authored `sceneLog` data and updated the associated scene/save/parser tests.
+
+### Important Architecture or Runtime Decisions
+
+- Technical teleport areas are part of navigation, not the semantic scene model. They should influence movement, but not text-layer descriptions or NPC object reasoning.
+- `SceneLog` is gameplay/runtime state, not an authored scene asset. It belongs in save snapshots and live runtime state, not in scene JSON.
+- NPC memory of entities should track location history separately from the authored scene listing so item movement and actor transfer remain coherent.
+- The PM context must respect visibility and knowledge boundaries: hidden items, protected inventories, and unseen entities are not valid targets.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Parser / PM:
+  - Reduced false positives in available target generation.
+  - Kept technical navigation zones out of the textual scene scope.
+- Scene:
+  - `Scene.toJSON()` no longer serializes `SceneLog`.
+  - Scene runtime snapshots still preserve `SceneLog` for save/restore.
+- Inventory / NPC:
+  - Item pickup now updates known location state instead of leaving stale world coordinates behind.
+  - Actor transfer and inventory ownership now behave consistently when scenes swap the player actor.
+- Docs / assets:
+  - Updated project docs and removed obsolete authored `sceneLog` data from scene files.
+
+### Tests and Validation
+
+- Focused regression tests for scene logging, save-state restoration, PM context, and scene transitions passed.
+- `npm run build` passed.
+- The full test suite had one intermittent PM fake-timer timeout during the broad run, but the targeted `puppet-master` coverage passed when rerun in isolation.
+
+### Commits Created
+
+- `8a73c2f` - `Refine PM context and persistence`
+
+### Remaining Work / Next Recommended Steps
+
+- Keep watching PM traces for any remaining stale-memory or stale-location cases when items move between actors.
+- If more navigation-only areas appear, reuse the `Ex3` treatment so they stay out of the semantic layer.
+- Continue validating save/load and scene-transition behavior when player transfer overlaps with runtime inventory ownership.
+
+### Risks, Caveats, Open Questions, or Non-committed Changes
+
+- The intermittent PM fake-timer abort in the broad suite still deserves attention if it starts happening consistently.
+- Scene and PM contracts are now stricter, so any future authored-data drift should surface earlier in tests.
+- The wrap-up also depends on NotebookLM sync succeeding from the local CLI; if auth is stale, that step may need a retry after recovery.
+
+## Session Entry - 2026-07-18 05:03 +02:00
+
+### Session Goals
+
+- Wrap up the completed `GIVE` feature and leave a durable handoff for the next session.
+- Make sure the repo history, local memory, and NotebookLM sources all reflect the finished state.
+- Preserve the final root cause and fix for the brief UI freeze that appeared after successful `GIVE`.
+
+### What Was Implemented
+
+- Confirmed the feature landed in commit `d4689db` with the message `feat: add GIVE action and PM wake handling`.
+- Recorded durable project memory for the finished `GIVE` flow, including player and NPC transfer behavior, scene-log visibility, Puppet Master notifications, recipient wake-up, and the successful-player popup behavior.
+- Recorded the UI-freeze incident and its fix in long-term memory so future sessions can recognize the stale synchronous route-planning pattern quickly.
+- Ran the session wrap-up flow to persist the raw summary and prepare the NotebookLM sync set.
+
+### Important Architecture or Runtime Decisions
+
+- `GIVE` is now part of the standard action surface, not a one-off semantic shortcut.
+- Successful `GIVE` should wake a dormant recipient NPC, because receiving an item is enough to make that NPC relevant to the current simulation again.
+- The PM context path must stay pathfinder-free in its fast reachability branch so it does not reintroduce frame stalls when NPC state is rebuilt.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Parser:
+  - The player command surface includes `GIVE` variants for giving to and receiving from actors.
+- Mechanics:
+  - NPCs understand successful and failed give/receive outcomes through Puppet Master prompt context.
+  - The recipient wake behavior is preserved on successful item transfer.
+- Scene:
+  - `GIVE` is visible in the scene log to actors whose perception radius allows it.
+- Inventory:
+  - The transfer still respects the usual `TAKE`-style fit and space checks on the target inventory.
+
+### Tests and Validation
+
+- The feature work had already passed the full project test suite before commit.
+- `codex-doctor -Fast` passed during wrap-up and confirmed NotebookLM CLI readiness, repo health, and shared memory infrastructure.
+
+### Commits Created
+
+- `d4689db` - `feat: add GIVE action and PM wake handling`
+
+### Remaining Work / Next Recommended Steps
+
+- Keep an eye on any future route-planning regressions in Puppet Master context generation.
+- If the NotebookLM sync needs a retry on another machine, re-run the wrap-up source sync rather than hand-editing the manifest.
+
+### Risks, Caveats, Open Questions, or Non-committed Changes
+
+- `Sessions.md` itself now has an additional wrap-up entry, but no new code changes were made during this final handoff step.
+- NotebookLM and memory sync are dependent on the local CLI state, so a stale auth session would be the main thing to recheck if a future wrap-up stalls.
+
+## Session Entry - 2026-07-18 19:25 Europe/Warsaw
+
+### Session Goals
+
+- Stabilize the Scanline Engine NPC Puppet Master integration after manual Corridor / Mile's Home traces.
+- Fix cross-scene continuation, inventory perception, item discovery, navigation, save/load compatibility, and reciprocal item exchange behavior.
+- Commit the complete worktree, including authored content changes and the user's `#LOAD` fix.
+
+### What Was Implemented
+
+- Puppet Master now retains a compact cross-scene per-NPC action history with scene, outcome, and record-age context.
+- Dynamic PM context exposes current item titles and richer nested inventory/container information so `ITEM_FOUND` and battery/item reasoning can use actual names and state.
+- Objective/planning context was strengthened for prerequisite subgoals while keeping plans in `CURRENT OBJECTIVES` rather than adding a parallel commitment system.
+- `WAIT` continuations now resolve in the NPC's actual scene even after the player changes scenes; stale-generation protection remains active for real halts and `#LOAD`.
+- Cross-scene exit continuations preserve the completed plan and memory after actor transfer.
+- `MOVE_TO`, exit auto-approach, navigation diagnostics, route/no-progress handling, and related PM trace output were improved.
+- Runtime-confirmed item transfer remains authoritative. Premature model claims about `GIVE` are removed, and ordinary recipient plans wait for `item_given`.
+- Reciprocal same-response `GIVE` cycles are now handled with a generic strongly-connected-component dependency check: one deterministic sender starts each cycle, then runtime confirmation wakes the next recipient.
+- The save system now rejects incompatible authored-scene saves with a clear `#LOAD` diagnostic while preserving the authored-scene compatibility fix.
+- Corridor/Rick authored content and related documentation were updated.
+
+### Important Architecture and Runtime Decisions
+
+- NPC continuation ownership follows the NPC's scene, not the player's currently active scene.
+- Dynamic item identity is supplied by the runtime projection; prompts do not contain scenario-specific item-name hacks.
+- Runtime transfer events, not model memory or prose, are the authority for inventory ownership.
+- A reciprocal transfer is a dependency cycle, not a reason to discard every plan. The cycle breaker is generic and response-order deterministic.
+- `CURRENT OBJECTIVES` remains the sole planning/commitment surface; no separate tasks or commitments store was introduced.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Parser and semantic contracts were updated for executable NPC plan steps, item discovery, inventory-aware actions, and save-state compatibility checks.
+- `NpcPuppetMaster`, `ActorPlanExecutor`, `ActorCommandExecutor`, `ActorWorldQuery`, `GameSemanticAPI`, `SceneManager`, and `ComponentSystem` were updated across planning, execution, perception, transfer, and persistence paths.
+- `navigationDebug.ts` was added for focused MOVE_TO/navigation diagnostics.
+- Scene and text assets for Corridor and Rick were updated alongside PM system documentation and the GDD / engineering notes.
+
+### Tests and Validation
+
+- Focused Puppet Master suite: 101 tests passed.
+- TypeScript validation: `npm run typecheck` passed.
+- Commit hooks ran Prettier and ESLint successfully with zero warnings.
+- `codex-doctor -Fast` passed: repository, NotebookLM CLI, Kairo, agent memory, and local RAG readiness all confirmed.
+- Manual gameplay validation remains recommended for the Corridor reciprocal exchange and `#LOAD` authored-scene flow.
+
+### Commits Created
+
+- `a582a19` - `feat: improve Puppet Master and fix runtime integration`
+
+The commit includes all current worktree changes, including user-authored Corridor/Rick content and the user's save compatibility fix.
+
+### Remaining Work / Next Recommended Steps
+
+- Run the manual Corridor exchange scenario with `#PEEKPM-ON` and `#PEEKNAV-ON`; verify the cycle-break trace, real `item_given`, recipient wake, and final battery/cassette ownership.
+- Exercise `#SAVE` / `#LOAD` against both matching and deliberately changed authored scenes.
+- Treat any new `No plans generated` trace involving transfers as a dependency/confirmation issue first, and inspect `recipient_plan_retained_to_break_give_cycle` and `recipient_plan_deferred_pending_give` together.
+
+### Risks, Caveats, and Open Questions
+
+- The first sender in a reciprocal transfer cycle is selected by provider response order; this is deterministic and generic, but the resulting conversational order remains model-dependent.
+- Manual testing was not performed in this session after the final commit.
+- NotebookLM source synchronization is performed by the wrap-up scripts below and should be verified through the final source listing.
+
+## Session Entry - 2026-07-20 03:37 Europe/Warsaw
+
+### Session Goals
+
+- Diagnose long PM pauses, missing NPC responses, and apparent inactivity after scene transitions.
+- Make NPC Puppet Master continuations reliable after an NPC crosses an Exit while the player stays behind.
+- Ensure NPCs autonomously execute movement and subsequent plans in offscreen scenes.
+
+### What Was Implemented
+
+- State-only PM plans (for example objective/memory updates plus speech) now schedule bounded continuation wakes after any relevant trigger, rather than stopping after a cognitive-only result.
+- The PM prompt now requires a visible NPC to respond to direct player speech or explicitly justify appropriate silence.
+- PM ownership was made scene-authoritative for NPCs: batches, continuation timers, retries, no-progress wakes, interruptions, and completed plans use the NPC's actual scene instead of the player's `currentScene`.
+- Destination-scene PM batches now run after `TRAVERSE_EXIT`; stale entries are skipped only when the NPC has moved away again.
+- Static PM and strategy prompt projections now receive the processing scene explicitly, preventing offscreen NPCs from receiving the player's scene catalog.
+- Added background-scene simulation for enabled non-player NPC Actors. `SceneManager` advances these actors without running camera, rendering, player input, or scene-level systems, allowing offscreen `MOVE_TO` to complete and wake PM.
+- Cached scenes containing autonomous NPCs are protected from eviction so PM timers and continuations retain their actors.
+
+### Important Architecture and Runtime Decisions
+
+- A successful `TRAVERSE_EXIT` synchronously calls `ensureSceneLoaded`; an unloaded cached destination is therefore not the normal cause of an NPC stopping after `exit_traversed`.
+- Offscreen autonomy requires both PM planning and runtime actor simulation. Planning alone leaves a background `MOVE_TO` permanently in `started` because the previous update loop advanced only the rendered current scene.
+- Background simulation intentionally updates only enabled NPC actors. It does not run scene-wide triggers, camera changes, rendering, player input, or visual-only scene animations.
+
+### Parser / Mechanics / Scene Changes
+
+- Updated `src/mechanics/NpcPuppetMaster.ts` for cross-scene PM ownership, prompt construction, and continuation scheduling.
+- Updated `src/scene/Scene.ts` with `updateAutonomousNpcs` and `hasAutonomousNpcs`.
+- Updated `src/scene/SceneManager.ts` to tick cached offscreen NPCs and preserve their scenes in the cache.
+- Expanded `tests/npc/puppet-master.test.ts` with destination-batch, prompt-scene, post-exit continuation, state-only, and offscreen movement regression coverage.
+
+### Tests and Validation
+
+- `npm test -- --run tests/npc/puppet-master.test.ts tests/scene/scene-transition.test.ts tests/scene/subscene-activation.test.ts` passed: 114 tests.
+- `npm run typecheck` passed.
+- `git diff --check` passed before commit.
+- `codex-doctor -Fast` passed and confirmed NotebookLM CLI, agent memory, local RAG, Kairo, and repository readiness.
+- Final full suite rerun passed: `npm test -- --run` — 55 files and 664 tests. An earlier doctor-launched full-suite run reported one non-reproducing failure without test-name detail.
+
+### Commits Created
+
+- `6cc0308` - `Fix PM state-only plan continuations`
+- `b6fdc07` - `Require PM responses to direct player speech`
+- `522ed72` - `Keep NPCs active across offscreen scenes`
+
+### Remaining Work / Next Recommended Steps
+
+- Manually replay the Corridor/Rick scenario with `#PEEKPM-ON` and `#PEEKNAV-ON`; verify that Linda finishes offscreen movement and continues planning without player speech.
+- Investigate the separate prompt/perception issue visible in the trace: `npc_Rick` appears in knowledge but the model may still treat him as not directly actionable in the Corridor.
+- Watch memory usage in large projects: scenes with enabled autonomous NPCs now remain cached by design.
+
+### Risks, Caveats, and Non-committed Changes
+
+- The working tree was clean after commit `522ed72` before this wrap-up entry.
+- `Sessions.md` is modified by this handoff process and will be synchronized to NotebookLM; it is not part of the runtime commit unless explicitly committed later.
+- Shared-memory backup updated its local database, but its RAG-document export encountered a pre-existing malformed UTF-8 review-queue title; the generated `AgentMemory.md` therefore contained zero documents. NotebookLM source synchronization otherwise completed and verified Markdown source types.
+
+## Session Entry - 2026-07-20 17:31 +02:00
+
+### Session Goals
+
+- Update `evictScenesIfNeeded()` in `SceneManager.ts` so the scene cache can enforce its budget when autonomous-NPC scenes exhaust normal eviction candidates.
+- Preserve protection for current and pinned scenes while establishing a clear hard-over-budget fallback threshold for autonomous-NPC scenes.
+
+### What Was Implemented
+
+- Added `HARD_OVER_BUDGET_FACTOR = 1.5` in `src/scene/SceneManager.ts` to compute `hardOverBudgetThreshold` (`sceneCacheBudget * 1.5`).
+- Updated `evictScenesIfNeeded()`:
+  - Normal eviction pass continues to reduce estimated memory to `<= sceneCacheBudget` by evicting eligible non-autonomous, unpinned, non-current scenes in LRU order.
+  - Added a fallback pass triggered when `estimatedMemory > hardOverBudgetThreshold`: evicts eligible unpinned, non-current autonomous NPC scenes in LRU order until memory drops back to `<= sceneCacheBudget`.
+  - Calling `evictScene()` automatically snapshots and suspends NPC runtime state (`captureSceneRuntimeSnapshot`) and removes the scene from loaded active scenes.
+  - Current and pinned scenes remain fully protected under all budget conditions.
+- Added comprehensive unit test coverage in `tests/scene/scene-cache-eviction.test.ts`.
+
+### Important Architecture and Runtime Decisions
+
+- Soft budget (`sceneCacheBudget`) protects autonomous-NPC scenes from routine eviction when non-autonomous candidates exist.
+- Hard over-budget threshold (`1.5 * sceneCacheBudget`) acts as a safeguard against unbounded memory growth when autonomous-NPC scenes accumulate.
+- `evictScene()` snapshotting mechanism guarantees that NPC state and history are safely persisted and suspended before scene removal.
+
+### Tests and Validation
+
+- `npx vitest run tests/scene/` passed (11 test suites, 54 total tests passed).
+- Verified diffs for `src/scene/SceneManager.ts`.
+
+### Commits Created
+
+- No commits were created in this turn.
+
+### Remaining Work / Next Recommended Steps
+
+- Perform a full vitest test run across all project suites.
+- Commit the SceneManager eviction fallback update and new test file.
+
+## Session Entry - 2026-07-20 21:07 +02:00
+
+### Session Goals
+
+- Make the standard parser `USE` command an intentional prompt rather than a generic adventure-game item-on-target action.
+- Remove generic `USE` from the Puppet Master action DSL while preserving explicitly authored commands.
+- Make `OPEN` on an accessible, non-switch semantic container report its `in` contents for both player parser and Puppet Master.
+
+### What Was Implemented
+
+- Replaced the default `use_on` command asset with a zero-argument stub that displays `How to use?`.
+- Kept authored override support: a project can replace the `use_on` asset or add a more specific parser command, including one that uses `actorUseOn`.
+- Removed generic PM `USE` from the PM plan type, runtime schema, prompt contract, normalization, executor, and SLM decoding path. PM now uses only explicitly projected authored `COMMAND` affordances such as `turn_tv_on`.
+- Added `OPEN` handling in `GameSemanticAPI`: when a titled non-switch object has an accessible nested `Inventory` on semantic relation `in`, `OPEN` returns `relation_contents` or `relation_empty` instead of escalating as a non-switch action.
+- Routed player parser `OPEN` through the shared semantic path and verified PM receives the same actor-aware outcome, including discovered item IDs and the text list of contents.
+- Updated `GDD.md`, `Autotests.md`, parser fixture behavior, and focused regression tests.
+
+### Important Architecture and Runtime Decisions
+
+- `USE` is not a generic player or NPC interaction convention in Quest. The default player command is a stub; meaningful use behavior is authored explicitly.
+- Generic PM `USE` is unsupported even if returned by a model; it is discarded/escalated. This prevents PM from inventing un-authored item interactions.
+- `OPEN` on a non-switch does not bypass access controls. It becomes a contents inspection only when existing actor-aware Inventory accessibility succeeds; Switch and Blocker gating remain authoritative.
+- The semantic `relation_contents` / `relation_empty` outcome is shared by player parser and PM so the two paths do not independently infer container state.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- `public/text/system/commands/use_on.json` and the fallback command definitions now implement the `How to use?` stub.
+- `src/mechanics/NpcPuppetMaster.ts`, `src/mechanics/npcTypes.ts`, `src/contracts/runtimeSchemas.ts`, `src/mechanics/ActorPlanExecutor.ts`, and `src/mechanics/slm/SlmOutputAdapter.ts` no longer advertise or execute PM `USE` steps.
+- `src/systems/GameSemanticAPI.ts` now resolves accessible nested `Inventory` storage below a titled anchor for non-switch `OPEN`.
+- `src/mechanics/Parser.ts` delegates non-switch `OPEN` to the semantic runtime, retaining the previous fallback for targets without eligible storage.
+
+### Tests and Validation
+
+- `npm run typecheck` passed after both changes.
+- `tests/parser/commands.test.ts` and `tests/npc/puppet-master.test.ts` passed: 150 focused tests for the `USE` change.
+- `tests/game/semantic-api.test.ts`, `tests/integration/parser-game.test.ts`, and `tests/npc/puppet-master.test.ts` passed: 300 focused tests for the `OPEN` change.
+- `git diff --check` passed before both commits.
+- `codex-doctor -Fast` passed and confirmed repository, NotebookLM CLI, agent memory, local RAG, and Kairo readiness.
+
+### Commits Created
+
+- `0283c84` - `Make USE an explicit authored action`
+- `4e0aa3a` - `Make OPEN inspect accessible containers`
+
+### Remaining Work / Next Recommended Steps
+
+- No immediate follow-up is required for these contracts.
+- When authoring future interactions, prefer explicit parser commands and PM `COMMAND` affordances over generic verbs.
+
+### Risks, Caveats, and Non-committed Changes
+
+- `OPEN` only lists an accessible nested `Inventory` on the semantic `in` relation; a non-switch object without eligible accessible storage still follows the prior non-switch fallback.
+- The working tree was clean after commit `4e0aa3a` before this wrap-up entry. `Sessions.md` is modified by this handoff workflow and is intentionally left uncommitted unless the user requests a documentation commit.
+
+## Session Entry - 2026-07-20 23:30 Europe/Warsaw
+
+### Goals
+
+- Analyze Puppet Master logs where Linda/Rick crossed scenes and speech was not heard.
+- Fix the critical scene-local world-model bug that made Linda place the cassette in the Corridor although she had seen it on the Desk in `test_room`.
+- Preserve the nested-inventory battery transfer fix and commit the implementation.
+
+### Implemented
+
+1. `f4d6ecb fix: let PM transfer nested inventory items` added prompt/fallback guidance and nested-inventory validation/peek support so PM can plan “remove old batteries, insert new batteries” without requiring `REPLACE`.
+2. `ade9d04 fix: route NPC speech to speaker scene` made `Game.sayAsActor` and listener perception use the speaking actor’s actual scene rather than the player’s current scene. Regression coverage was added in `tests/game/observed-actor-actions.test.ts`.
+3. `6453d57 fix: keep PM world model scene-local` made `ActorWorldQuery` scene-aware and threaded the authoritative NPC scene through `NpcWorldModelBuilder` for known objects, dynamic perception, switch affordances, location resolution, exits, protected inventory, and remembered locations. Regression coverage verifies that the cassette on the `test_room` Desk is not stamped into Corridor state.
+
+### Root causes
+
+- `NpcWorldModelBuilder.build(scene=Corridor)` called `buildKnownEntities(npc)`, while `ActorWorldQuery` implicitly read `sceneManager.currentScene` (`test_room`). The cassette was therefore discovered in `test_room` and then remembered as if observed in Corridor, producing an invalid TAKE/GIVE plan and rejection.
+- Speech listener lookup likewise used the player scene, so Rick could not hear Linda after she moved to another scene.
+
+### Validation
+
+- `npm run typecheck` passed.
+- Sequential full suite passed: `npm test -- --run --maxWorkers=1 --no-file-parallelism` — 56 files, 685 tests.
+- `tests/npc/puppet-master.test.ts`: 115 passed.
+- `tests/game/observed-actor-actions.test.ts`: 6 passed.
+- `git diff --check` passed.
+- The default parallel Vitest run still has an existing fake-timer interaction in `builds PM batch context only for selected NPCs`; the isolated test and PM file pass.
+
+### Follow-up
+
+- Re-run the runtime log reproduction to confirm no cassette leakage after the scene-local fix.
+- Consider a separate follow-up for the parallel fake-timer flake.
+- This wrap-up intentionally leaves `Sessions.md` and the pre-existing user change in `public/text/objects/NPC.json` uncommitted.
+
+## Session Entry - 2026-07-21 15:17 Europe/Warsaw
+
+### Goals
+
+- Analyze successive compact PM logs for Linda/Rick, especially scene transfers, MOVE_TO/GIVE behavior, stale inventory, WAIT wake-ups, and objective confirmations.
+- Make NPC cognition continue after `wait_elapsed` and prevent stale inventory from making a transferred item appear in two Actors' inventories.
+- Preserve the compact PM diagnostics while keeping the runtime and tests correct.
+
+### Problems Encountered
+
+- Autonomous NPCs sometimes used the player's `currentScene` for inventory, perception, speech, or action routing, causing cross-scene leakage and incorrect cassette/battery decisions.
+- Linda could receive a `wait_elapsed` wake-up with active objectives and return an empty plan, making her stop without progressing.
+- After a successful `GIVE`, a stale source `Inventory.items` ID could resolve to the recipient's entity through same-ID fallback. PM then saw the item in both inventories and repeated `GIVE`, producing `inventory_item_already_present`.
+- PM treated a one-way cassette `GIVE` as proof that the promised battery had also been transferred. It wrote false memory/objective state even though no `GIVE battery_aaa -> Linda` occurred.
+- `OBJECTIVE_MARK_COMPLETED` evidence was not consistently accepted when the relevant successful result was carried by a later `plan_completed`/continuation trigger; models could leave objectives pending or remove a parent containing a pending subtask.
+- MOVE_TO continuation watchdogs sometimes timed out while navigation later completed; scene-transfer diagnostics could also report identical source/destination IDs after a real cross-scene transfer.
+
+### Implemented Decisions and Fixes
+
+- NPC world-model and inventory queries are scene-authoritative and no longer depend on the player's scene. Speech/listener routing is scene-local by default.
+- Inventory transfer moves nested descendants with the autonomous Actor and filters untitled entities from PM knowledge.
+- `wait_elapsed` is a mandatory cognitive wake-up when active objectives remain: PM must groom OBJECTIVES/MEMORY, continue with a concrete action, or use `THINK_STRATEGY`; empty plans are allowed only with no active objectives. Runtime preserves `THINK_STRATEGY` for this case.
+- Inventory candidate resolution now rejects same-ID entities explicitly spatially/inventory-owned by another Actor instead of falling back to an arbitrary match. This prevents duplicate-GIVE loops after transfer.
+- PM diagnostics were compacted into readable one-line wake/context summaries without exposing the old full `knownEntities` dump.
+- Runtime evidence, pending-confirmation lifecycle, held-container OPEN/TAKE behavior, and related objective safeguards received regression coverage.
+
+### Validation
+
+- Targeted autonomous-NPC GIVE regression passes.
+- `npm run typecheck`, ESLint, Prettier, and `git diff --check` pass for the committed changes.
+- The compact PM log confirms the stale-inventory fix: after cassette transfer Linda shows `Inv: [tv_rc]`, while Rick shows `Inv: [battery_aaa, test]`.
+- Some broader legacy tests still expose separate navigation/surface-duplicate or compact-log expectation issues; those were not hidden inside the inventory fix.
+
+### Commits Created During This Session
+
+- `3942b5e` — keep dialogue within the speaker scene.
+- `98f13ad` — require runtime evidence for objectives.
+- `e011bdc` — preserve scene-arrival context and commitments.
+- `d31ddc4` — correct autonomous scene transfers.
+- `6453d57` — keep PM world model scene-local.
+- `ad6b3ac` — resolve autonomous NPC inventory in its PM scene.
+- `e78f4f4` — strengthen pending-confirmation evidence handling.
+- `bc338cd` — allow OPEN on held inventory items.
+- `ad66b4d` — keep autonomous NPC inventory scene-aware.
+- `c14cc0d` — keep NPCs active after `wait_elapsed`.
+- `3463445` — compact/refactor PM logging.
+- `baf368a` — stale inventory candidate fix and regression test.
+- `429bf92` — fix active-player inventory bleed and explicit scene parsing during duplicate removal.
+
+### Remaining Work / Recommended Next Steps
+
+- Model bilateral trades explicitly: require a confirmed counter-item `item_given` or implement an atomic trade action; never infer the counter-transfer from the offered-item GIVE.
+- Make objective confirmation matching accept authoritative successful results from `plan_completed` and continuation batches, while preventing `OBJECTIVE_REMOVE` from deleting unresolved pending descendants.
+- Investigate MOVE_TO continuation timeout versus late `move_completed` delivery and correct `plan_completed_after_scene_transfer` source/destination diagnostics.
+- Re-run a full sequential suite and the real Linda/Rick reproduction after the remaining trade/confirmation fixes.
+
+### Risks and Caveats
+
+- The working tree was clean before this entry; `Sessions.md` is intentionally modified by this wrap-up and will remain uncommitted unless requested.
+- The latest runtime log demonstrates that the stale inventory fix is effective, but the battery was still not transferred; memory claiming otherwise is model error, not authoritative runtime state.
+
+## Session Entry - 2026-07-21 15:27 Europe/Warsaw
+
+### Session Goals
+
+- Diagnose the failing `Game navigation and spatial API > transfers a player actor with inventory and nested spatial descendants to the target scene` regression.
+- Verify whether `SceneManager.discardReplacedPlayer` failed to recursively remove inventory descendants.
+- Keep scene transfer universal for any `Actor`, while retaining only necessary player-specific scene activation behavior.
+
+### Implemented
+
+- Fixed `InventoryManager.syncInventoryStore` so the global `game.inventory` branch is used only when:
+  - the owner belongs to `sceneManager.currentScene`;
+  - the owner is that scene's player;
+  - the relation is `in`.
+- Cached-scene players now use scene-scoped inventory/component storage, matching the existing universal Actor transfer model.
+- Removed temporary diagnostic logging from `SceneManager` that had been present in the working tree.
+- Added regression assertions proving that a stale target-scene inventory item remains owned by the stale player and does not enter the active player's global inventory.
+
+### Root Cause and Architecture Decision
+
+- `Scene.addEntity(stalePlayer)` makes the stale player the target scene's `player`, but that scene is not active.
+- `syncInventoryStore` previously treated any `scene.player` as the global active player and wrote `staleCassette` into `game.inventory`.
+- Adding the incoming Hero's inventory then re-synchronized that contaminated list and rebound `staleCassette` to Hero before `discardReplacedPlayer` ran.
+- The discard BFS was therefore correct: it could not find an item that no longer belonged to `OldHero`.
+- Universal transfer remains the contract: any Actor moves with inventory contents and nested spatial descendants. Player-only behavior is limited to replacement, `scene.player`, camera, and activation concerns.
+
+### Validation
+
+- Targeted player and NPC transfer tests: passed.
+- `tests/game/navigation-and-spatial.test.ts` plus `tests/scene/scene-transition.test.ts`: 37/37 passed.
+- `npm run typecheck`: passed.
+- `git diff --check`: passed.
+- A separate existing failure remains in `tests/game/semantic-api.test.ts`: `chooses the latest surface-shaped duplicate during scene surface hydration`; it reproduces in isolation and is outside this transfer fix.
+
+### Commits
+
+- No commit was created during this session.
+
+### Remaining Work / Caveats
+
+- `run-test-debug.ts` is an existing untracked diagnostic file and was intentionally left untouched.
+- `src/scene/SceneManager.ts` remains marked modified by the pre-existing diagnostic/edit state; no functional SceneManager diff remains after log removal.
+- The semantic-api surface-duplicate failure should be tracked separately if it is not already covered by an existing task.
+
+## Session Entry - 2026-07-21 19:15 Europe/Warsaw
+
+### Session goals
+
+- Analyze several fresh Puppet Master logs from the game.
+- Investigate Linda/Rick behavior, especially apparent distance failures, stalled plans, and the `schedule_scene_scan` path.
+- Implement and validate the agreed Puppet Master fixes, then commit them.
+
+### Problems analyzed and resolved
+
+#### 1. GIVE confirmation and stale continuation state
+
+The earlier logs showed repeated or incorrect GIVE-related behavior: a recipient could react before the giver's transfer had an authoritative result, and a stored GIVE tail could use stale distance or inventory assumptions.
+
+Resolution:
+
+- Added a pending incoming-GIVE barrier for recipients.
+- Deferred recipient planning until the giver reaches a terminal GIVE result.
+- Re-evaluated the current interaction distance before executing a stored GIVE tail.
+- Preserved authoritative inventory ownership and avoided treating a proposal or agreement as a completed transfer.
+
+Commit: `b4c9c14 Fix Puppet Master GIVE confirmation flow`.
+
+#### 2. `schedule_scene_scan` self-activation and duplicate scene batches
+
+Individual scene-log cursors prevented ordinary self-activation, but they did not by themselves prevent multiple scene batches from being queued while one provider request was still running. Autonomous NPC events could therefore create redundant follow-up scans and consume rate budget unnecessarily.
+
+Resolution:
+
+- Added scene-batch coalescing while a provider request is in flight.
+- Moved the busy check before rate-budget consumption.
+- Kept a single pending follow-up batch and merged its triggers.
+- Used per-NPC scene-log watermarks captured before context construction and marked them processed only after successful processing.
+- Preserved player-speech priority and its rate-budget reset behavior while autonomous NPC speech uses the normal budget.
+- Added stale triggerless-batch suppression when no NPC has unread events.
+
+Commit: `7f155b5 Coalesce Puppet Master scene batches`.
+
+#### 3. First fresh log: explicit empty response
+
+One fresh run ended with the provider reasoning that Linda should respond or continue, followed by `No plans generated`. This was identified as a provider response-contract violation rather than an executor or scene-scan failure. The existing prompt contract requires a non-empty plan when an active objective or mandatory wake trigger remains.
+
+#### 4. Second fresh log: Linda stopped after a non-empty plan
+
+The second run was more specific. The provider returned a valid recovery plan containing `OBJECTIVE_REMOVE`, `OBJECTIVE_ADD`, memory updates, `SAY`, `MOVE_TO`, and `TRAVERSE_EXIT`, but the log contained no execution trace afterward.
+
+Root cause:
+
+- The model incorrectly marked the composite parent objective `TV is ON` complete using evidence from the child action `TAKE tv_rc`.
+- On the next PM turn the objective appeared as `[JUST COMPLETED]` and lifecycle cleanup removed it before the new response was executed.
+- The response then started with `OBJECTIVE_REMOVE` for the already-removed objective.
+- `ActorPlanExecutor` returned `objective_not_found` and stopped the remainder of the plan, so Linda never said anything or moved. The failure was also insufficiently visible in the PM trace.
+
+Resolution in commit `fd3d7e3 Fix Puppet Master objective recovery`:
+
+- Completion evidence cannot confirm a composite objective while any nested subtask remains incomplete. The invalid marker is dropped while valid objective, memory, and action-tail steps are preserved.
+- `OBJECTIVE_REMOVE` is idempotent when lifecycle cleanup has already removed the target; it returns a successful no-op and does not abort the plan.
+- Added `plan_step_failed` wake tracing with the failed code and planned step types.
+- Added regressions for composite-objective evidence, lifecycle-pruned removal, and executor behavior.
+
+### Important architecture decisions
+
+- Individual scene-log cursors are necessary for unread-event ownership, but in-flight batch coalescing is separately required to control provider calls and rate budgets.
+- Objective completion is cognition over already confirmed runtime evidence; it never performs the physical action.
+- Composite objectives represent the full procedure. A child action cannot confirm the parent unless all nested subtasks are already complete.
+- Lifecycle cleanup and model-emitted objective grooming must be safely composable. Removing an already absent objective is a no-op.
+- Runtime execution remains authoritative for movement, inventory, GIVE, commands, and scene transitions.
+
+### Validation
+
+- Puppet Master focused suite: 136/136 tests passed.
+- After updating the compatibility assertion for the autonomous `scheduleScene` options, the full project suite passed: 56 files, 708/708 tests.
+- TypeScript typecheck: passed.
+- Prettier check: passed.
+- ESLint on touched files: passed.
+- `git diff --check`: passed.
+- `codex-doctor -Fast -NoMemoryReview`: 17 checks passed, including project, NotebookLM, Kairo, agent-memory, and local-RAG readiness.
+
+### Commits created during the session
+
+- `b4c9c14 Fix Puppet Master GIVE confirmation flow`
+- `7f155b5 Coalesce Puppet Master scene batches`
+- `fd3d7e3 Fix Puppet Master objective recovery`
+- `3214f86 Align scene scan budget test`
+
+### Remaining work and caveats
+
+- The first fresh-log empty-plan issue remains a provider reliability case; the prompt contract identifies it, but a separate bounded runtime fallback may still be useful if it recurs.
+- The PM focused tests emitted one pre-existing warning about an invalid continuation transition in the moved-GIVE test; the suite still passed and this warning was not part of the current fixes.
+- No uncommitted implementation changes remain after `c2c6b2a`; the only test adjustment was the expected second argument `{ resetRateBudget: false }` for autonomous NPC speech.
+
+## Session Entry - 2026-07-22 01:12 Europe/Warsaw
+
+### Session goals
+
+- Analyze a fresh Puppet Master run after the objective-completion fixes.
+- Verify whether Linda still stops prematurely at the end of the TV objective chain.
+- Commit the accepted soft objective-completion implementation with a detailed description.
+- Preserve the result as a durable session handoff.
+
+### What was implemented and verified
+
+The fresh run demonstrated that the main Linda stall is resolved. Linda successfully completed the entire multi-scene chain: she found the TV remote, discovered its dead battery, negotiated with Rick, fetched the compact cassette, exchanged it for a charged AAA battery, returned to the apartment, installed the battery, and executed `turn_tv_on` successfully.
+
+The runtime emitted `objective_completion_soft_confirmed` for the TV objective and continued with the next objective instead of blocking on missing exact evidence. After a later movement timeout on the way to the sofa, the watch objective was also closed optimistically, allowing the story to reach a natural completion point. The remaining `No plans generated` entries were valid cases where an NPC was waiting or had no immediate work, not the previous deadlock.
+
+### Architecture and runtime decisions
+
+- Leaf objectives use optimistic completion when the model claims completion but the current trigger does not contain exact confirmation evidence.
+- Physical world mutations remain runtime-authoritative; soft completion never fabricates movement, inventory transfer, command execution, or scene transitions.
+- Composite objectives with unfinished subtasks remain protected from premature closure.
+- Invalid objective markers do not discard independent physical tail actions.
+- Empty-plan recovery remains deliberately bounded and narrow: it handles the specific objective-validation wake-up path without repeatedly waking ordinary idle/wait states.
+
+### Puppet Master, mechanics, and documentation changes
+
+- `src/mechanics/NpcPuppetMaster.ts` contains the soft leaf-confirmation path, composite-objective guard, tail preservation, and bounded empty-plan recovery.
+- `public/text/system/npc-pm-system.md` and `NPCsys.md` describe the new optimistic leaf-objective contract and the distinction between cognitive completion and authoritative physical execution.
+- `tests/npc/puppet-master.test.ts` covers soft leaf completion, preservation of physical tails, and one-shot recovery after an empty plan.
+
+### Fresh-log observations and remaining caveats
+
+- Linda's `MOVE_TO Sofa` timed out after 15 seconds. This is a separate pathfinding/collision issue; it no longer blocks the logical objective because the TV was already on and the watch objective was treated as achievable from the current position.
+- After the watch objective was already completed, the model attempted to mark a stale invented ID (`watch_muppet_show`). Runtime rejected it with `objective_not_found`, and Linda still responded correctly to Miles. This is safe but suggests a future prompt refinement: do not emit `OBJECTIVE_MARK_COMPLETED` for objectives already shown as `[JUST COMPLETED]` or absent from the active objective list.
+
+### Validation
+
+- `npm run typecheck` — passed.
+- Focused Puppet Master suite — 137/137 passed.
+- Full project suite — 56 files, 709/709 passed.
+- Targeted Prettier check — passed.
+- `git diff --check` — passed.
+- Commit hooks ran Prettier and ESLint successfully on the staged implementation files.
+
+### Commit created
+
+- `ba9f69ab2aebcabb2c65abc8e8a4f5a25401d3be` — `fix: soften NPC objective completion validation`
+
+The commit includes the runtime fix, prompt/documentation updates, and regression tests. The worktree was clean after the commit. The commit has not been pushed to a remote repository.
+
+### Next recommended steps
+
+- Reproduce and inspect the independent `MOVE_TO Sofa` timeout if sofa positioning is important to gameplay.
+- Optionally strengthen the PM prompt against repeated completion markers for already completed or missing objective IDs.
+- Run another real PM log after any prompt refinement; no further runtime change is required for the original Linda-stall symptom.
+
+## Session Entry - 2026-07-26 20:47 +02:00
+
+### Session Goals
+
+- Resolve navigation performance bottlenecks, freeze/lag issues on flat colliders, and early-return bugs in adaptive pathfinding.
+- Maintain editor UX for Exit components (`Collider` and `Portal` tooltips) and clarify technical exit hiding semantics (`navigationOnly`).
+- Create comprehensive system documentation in `NavSys.md` covering architecture, Worker pathfinding, caches, and exit mechanics.
+- Fix local teleport pruning bounds and target walkability validation in Actor navigation flows.
+
+### What Was Implemented
+
+1. **A* Grid Size Optimization (`Actor.ts`)**:
+   - Fixed `Actor.getRouteGridSize()` to return a stable `16px` grid size on the main thread instead of computing it dynamically from `Math.min(colliderWidth, colliderHeight)`.
+   - Prevented thin/flat colliders (e.g. 46x2px) from creating tiny 4px grids that caused A* search iterations to hit the 50,000 safety cap and trigger freezes.
+
+2. **Adaptive Navigation & Reachability Cache Fix (`navigationPlanner.ts`)**:
+   - Fixed early-return logic in `routeForAdaptive()` on `knownCoarseReachable` cache miss: coarse search misses now skip coarse routing (`skipCoarse = true`) and fall back to fine-resolution A* searches instead of returning early `null`.
+   - Removed unused `revision` and `actorKey` fields from `WalkabilityBitmap` type and `buildWalkabilityBitmap`.
+
+3. **Local Teleport Pruning & Target Walkability (`ActorNavigationService.ts` & `Actor.ts`)**:
+   - Updated `planLocalTeleportRoute` pruning bound (`minPossibleCost`) to conservatively subtract the exit's maximum approach radius (`maxRadius`) from the exit-center distance before adding entry-to-target distance.
+   - Added `isWalkable(target.x, target.y)` validation before calling `planLocalTeleportRoute` in `Actor.ts`, ensuring target destination is walkable before creating/accepting local teleport plans.
+   - Fixed A* heap processing loop in `Actor.ts`: replaced `if (!current) return null;` with `if (!current) continue;` to skip stale heap entries safely.
+   - Updated `startPlannedRoute` so `localTeleportTarget` is recorded only when a valid `teleportPlan` exists (`teleportPlan ? target : null`), preserving accidental-exit stop guards.
+
+4. **Editor & Component System (`ComponentSystem.ts` & Editor UX)**:
+   - Restored `navigationOnly?: boolean` in `ExitComponent` and `ComponentSystem.isNavigationOnlyExit()`.
+   - Added hover tooltips for `Collider` and `Portal` checkboxes in `SectionComponents.tsx` and `propertiesConstants.ts`.
+
+5. **Documentation (`NavSys.md`)**:
+   - Created `NavSys.md` in the project root documenting system architecture, Web Worker execution, A* grid size behaviors (16px main-thread vs 4–24px worker), adaptive coarse (`gridSize * 4`)/fine resolution searches, reachability caching, NPC exit rules (`ignorePhysicalExits`), `Collider`/`Portal` triggers, and `navigationOnly` technical exit rules.
+
+### Parser / Mechanics / Scene Changes
+
+- **Mechanics / Navigation**:
+  - Main-thread and worker pathfinding are now consistent and resilient against narrow corridors and flat colliders.
+  - NPC physical exit avoidance during blughd/wander flows is guarded by `ignorePhysicalExits`.
+- **Parser & Text Systems**:
+  - `ComponentSystem.isNavigationOnlyExit()` remains authoritative for hiding technical exits from text context when `navigationOnly: true`.
+
+### Tests and Validation
+
+- `npx vitest run tests/systems/navigationPlanner.test.ts` — 6/6 passed (including new `dynamicBlockers` test suite).
+- Full test suite `npm test` — 58 test files, 722/722 passed.
+- TypeScript typecheck `npm run typecheck` — 0 errors.
+
+### Commits Created
+
+- Session changes committed and linted during the session.
+
+## Session Entry - 2026-07-26 22:57 +02:00
+
+### Session Goals
+
+- Implement Retro Grid 3D Perspective mode and Amount slider for `QuadObject` entities.
+- Implement Retro Grid Checkerboard fill mode with Second Fill Color support.
+- Implement per-axis perspective toggles (**Off X** and **Off Y**) and synchronize editor snapping alignment with perspective grid nodes.
+
+### What Was Implemented
+
+1. **Quad Retro Grid Perspective & Amount Slider (`QuadObject.ts`, `EditorSnappingSystem.ts`)**:
+   - Added `gridPerspective` (`boolean`) and `gridPerspectiveAmount` (`number`, default `1.0`, range `0.0`–`2.0`) to `QuadObject` and `SERIALIZABLE_PROPS`.
+   - Implemented non-linear hyperbolic parameter warping formula `getPerspectiveT(t, edge1Length, edge2Length, amount)`:
+     Grid lines bunch closer together towards the narrower edge of trapezoidal Quads in 3D perspective space.
+   - Updated `EditorSnappingSystem` grid line and node snapping coordinates to align with perspective grid nodes when `Alt` is held.
+
+2. **Per-Axis Perspective Toggles (Off X & Off Y)**:
+   - Added `gridPerspectiveOffX` and `gridPerspectiveOffY` properties to `QuadObject`.
+   - Enabled selective disabling of 3D perspective warping on either axis independently (e.g. keeping vertical grid lines linearly spaced while horizontal grid lines retain perspective warping, or vice versa).
+   - Updated `QuadObject.render()` and `EditorSnappingSystem` to respect `usePerspectiveX` and `usePerspectiveY`.
+
+3. **Checkerboard Fill Mode & Second Fill Color (`QuadObject.ts`, `QuadProperties.tsx`, `MultiSelectionProperties.tsx`)**:
+   - Added `checkerboard` (`boolean`) and `secondColor` (`string`) properties to `QuadObject`.
+   - Rendered alternating grid cells $(col + row) \% 2 === 1$ in `secondColor` over the base `color` pass, fully supporting perspective and per-axis Off X/Y warping.
+   - Placed Checkerboard controls inside the **Retro Grid** inspector section (active when both **Retro Grid** and **Fill Color** are enabled).
+
+4. **Inspector UI & Tooltips (`QuadProperties.tsx`, `MultiSelectionProperties.tsx`, `propertiesConstants.ts`)**:
+   - Added UI controls for **Perspective**, **Amount**, **Off X**, **Off Y**, **Checkerboard**, and **Second Fill Color** in both `QuadProperties` and `MultiSelectionProperties`.
+   - Added hover tooltips in `propertiesConstants.ts`.
+
+### Tests and Validation
+
+- `tests/entities/quad-object.test.ts` — 4/4 tests passed (covering `getPerspectiveT` math, JSON serialization/deserialization, and checkerboard cell rendering).
+- `npm run typecheck` — 0 errors.
+- `npm test -- --run` — 58 test files, 725/725 tests passed cleanly.
+
+### Commits Created
+
+- `67c4283` — `feat(quad): add perspective warping and amount slider for retro grid`
+- `90d7e0f` — `feat(quad): add Checkerboard fill mode and Second Fill Color`
+- `2ec1125` — `fix(quad): restrict Checkerboard option to Retro Grid section and require Fill Color`
+- `129498e` — `feat(quad): add Invert X and Invert Y perspective options`
+- `d91448d` — `feat(quad): replace Invert X/Y perspective options with Off X/Y`
+
+## Session Entry - 2026-07-27 04:49 +02:00
+
+### Session Goals
+
+- Finish the textured `Quad` feature with a stable commit and wrap up the session cleanly.
+- Preserve the existing `t-quad` scene worktree files exactly as-is.
+- Leave a durable session summary behind in the repo and NotebookLM sources.
+
+### What Was Implemented
+
+1. **Textured Quad Rendering**:
+   - Completed the textured `QuadObject` pipeline with sprite-backed rendering, `stretch` and `tile` modes, projective correction by default, and the near-affine flat fast path for almost-rectangular Quads.
+   - Kept Retro Grid as an overlay on top of the textured fill.
+   - Reduced the earlier visible mesh artifacts by switching to bounded screen-space tessellation and avoiding texture-resolution-driven over-subdivision.
+
+2. **Editor / Property UI**:
+   - Added the texture-related Quad inspector controls and kept them consistent with the existing entity sprite workflow.
+   - Preserved the user-facing defaults already agreed during implementation: perspective enabled, stretch as the default mode, and optional tiling scale controls.
+
+3. **Validation and Commit**:
+   - Verified the implementation with typechecking and the test suite during the feature work.
+   - Created the final commit for this session: `447f4d9` (`feat: add textured quad rendering`).
+
+### Architecture / Runtime Decisions
+
+- The textured Quad renderer now prefers the cheapest possible path when the shape is close to an affine rectangle, which avoids unnecessary mesh work and reduces the chance of seams.
+- Stronger perspective still uses Canvas2D mesh subdivision, but the subdivision is bounded by screen-space error instead of texture size.
+- This keeps quality high enough for skewed quads while protecting frame time in the common case.
+
+### Tests and Validation
+
+- `npm run typecheck` — passed.
+- `npm test` — passed.
+- Focused `tests/entities/quad-object.test.ts` coverage was updated and passed during implementation.
+
+### Commits Created
+
+- `447f4d9` — `feat: add textured quad rendering`
+
+### Remaining Work / Next Steps
+
+- No blocking follow-up remains from this session.
+- The only uncommitted items left in the working tree are the user-owned scene files:
+  - `public/scenes/t-quad.json`
+  - `public/text/scenes/t-quad.json`
+
+### Risks / Caveats
+
+- The textured Quad implementation intentionally stays on Canvas2D for now, so very complex future texture cases may still warrant a renderer revisit later.
+- The wrap-up intentionally did not touch or normalize the `t-quad` scene files so that the user's local scene work stays intact.
+
+## Session Entry - 2026-07-30 14:23 +02:00
+
+### Session Goals
+
+- Fix the `Quad` `Walkbox` `3d-perspective walk` behavior so player movement follows the visible perspective lines of the quad instead of a camera-fixed approximation.
+- Keep the solution stable when the camera follows the player on the X axis.
+- Leave user-owned scene edits untouched while recording a durable handoff.
+
+### What Was Implemented
+
+1. Updated `src/entities/Actor.ts` so the player position and quad vertices are compared in the same visual space before computing the walk vector.
+2. Reworked the vertical perspective walk direction to use the current projected left and right quad side edges and their intersection point, which acts as the current vanishing point.
+3. Kept the horizontal basis logic consistent with the quad's projected geometry while removing the earlier interpolation path that could switch direction mid-walk.
+4. Added regression coverage in `tests/entities/quad-perspective-walk.test.ts` for both continuity on a single perspective ray and the moving-camera / projected-quad case.
+
+### Important Architecture Decisions
+
+- The walk trajectory now depends on the quad's current visible side edges and their convergence point, not on a camera-independent or fixed-space approximation.
+- Quad parallax is treated as part of the visual projection, so any motion caused by camera movement is reflected in the walk direction through the projected geometry itself.
+- This keeps the player's movement aligned with what the player sees on screen, which is the contract the user wanted.
+
+### Runtime / Scene Notes
+
+- The fix specifically targets `Walkbox` perspective walking on `Quad` scene objects.
+- The user described a failure mode where the path changed to a different line partway up the quad; the new implementation avoids that switch by deriving the direction from the live projected side edges.
+- The camera-follow behavior is now part of the projection math instead of a separate special case.
+
+### Tests and Validation
+
+- `npm test -- tests/entities/quad-perspective-walk.test.ts` — passed.
+- `npm run typecheck` — passed.
+- Browser validation in the `logo` scene traced the actor moving collinearly toward the current visual vanishing point until the walkbox boundary was reached.
+- Console checks during browser validation reported no errors.
+
+### Commits Created
+
+- `960c5ca` — `Fix Quad perspective walk with moving camera`
+
+### Remaining Work / Next Steps
+
+- No code follow-up is required for the committed fix.
+- The working tree still contains user-owned scene changes that were intentionally left untouched:
+  - `public/scenes/logo.json`
+  - `public/scenes/logo2.json`
+  - `public/text/scenes/logo2.json`
+
+### Risks / Caveats
+
+- A browser-test helper directory `.codex-game-test` was created during validation and hit a Windows ACL issue. It does not affect gameplay, but it may need elevated cleanup later.
+- The wrap-up intentionally did not normalize or rewrite the user's scene files.
+
+## Session Entry - 2026-07-30 14:28 +02:00
+
+# Session Summary
+
+## Session Goal
+
+Улучшение UX/UI диалогового окна файлового браузера (`FileBrowser`), внедрение поддержки отображения эскизов (thumbnails) для префабов, а также исправление мелких недочётов верстки, доступности и работы кэширования миниатюр.
+
+## What Was Implemented
+
+### 1. Переработка интерфейса FileBrowser
+
+- Убрана кнопка "Cancel" из подвала окна, а кнопка подтверждения ("Load" / "Save") перенесена на одну линию с полем ввода имени файла. Это сэкономило вертикальное пространство.
+- Кнопка закрытия окна ("X") перенесена в правый верхний угол и стилизована под стандарты `PropertiesPanel` (используется класс `e-btn`).
+- Выровнено по вертикали поле `FilterInput` и кнопка "LOAD", путём обнуления нежелательного нижнего отступа `margin-bottom: 5px` у поля ввода.
+- Удалён неиспользуемый CSS-класс `.file-browser-actions`.
+
+### 2. Улучшение работы поля ввода (FilterInput)
+
+- Кнопка очистки текста (крестик внутри поля) теперь отображается на основе значения `filename`, а не `filterText`. Таким образом, она появляется даже тогда, когда файл выбран мышью из списка, что позволяет быстро сбросить выбор.
+- Добавлены атрибуты `aria-label` и `aria-pressed` для кнопок переключения режима просмотра (Сетка/Список), что улучшает доступность (a11y).
+
+### 3. Нормализация URL и исправление путей
+
+- Логика формирования путей для миниатюр объединена в единой функции `getNormalizedUrl`. Это решило проблемы с дублированием путей (например, если текущая папка была корнем `public`).
+
+### 4. Кэширование и фиксы миниатюр (SpriteThumbnail)
+
+- Внедрён модульный кэш `spriteThumbnailCache` (Map) на уровне файла. Ранее разрешённые пути к картинкам спрайтов кэшируются, благодаря чему при перерисовках или навигации эскизы появляются мгновенно без повторных сетевых запросов.
+- Исправлено "протекание" состояний (state bleed) при смене пути, но сохранении того же имени файла (например, в другой папке). Миниатюры теперь корректно сбрасывают `imgSrc` в `null` при промахе кэша, а в списке рендерятся с ключом `key={getNormalizedUrl(item.name)}`.
+
+### 5. Поддержка эскизов для Префабов
+
+- Добавлен новый компонент `PrefabThumbnail`.
+- Файловый браузер теперь автоматически включает режим отображения изображений (`isImageBrowser`) при навигации в папки с `prefabs`.
+- `PrefabThumbnail` загружает JSON префаба, извлекает `spriteName` из первого объекта и передаёт его на отрисовку в `SpriteThumbnail`.
+- Добавлена автокоррекция расширения: если `spriteName` в префабе указан без `.json` (как в `battery_aaa.json`), расширение добавляется автоматически, что устраняет ошибку 404 (Not Found).
+
+## Important Architecture / Runtime Decisions
+
+- **Модульное кэширование вместо React Context:** Для кэширования миниатюр было решено использовать простой Map на уровне модуля `FileBrowser.tsx`. Это эффективно и полностью покрывает нужды файлового диалога без усложнения стейт-менеджмента проекта.
+- **Интеграция PrefabThumbnail со SpriteThumbnail:** Вместо дублирования логики получения картинки из JSON спрайта, `PrefabThumbnail` занимается только извлечением имени спрайта из префаба, а отрисовку делегирует `SpriteThumbnail`.
+
+## Parser / Mechanics / Scene / Subscene / Inventory Changes
+
+Изменений в ядре движка или механиках не было. Все доработки касались исключительно UI-компонента `FileBrowser`.
+
+## Tests Run
+
+- Визуальное тестирование через интерфейс редактора в процессе внесения изменений (проверка выравнивания, работы кэша, навигации по папке префабов).
+
+## Commits Created During the Session
+
+- Коммиты в рамках сессии пока не создавались (изменения локальны).
+
+## Remaining Work / Next Recommended Steps
+
+- Закоммитить изменения в `FileBrowser.tsx` и `index.css`.
+- Проверить наличие других префабов с нестандартной структурой (где нужный спрайт может лежать не в первом элементе массива).
+
+## Risks, Caveats, Open Questions
+
+- В текущей реализации эскизов для префабов берётся спрайт строго из *первого* элемента. Если в префабе первый объект является пустым контейнером без спрайта, эскиз отображаться не будет, даже если спрайт есть у дочерних объектов. Это можно будет улучшить в будущем.
+
+## Session Entry - 2026-08-13 04:13 +03:00
+
+# Session Summary
+
+## Session Goals
+
+- Устранить дрейф и изменение формы Quad при движении камеры, когда вершина была привязана к узлу Retro Grid.
+- Сделать параметры вершин, связанных vertex-binding, редактируемыми в панели свойств с синхронизацией всей группы.
+- Изменить Alt-снап к узлам Retro Grid с живой binding-связи на одноразовую установку координат и P.
+- Исправить применение `3d-parallax` к Static-объектам из legacy-сцен.
+
+## What Was Implemented
+
+### 1. Стабильный P для grid binding
+
+- В `QuadObject` добавлен `getParallaxAtGrid(u, v)`, который вычисляет эффективный P непосредственно по известным координатам узла сетки.
+- `QuadObject.resolveBindings()` больше не восстанавливает P через обратное проектирование camera-dependent точки на границе Quad.
+- `EditorSnappingSystem` использует тот же прямой UV-расчёт P.
+- Это устраняет переключение пограничной вершины между интерполированным P и fallback-значением при движении камеры.
+
+### 2. Редактирование связанных вершин
+
+- Поля X/Y/P в `QuadProperties` теперь вызывают `QuadObject.setVertex()` вместо прямой мутации данных.
+- `setVertex()` обновляет всю связанную vertex-binding группу, включая целевую вершину, поэтому следующий `resolveBindings()` не затирает пользовательское изменение.
+- Для P редактор сохраняет экранную позицию через camera compensation; API-вызовы `setVertex()` сохраняют прежнее raw-поведение по умолчанию.
+- При разных глобальных P синхронизируется единый эффективный P, а локальные значения пересчитываются для каждого Quad.
+
+### 3. Одноразовый Alt-снап к Retro Grid
+
+- Grid-узлы теперь являются только snap-точками: в вершину записываются рассчитанные координаты и P, но `binding.type = 'grid'` не создаётся.
+- Quad и его сетку можно менять после снапа без перемещения уже установленной вершины.
+- Вершину также можно свободно редактировать; существующие прямые vertex-binding между Quad сохраняются и продолжают двигать связанную группу.
+- Legacy grid bindings материализуются один раз при обновлении Quad, после чего binding удаляется.
+- Поведение зафиксировано в `GDD.md`.
+
+### 4. 3d-parallax для legacy Static
+
+- `Static_923` из `t-quad` загружался с сериализованным `type: "Entity"`, хотя это Static-объект.
+- `ThreeDParallaxSystem` теперь обрабатывает `Actor`, `Player`, `Static` и legacy `Entity`, поэтому Static получает P поверхности Quad и компенсацию позиции так же, как Actor.
+
+## Important Architecture Decisions
+
+- Живыми остаются только vertex-to-vertex bindings. Связь с Retro Grid не хранится в runtime/editor data после снапа.
+- Перспективная коррекция Retro Grid продолжает использоваться для вычисления координат snap-точки и P; изменён только жизненный цикл binding.
+- Legacy-сериализация `Entity` сохраняется для совместимости, а runtime-системы учитывают оба имени типа.
+
+## Parser / Mechanics / Scene / Subscene / Inventory Changes
+
+- Parser, inventory и subscene-механики не менялись.
+- Изменения затрагивают Quad surface depth, редакторский snapping/property editing и `ThreeDParallaxSystem`.
+
+## Tests and Validation
+
+- Фокусированные проверки: `tests/editor/editor-snapping-system.test.ts`, `tests/entities/quad-object.test.ts`, `tests/entities/quad-surface-depth.test.ts`, `tests/systems/three-d-parallax-system.test.ts` — passed.
+- Полный набор Vitest — passed.
+- TypeScript: `npm exec tsc -- --noEmit` — passed.
+- `git diff --check` — passed.
+- Commit hooks Prettier и ESLint — passed для обоих коммитов.
+
+## Commits Created During the Session
+
+- `5ade5c36a38a7d6439d697f9411499f2400ba84b` — `Make Retro Grid snapping positional`.
+- `3bd4dd5` — `Apply 3D parallax to legacy Static entities`.
+
+## Remaining Work / Next Recommended Steps
+
+- Провести ручную проверку `t-quad`: перемещение `Static_923` по Quad_408, движение камеры и изменение геометрии/сетки Quad после снапа.
+- Если потребуется поддержка других legacy-типов объектов, проверить их сериализацию и фильтры runtime-систем по `type`.
+
+## Risks / Caveats / Non-Committed Changes
+
+- `public/scenes/quad5.json` и `public/scenes/t-quad.json` содержат пользовательские изменения и намеренно оставлены вне коммитов.
+- Старые grid bindings изменяются при первом `Quad.update()`: их координаты/P сохраняются как текущая одноразовая позиция, затем binding удаляется.
+
+## Session Entry - 2026-08-14 15:48 +03:00
+
+# Session Summary
+
+## Session Goals
+
+- Завершить стабилизацию unified surface depth при схлопывании и инверсии Quad.
+- Устранить повторный camera-only захват объектов компонентами `3d-parallax` и `Depth scaling controller`.
+- Добавить управляемую сортировку глубины для Static и Actor.
+- Зафиксировать результаты и durable knowledge после предыдущего wrap-up.
+
+## What Was Implemented
+
+### 1. Стабильное владение 3D-поверхностью при инверсии Quad
+
+- При визуально нестабильной проекции Quad существующая 3d-parallax binding сохраняет `(u, v)` и не переинвертируется через неоднозначную геометрию.
+- Новые surface bindings не приобретаются только из-за движения камеры: для unbound объекта требуется первое авторское размещение или реальное изменение мировых X/Y.
+- Это защищает объекты вне `floor` в `test_t`, когда его верхняя и нижняя грани проходят через нулевую площадь и меняются местами.
+- Для `Depth scaling controller` применено такое же владение: существующая controller binding хранит локальную глубину, camera-only движение её не заменяет, а реальный выход объекта освобождает binding.
+
+### 2. Исправление fallback Scene Depth Scaling при CAM Y=647
+
+- Выяснено, что изменение размера `wall` при CAM Y около 647 не было захватом controller: binding отсутствовала.
+- Причиной был fallback scene Depth Scaling, который использовал экранную Y после применения P=0.6. При движении камеры экранная Y `wall` менялась примерно от `-1` до `258`, поэтому масштаб менялся с `0.5` до `0.8593`.
+- Fallback теперь использует мировую Y: raw `Entity.y`; для Quad — Y-координату центра авторских вершин. Локальные controller-метрики по-прежнему вычисляются по visual surface координатам.
+- В браузере `test_t` при CAM Y=647 `wall` сохраняет `scale=0.5`, P=0.6 и не получает binding.
+
+### 3. Depth Sort mode для Static и Actor
+
+- В Entity добавлено сериализуемое поле `depthSortMode`: `y` (по умолчанию), `parallax`, `manual`.
+- `By Y` сохраняет прежнюю сортировку по отображаемой Y.
+- `By Parallax` переиспользует общий comparator: меньший P рисуется раньше, больший P — поверх.
+- `Manual` учитывает только Layer и сохраняет порядок объектов сцены внутри равного Layer.
+- Режим добавлен в Transform properties Entity, описан в `GDD.md`, покрыт renderer-регрессиями. Quad продолжает использовать собственный `sortMode` для Ignore/Parallax/Vertex 0..3.
+
+### 4. Стабилизация NPC timer cleanup
+
+- `ActorPlanExecutor` перестал оставлять polling таймер MOVE_TO вне `pendingTimeouts`.
+- Polling и delayed completion теперь используют общий tracked-timeout путь; polling прекращается, если Actor больше не принадлежит сцене.
+- Добавлены проверки `clearState`, `clearAllPending`, остановки Actor и удаления сцены.
+
+## Important Architecture Decisions
+
+- Camera movement никогда не меняет логическое владение объектом поверхностью или controller.
+- 3d-parallax и controller используют visual/projective координаты только для уже разрешённой поверхности; fallback scene Depth Scaling остаётся мировым механизмом.
+- Entity и Quad имеют разные serialized поля сортировки (`depthSortMode` и `sortMode`), чтобы не нарушать Quad vertex-anchor контракт и legacy scenes.
+- Legacy scenes без `depthSortMode` получают default `By Y` через конструктор Entity.
+
+## Parser / Mechanics / Scene / Subscene / Inventory Changes
+
+- Parser, inventory и subscene не менялись.
+- Runtime mechanics changes: `Scene.getDepthScaleFor`, `ThreeDParallaxSystem`, Quad projective stability, renderer depth comparator, ActorPlanExecutor cleanup.
+- Editor changes: Entity Transform depth sort selector.
+
+## Tests and Validation
+
+- Focused Quad surface tests: 11 passed.
+- Focused renderer depth-sort tests: 5 passed.
+- Focused NPC Puppet Master tests: 138 passed.
+- TypeScript typecheck and `git diff --check` passed.
+- Full Vitest suite passed: 69 files, 796 tests.
+- Browser checks used Python Playwright because the local Node Playwright package is unavailable. `test_t` was loaded directly; CAM Y=647 confirmed `wall.scale=0.5` and no controller binding.
+
+## Commits Created During the Session
+
+- `30ea09b` — `Stabilize collapsed Quad perspective`.
+- `ee3d903` — `Preserve 3D surface ownership through Quad inversion`.
+- `d179496` — `Stabilize Quad depth ownership across camera motion`.
+- `c631393` — `Add depth sort modes for entities`.
+- `0992c06` — `Fix leaked NPC move polling timers`.
+- `30ea0d0` — `Keep scene depth scaling independent of camera`.
+
+## Remaining Work / Next Recommended Steps
+
+- Ручная проверка в редакторе/игре: `test_t`, `floor`, `wall`, CAM Y около 647 и обратный возврат камеры.
+- Если появятся другие camera-only size changes, сначала определить, это controller binding или fallback scene scaling; для fallback проверять мировую Y, для controller — сохранённые UV.
+
+## Risks / Caveats / Non-Committed Changes
+
+- В рабочем дереве намеренно оставлены несвязанные изменения в `.gitignore` и `progress.md`; они не входят в последний фикс.
+- Временные Playwright-скриншоты не отслеживаются Git.
+- NotebookLM readiness в начале сессии сообщил истёкшую авторизацию; автоматическое восстановление было запущено codex-doctor. Синхронизация wrap-up должна подтвердить фактический CLI status и при необходимости остановиться на re-auth.
+
+## Session Entry - 2026-08-19 18:20 +03:00
+
+# Session Summary
+
+## Session Goals
+
+- Разобрать регрессию Puppet Master: NPC не могла заменить разряженные батарейки в пульте на свежие.
+- Восстановить корректную работу скрытых, но раскрытых конкретному Actor предметов.
+- Зафиксировать единый контракт Text Assets для индивидуальных и групповых TA, включая регистрозависимые файловые системы.
+
+## What Was Implemented
+
+### 1. Единый семантический резолвер Text Assets
+
+- `TextAssetManager` разрешает поля для каждого объекта в порядке: индивидуальный TA, затем group TA в порядке тегов.
+- Приоритет применяется к каждому полю отдельно: индивидуальный TA может переопределить только `title`, сохранив group fallback для остальных полей.
+- Group TA признан полноценным источником семантики: group `title` делает объект видимым для parser и Puppet Master.
+- Ключи TA-кэша нормализуются без учёта регистра, а путь запроса сохраняет авторское написание ID. Это исключает две разные сущности, отличающиеся только регистром, и не ломает загрузку на case-sensitive ФС при согласованных ID/именах файлов.
+- Редактор теперь создаёт/открывает/переименовывает индивидуальный TA, но предпросмотр Title строит полной той же цепочкой, что игра и PM.
+
+### 2. Контекст PM, скрытые вложения и загрузка сцен
+
+- Раскрытие `hidden: lookable`/`examinable` теперь хранится по Actor, сохраняется в scene runtime snapshot и save state и не раскрывает предмет другим Actor автоматически.
+- Parser и PM получают семантически валидные вложенные предметы, если они видимы данному Actor; скрытые нераскрытые объекты исключаются.
+- Проверка PM-плана `TAKE` использует фактическую иерархию инвентаря и actor-aware perception, поэтому NPC может извлечь раскрытую старую батарейку из пульта перед `PUT` новой.
+- PM пакет для сцены, восстановленной из кэша, ждёт завершения preload её TA; контекст больше не строится по пустому кэшу.
+- У Actor в PM-контексте `title` теперь optional: ID никогда не подставляется вместо отсутствующего семантического Title.
+
+### 3. Редактор, контент и документация
+
+- Поле `Hidden` в редакторе показывается для всех применимых объектов.
+- Обновлены test scenes, prefab/TA батареи, `water` TA и добавлены ассеты/спрайты Verity.
+- `TextAssets.md` обновлён: порядок индивидуальный → group fallback, семантика group TA, поведение editor preview и правила case-sensitive/case-insensitive файловых систем.
+
+## Important Findings and Decisions
+
+- Причина регрессии не была отсутствием TA у батарейки: `#aaa.json` содержит `"title": "AAA batteries"`; group TA валиден.
+- `NPC.json` содержит `"title": "Linda"`. Надпись `ACTOR: NPC` в шапке редактора и записи вида `NPC @ scene` — это ID, не семантический Title.
+- `battery_aaa.json` сейчас явно содержит `"title": "battery_aaa"`; если нужно отображать `AAA batteries`, следует изменить это авторское поле или удалить его для применения group fallback.
+
+## Tests and Validation
+
+- `npm test -- tests/core/text-asset-manager.test.ts tests/npc/puppet-master.test.ts tests/editor/properties-panel-header.test.ts` — 149 tests passed.
+- `npm run typecheck` — passed.
+- `git diff --check` — passed.
+- Пользователь повторил тест `test_room1`; NPC успешно заменила батарейки.
+
+## Commit Created During the Session
+
+- `ba16677d6ac1e795d96f393f917328e7abc6e96e` — `Fix semantic TA resolution and NPC hidden-item context`.
+
+## Remaining Work / Next Recommended Steps
+
+- Нет обязательных follow-up по этой регрессии. При будущих case-only переименованиях ID и TA сохранять единое написание ID и имени файла.
+
+## Risks / Caveats / Non-Committed Changes
+
+- Рабочее дерево чистое после коммита.
+- Экспорт shared memory mirror для local RAG не завершился из-за существующей записи с некорректной UTF-8 кодировкой; сгенерированный `AgentMemory.md` поэтому пуст. Синхронизация NotebookLM при этом успешно заменила `GDD.md`, `Sessions.md`, `TextAssets.md` и `AgentMemory.md` как Markdown-источники.
+
+## Session Entry - 2026-08-23 03:15 +03:00
+
+# Session Summary
+
+## Session Goals
+
+- Зафиксировать в репозитории техническую модель новой системы `Box3D` и общей 3D-сцены.
+- Сделать документацию пригодной для будущих разработчиков и последующего импорта в NotebookLM.
+- Отдельно сохранить обнаруженные визуальные проблемы и решения, которые были приняты в ходе разработки.
+
+## What Was Implemented
+
+### 1. Box3D и единая 3D-сцена
+
+- `Box3DObject` наследуется напрямую от `SceneObject` и является контейнером трансформации, а не самостоятельной поверхностью.
+- Внутри Box3D находятся шесть managed Quad-граней. Они остаются полноценными Quad для текстур, Grid, компонентов, WalkBox, spatial-потомков и `3d-parallax`, но их Transform и Surface Perspective управляются родителем.
+- Геометрия строится из восьми общих физических вершин frustum. Одной моделью поддерживаются куб, прямоугольный параллелепипед, призма и пирамида, включая нулевую ширину/глубину верхней грани.
+- Все Box3D используют общую перспективу сцены. Положительный Z означает удаление от камеры; камера смотрит вдоль +Z, а экранные X/Y получают перспективное масштабирование относительно камеры.
+- После исправления повторного Quad-parallax Box3D больше не растягивается бесконечно при уходе к краю экрана: сначала применяется физическая 3D-проекция, затем managed Quad помечается как уже спроецированный.
+- Рендер, editor preview, hit-test и привязанные объекты используют одну и ту же спроецированную геометрию.
+
+### 2. Occlusion, пересечения и поверхности
+
+- Грани Box3D обрабатываются отдельным render batch. Видимость определяется физическим winding/depth, а не только экранным положением целого Quad.
+- Пересекающиеся объёмы поддерживаются через разбиение полигонов BSP и обратную сортировку фрагментов. Для простой целой грани есть прямой путь отрисовки, чтобы не добавлять лишние треугольные швы.
+- Прозрачные или Disabled грани не становятся чёрной заглушкой: через них видны другие объекты и грани других Box3D. Грани того же Box3D корректно учитывают открытый объём.
+- Для треугольных/дегенеративных граней были исправлены duplicate physical vertices, нулевые площади и ошибочный частичный порядок отрисовки.
+- `3d-parallax` на managed Quad вычисляет точку на физической плоскости грани и сохраняет сторону поверхности (`front`/`back`). Entity на Disabled-грани отключается; Entity за непрозрачной гранью участвует в настоящем 3D depth occlusion.
+
+### 3. Editor, иерархия и UX
+
+- Box3D создаётся унифицированным путём из JSON-шаблона и сразу получает шесть числовых граней `0..5`.
+- Копирование, duplicate, paste и prefab работают рекурсивно для Box3D, managed-граней, spatial-потомков и папок; ссылки parent/binding/component remap-ятся одним undo-шагом.
+- Родитель Box3D выделяется в иерархии отдельно от managed Quad; Ctrl-клик по грани поднимает выбор к родителю.
+- Для Box3D добавлены оси, цветные физические вершины и прямые мышиные операции масштаба, размеров, смещения, вращения и Z-перемещения. Оси должны обрываться на первом физическом пересечении фигуры, а не рисоваться полностью за ней.
+- Рамочное выделение сохраняет скрытые вершины и грани, тогда как экранный click hit-test выбирает только реально видимый ближайший фрагмент.
+
+## Important Problems and Resolutions
+
+- **Повторное искажение Quad:** managed Quad проходил обычный parallax path после Box3D projection. Введён контракт «project once», поэтому физическая 3D-проекция не смешивается с историческим Quad deformation.
+- **Перспектива каждого Box выглядела отдельной:** экранное смещение применялось как к независимым 2D Quad. Проекция перенесена в общий физический camera path с одной Scene perspective.
+- **Швы и белёсые диагонали на текстурах:** BSP-фрагменты с промежуточным прозрачным/цветовым слоем и треугольной интерполяцией давали seam artifacts. Для непересекающихся целых граней используется прямой Quad render; valid texture не получает непрозрачный underlay.
+- **Призма показывала задние грани поверх передних:** совпадающие вершины и нулевые полигоны ломали winding/depth. Перед BSP/raycast физические вершины схлопываются, нулевые грани исключаются, а вырожденные Quad нормализуются в треугольники.
+- **Disabled грань была чёрной:** состояние трактовалось как fill вместо отсутствия поверхности. Теперь грань прозрачна, а visibility attached Entity наследует Disabled.
+- **Entity на обратной стороне грани:** одной UV-привязки было недостаточно. Сохраняется физическая сторона поверхности, и обратная сторона заслоняется непрозрачной гранью так же, как в 3D.
+- **Неверная ориентация текстур:** UV-порядок Quad не совпадал с outward winding Box3D. Геометрический winding и порядок UV разделены; текстуры теперь не зеркалятся и не поворачиваются на 90 градусов.
+- **Оси редактора были за фигурой:** overlay рисовался обычным 2D-порядком. Для осей используется пересечение с физическим Box3D и depth clipping.
+
+## Documentation and Code Map
+
+- `3dSys.md` — канонический технический контракт: координатные пространства, формулы камеры, frustum, managed Quad, BSP, hit-test, attachments, editor lifecycle и ограничения.
+- `tech-spec.md` — навигация по исходникам (`Box3DObject`, `Scene`, `SceneRenderer`, `SceneInteraction`, `ThreeDParallaxSystem`, editor managers и тесты).
+- `GDD.md` — пользовательское описание Box3D и его ограничений.
+- `Box3DObject.ts`, `SceneRenderer.ts`, `SceneInteraction.ts`, `ThreeDParallaxSystem.ts`, `SceneManager.ts` и соответствующие editor/property файлы — основные точки реализации.
+
+## Tests and Validation
+
+- Для документационного wrap-up: Markdown-ссылки проверены, `git diff --check` прошёл.
+- Полные тесты в этой финальной операции не запускались: код не менялся.
+- В `3dSys.md` зафиксирована карта focused-тестов и рекомендуемые команды для будущих изменений 3D-системы.
+
+## Commits Created During the Session
+
+- В рамках этого wrap-up новых коммитов не создавалось.
+- Рабочие изменения документации намеренно оставлены в рабочем дереве для последующего пользовательского коммита.
+
+## Remaining Work / Next Recommended Steps
+
+- Синхронизировать обновлённые root Markdown-файлы и `AgentMemory.md` с NotebookLM.
+- При следующих изменениях 3D-системы сначала обновлять контракт в `3dSys.md`, затем code map в `tech-spec.md` и пользовательское поведение в `GDD.md`.
+- Для будущих регрессий использовать Playwright-сценарии с текстурами, прозрачными/Disabled гранями, пересечением Box3D, диагональным движением камеры и raycast по видимым фрагментам.
+
+## Risks / Caveats / Non-Committed Changes
+
+- BSP остаётся CPU-путём с ограничением числа фрагментов и fallback depth-сортировкой; это не GPU depth buffer и требует контроля сложности сцены.
+- Пересекающиеся выпуклые Box3D поддерживаются, но сложные coplanar/многообъёмные сцены должны проверяться детерминированным scene order.
+- В рабочем дереве находятся пользовательские и документационные изменения; их не следует откатывать автоматически.
+
+## Session Entry - 2026-08-29 03:20 Europe/Warsaw
+
+# Session Summary
+
+## Session Goal
+
+Исследование и реализация передовых графических техник ЭЛТ-шейдера (CRT Shader Pipeline), устранение муара, артефактов нецелочисленного масштабирования (3-4-3-4 px quantization stepping), рассинхронизации WebGL бэкбуфера при смене режимов и реализация кинематографических аналоговых эффектов кинескопа.
+
+## What Was Implemented
+
+### 1. Непрерывные Sinc-интегрированные сканлайны Фурье (Continuous Sinc-Fourier Scanlines)
+
+- Полностью устранено ступенчатое чередование толщины сканлайнов (3-4-3-4 px) при нецелочисленном разрешении экрана и искривлении.
+- Реализовано аналитическое интегрирование прямоугольного окна физического пикселя $w = \text{fwidth}(pos)$ по гармоникам Фурье ($\text{sinc1} = \frac{\sin(\pi w)}{\pi w}$, $\text{sinc2} = \frac{\sin(2\pi w)}{2\pi w}$) в сочетании с фазовым субпиксельным дизерингом Тимоти Лоттеса.
+
+### 2. Beam Spot Modulation (Динамическая модуляция электронного пучка)
+
+- Реализовано физически точное поведение кинескопа: на ярких участках электронный луч расширяется, сокращая межстрочные промежутки, тогда как в тенях и тёмных полутонах сохраняется чёткая строчная структура.
+- Добавлен настраиваемый слайдер `Beam Modulation` (`0.0 – 1.0`).
+- Реализовано динамическое скрытие зависимых слайдеров в интерфейсе (`Beam Modulation` и `Scanline Intensity`) и полный zero-cost bypass на GPU при `Scanline Count = 0`.
+
+### 3. Переупорядочивание рассеивания света (Screen Glow Pipeline Reordering)
+
+- Рассеивание света передней стеклянной панели экрана (`Screen Glow`) перенесено **после** сканлайнов, эмулируя физическое рассеивание внутри толстого свинцового стекла поверх люминофорного растра.
+- Использован режим Screen Blend со снижением насыщенности на 35% и увеличенным радиусом `0.18`.
+
+### 4. 60 Hz AC Hum Bar (Сетевая наводка / Ground Loop Ripple)
+
+- Реализована мягкая аналоговая волна помехи питания 60 Гц, медленно плывущая снизу вверх по экрану.
+- Для видимости как на светлых, так и на абсолютно чёрных участках сцены скомбинированы модуляция видеоусиления (`color *= 1.0 + wave * gain`) и модуляция пьедестала уровня чёрного (`color += wave * offset`).
+- Добавлен отключаемый слайдер `60 Hz Hum Bar` (`0.0 – 1.0`).
+
+### 5. High-Voltage Anode Breathing (Raster Bloom / «Дыхание» кинескопа)
+
+- Смоделирована просадка высоковольтного анодного напряжения (25 кВ) при вспышках и ярких кадрах с экспоненциальной RC-фильтрацией ($\sim 80\text{ms}$).
+- Разделена статическая геометрия колбы/бейзеля и динамический электронный растр: пластиковая рамка и кривизна стекла остаются 100% неподвижными, а растр при затемнении формирует аккуратную кайму ($\sim 1.3\%$), расширяясь и заползая на 2–3px под бейзель при ярких вспышках.
+- Добавлен слайдер `HV Breathing` (`0.0 – 1.0`).
+
+### 6. Anti-Moiré 2D Pixel Reconstruction (Непрерывная интеграция пиксельной сетки)
+
+- Перенесён аппарат непрерывного интегрирования бокс-фильтра на всё 2D-изображение виртуального экрана $320 \times 200$.
+- Внутри тела ретро-пикселя цвет сохраняет 100% чёткость `Nearest-Neighbor`, а субпиксельные границы между пикселями аналитически интерполируются ровно на ширину 1 физического субпикселя дисплея.
+- Устранён муар и мерцание при любом масштабе и сильном `Curvature`.
+- Добавлен чекбокс-переключатель `Anti-Moiré Pixels` в настройках.
+
+### 7. Синхронизация бэкбуфера WebGL при переключении режимов Игра/Редактор
+
+- Устранено падение разрешения и мыльное масштабирование canvas при переходе Game $\leftrightarrow$ Editor из-за 1-кадровой задержки `clientWidth`/`clientHeight` в DOM. Физический размер буфера теперь задаётся напрямую из геометрии `Math.round(width * dpr)` и `Math.round(height * dpr)`.
+
+### 8. Исправление перетаскивания слайдеров в панели настроек
+
+- Устранена блокировка перетаскивания ползунка `Bloom` и других слайдеров параметров CRT: значения нормализованы к точным шагам `step="0.05"`, исключая ошибку `stepMismatch` браузера из-за чисел с плавающей запятой или пустых строк.
+
+## Important Problems and Resolutions
+
+- **Неравномерная толщина сканлайнов (3-4-3-4 px):** Гауссовы профили при дробном масштабировании попадают на дискретные пиксели неравномерно. Решено аналитическим интегрированием гармоник Фурье с $\text{sinc}$-множителями.
+- **Размытие экрана при переходе в редактор:** Чтение DOM `clientWidth` после React setState возвращало устаревшие размеры предыдущего фрейма. Решено прямой установкой разрешения canvas из вычисленных `width * dpr`.
+- **Невидимость 60Hz Hum Bar в темноте:** Мультипликативное умножение $0 \times \text{hum} = 0$ давало ноль на чёрном фоне. Решено добавлением аддитивной модуляции уровня чёрного катода.
+- **Пульсация рамки при HV Breathing:** Масштабирование до `curve(uv)` двигало саму рамку и стекло. Решено фиксацией геометрии бейзеля и масштабированием только внутреннего растра `rasterUV`.
+- **Зависание ползунка Bloom:** Невыровненные значения с плавающей точкой вызывали `stepMismatch` в HTML5 range inputs. Решено строгой нормализацией `Number(val.toFixed(2))`.
+
+## Tests and Validation
+
+- `npm run typecheck`: 0 ошибок.
+- `vitest`: Все 876 тестов в 76 тест-сьютах успешно пройдены.
+
+## Commits Created During the Session
+
+- `c77807d`: `feat(graphics): add anti-aliased scanlines with Timothy Lottes phase jitter and derivative beam scaling`
+- `bedb006`: `feat(graphics): implement Sinc-integrated Fourier scanlines to eliminate non-integer scaling line thickness variations`
+- `00b16d3`: `fix(ui): synchronize WebGL canvas resolution immediately with computed layout dimensions on mode switch`
+- `2fe98ac`: `tune(graphics): apply Screen Glow over scanlines and widen diffuse glass scatter radius`
+- `460b954`: `feat(graphics): implement configurable Beam Spot Modulation for dynamic electron beam widening`
+- `9724067`: `feat(editor): hide Beam Modulation when scanlines are 0 and allow disabling scanlines with 0 count`
+- `16b2bbc`: `feat(graphics): implement configurable 60Hz AC Hum Bar and hide scanline intensity when scanline count is 0`
+- `e901a9b`: `tune(graphics): amplify 60Hz Hum Bar with black pedestal and video gain modulation`
+- `fd5ee57`: `feat(graphics): implement configurable High-Voltage Anode Breathing (Raster Bloom)`
+- `612b109`: `tune(graphics): triple maximum High-Voltage Anode Breathing expansion strength`
+- `365f803`: `fix(graphics): isolate HV breathing to internal raster with resting margin and fixed bezel`
+- `8c50b3d`: `feat(graphics): implement Anti-Moiré sharp pixel reconstruction with settings toggle`
+- `fd4f401`: `fix(editor): sanitize and step-align Bloom and CRT range sliders for smooth dragging`
+
+## Remaining Work / Next Steps
+
+- При необходимости исследовать добавление эмуляции теневой маски / апертурной решётки (**Aperture Grille / Shadow Mask / Slot Mask**).
+- Исследовать радиальное сведение лучей (**Radial Misconvergence / Dynamic Convergence**).
+
+## Session Entry - 2026-08-30 Europe/Bucharest
+
+### GPU Box3D Prototype: Result and Decision
+
+Проверен узкий WebGL-прототип для текстурированной грани `Box3D_815_face_3`: Canvas2D-буфер загружается в texture общего контекста CRT, после чего GPU рисует грань в scene FBO до CRT-прохода. Для безопасного режима добавлена консервативная проверка порядка композитинга: если после целевой грани есть статичный bitmap-слой или пересекающийся объект, применяется обычный Canvas2D-рендер.
+
+Методика измерения была исправлена: для `box3d2` вращается не отдельный дочерний `Box3D_815`, а `Folder_300` через штатный `EditorSelectionManager.applyCompoundBox3DField` по `rotationX`, `rotationY` и `rotationZ`. Это важно, поскольку прямое изменение Box3D обходило pivot и иерархическую трансформацию Compound-объекта.
+
+Результаты headless-прогона на свежем Vite-сервере:
+
+- Canvas2D (`off`): около 20.26 ms среднего времени render.
+- `safe`: около 21.86 ms; GPU корректно не задействуется из-за следующего static bitmap layer.
+- `unsafe`: около 19.96 ms; GPU получил 4 BSP-фрагмента, текстура загрузилась один раз.
+
+Визуальная проверка при повороте `Folder_300` по всем осям пройдена, как и `git diff --check`, typecheck, 36 профильных тестов и production build. Однако разница между 20.26 и 19.96 ms находится в пределах шума headless-измерения; подтверждённого выигрыша производительности нет.
+
+Принятое решение: не сохранять GPU-прототип, его debug-переключатели и сценарно привязанный `benchmark.py` в основной ветке; откатиться к предыдущему коммиту. Сохранить нужно только вывод о корректной методике будущих измерений: Compound Box3D следует трансформировать через `applyCompoundBox3DField`, а не прямым изменением дочернего Box3D.
+
+## Session Entry - 2026-08-30 04:58 Europe/Bucharest
+
+## Session Goals
+
+- Найти следующий универсальный источник ускорения динамического Box3D-рендера после того, как retained layer cache, адаптивная texture mesh и layer redraw уже были реализованы.
+- Проверить результаты через Debug API на реальном вращении `Folder_300` в `box3d2`.
+- Обновить техническую документацию и оставить воспроизводимый handoff.
+
+## What Was Implemented
+
+Профилирование показало, что основное время тратилось не на `drawTexturedTriangle()`, а на построение projective mesh в `buildQuadTextureMesh()`. Одна Box3D face может быть разделена BSP на несколько fragments; при этом полная texture mesh, UV-разбиение и выбор диагоналей у всех этих fragments одинаковы.
+
+В `QuadObject` добавлен per-frame cache полной projective texture mesh. `SceneRenderer` передаёт Quad внутренний `textureMeshFrameId`, действующий только во время текущего `render()`:
+
+```text
+full Quad face -> build mesh once
+BSP fragment  -> own clip + reuse mesh
+```
+
+Кэш использует ключ из визуальных вершин, масштаба Canvas-контекста, texture mode, tile scale, perspective и projective compactness. Между кадрами mesh не переиспользуется, поэтому вращение Box3D и движение Camera сохраняют корректность.
+
+В Debug API добавлены `textureMeshBuildCalls` и `textureMeshCacheHits`. Также сохранено ранее добавленное детальное профилирование Box3D:
+
+- `api.renderer.setBox3DProfilingEnabled(true)`;
+- `api.renderer.resetBox3DProfile()`;
+- `api.renderer.getBox3DProfile()`.
+
+## Validation
+
+Реальный browser-прогон загружает `box3d2` и вращает `Folder_300` через `EditorSelectionManager.applyCompoundBox3DField` по всем трём осям. За 2 секунды профиля получено: 11 кадров, 40 textured fragments, 15 mesh builds и 25 cache hits. Таким образом, 25 повторных построений из 40 были устранены (62.5%). Измеренное время построения mesh составило 15.7 ms на прогон; texture triangle draw — 5.9 ms; Grid — 8.4 ms.
+
+Пройдены `git diff --check`, typecheck и 54 профильных теста (`quad-object`, `scene-renderer`, `debugApi`). Commit hooks успешно выполнили Prettier и ESLint.
+
+## Documentation and Commit
+
+Обновлены `3dSys.md`, `tech-spec.md`, `debugAPI.md` и `progress.md`. Создан commit `1187e1a` (`perf(box3d): reuse projective meshes across BSP fragments`).
+
+## Decisions and Next Steps
+
+- Кэшировать финальный bitmap динамической грани между кадрами нельзя: при вращении меняются projected vertices.
+- GPU-прототип для одной тестовой грани не показал надёжного выигрыша и ранее был отклонён; текущая оптимизация остаётся универсальной Canvas2D/BSP-оптимизацией.
+- Следующий кандидат для исследования — аналогичное переиспользование подготовленных Grid-данных между BSP fragments, но только после отдельной проверки порядка, clipping и прозрачности.
+- Для будущих замеров важно трансформировать Compound Box3D через `applyCompoundBox3DField`, а не напрямую изменять дочерний Box3D.
+
+## Risks / Caveats
+
+- Cache действует только в одном render frame и намеренно не скрывает изменения геометрии между кадрами.
+- Профильные headless-времена пригодны для сравнения относительной работы, но не являются абсолютным пользовательским FPS-бенчмарком.
+- Parser, mechanics, gameplay и scene data в этой сессии не изменялись.
+
+## Session Entry - 2026-09-26 18:21 Europe/Bucharest
+
+## Session Goals
+
+- Завершить миграцию Quest и Scanline Term на внешний `scanline-virtual-screen`.
+- Устранить замыливание низкоразрешённого source canvas без смешения независимых настроек SVS.
+- Проверить и исправить координатную пару editor context/canvas.
+- Удалить случайно попавшие в Quest извлечённые файлы локального SVS package.
+- Подготовить устойчивую память и документацию для следующих сессий.
+
+## What Was Implemented
+
+- В Quest сохранены три source-режима: `quest-420x300` (default), `quest-800x600`, `quest-1024x768`.
+- `Game.settings.screenProfile` остаётся единственным canonical persisted display/CRT profile; legacy `crt` мигрирует в него, а Debug API сохраняет вычисляемые `crt.*` aliases.
+- Исправлена координатная модель редактора: source geometry/hit-testing использует active `bufferCanvas`, а output/UI/editor overlays используют CSS viewport × DPR.
+- В SVS добавлен независимый persisted `pixelSmoothing`: он управляет `LINEAR`/`NEAREST` sampling и при CRT on, и при CRT off; `antiAliasedPixels` остаётся отдельным anti-moiré параметром. `pixelSmoothing=false` сохраняет резкую пиксельную картинку.
+- Quest и Scanline Term закреплены на одном проверенном SVS commit `24efd0a8105a9b7d9d68f9bbf59139589fec9125`.
+- Удалены 29 tracked `.tmp-svs` package-extraction файлов из Quest; локальная копия сохранена и каталог добавлен в `.gitignore`.
+- Исправлен editor rendering fallback в `src/core/Game.ts`: `editorOverlayCtx` и `editorOverlayCanvas` выбираются как пара; при отсутствии пары используется `uiCtx` вместе с `this.canvas`.
+
+## Architecture / Runtime Decisions
+
+- Quest владеет screen-mode catalogue и canonical profile; SVS владеет display pipeline, sampling и CRT lifecycle.
+- `antiAliasedPixels` не должен автоматически выключать или включать pixel smoothing. Для этого используется отдельный `pixelSmoothing`, default `true` для совместимости.
+- При `crtEmulation=false` SVS получает pass-through profile, но source sampling всё равно определяется `pixelSmoothing`.
+- Parser, mechanics, gameplay, scene data, subscene и inventory contracts в этой сессии не менялись.
+
+## Validation
+
+- SVS: 47 тестов, build, lint и `git diff --check` прошли.
+- Scanline Term: 164 теста, build и lint прошли; lint оставил два существующих React Fast Refresh warning.
+- Quest: `npm install`, forced Vite optimize, typecheck и focused display/editor tests (7 тестов) прошли.
+- Quest editor fallback: `npm run typecheck` и focused `game-display`/editor tests (17 тестов) прошли; `git diff --check` прошел.
+- Cleanup commit Quest: `e8f79af chore: remove extracted SVS package artifacts`, опубликован в `origin/dev`.
+
+## Commits / Working Tree
+
+- SVS final commit: `24efd0a fix: apply pixel smoothing with CRT enabled`.
+- Quest cleanup commit: `e8f79af`.
+- Current Quest working tree intentionally contains an uncommitted `src/core/Game.ts` fallback fix.
+- Current Scanline Term working tree contains uncommitted dependency pin changes and the pre-existing `docs/quest-svs-migration-agent-prompt.md` edit; do not silently commit them as part of wrap-up.
+
+## Remaining Work / Risks
+
+- Review and commit the Quest `Game.ts` fix when the user accepts the current working tree state.
+- Commit or otherwise hand off the Scanline Term dependency pin separately.
+- Old Quest history commit `fa03fd2` still contains the removed `.tmp-svs` artifacts; current tree is clean and history was intentionally not rewritten.
+- Full browser Playwright smoke was not repeated in this wrap-up; earlier validation used focused tests and build/typecheck paths.
+
+## Durable Project Facts
+
+- SVS changes must be made and committed in its own repository first, then consumers pin the exact tested commit; avoid copying SVS package source into Quest or Term.

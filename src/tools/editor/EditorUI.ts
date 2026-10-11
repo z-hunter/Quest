@@ -86,6 +86,19 @@ export class EditorUI {
       if (parserInput) {
         parserInput.disabled = false;
       }
+
+      // Fix: Blur any active inputs (like filter string) to prevent them from swallowing keys after editor unmounts
+      if (
+        document.activeElement instanceof HTMLElement &&
+        document.activeElement.id !== 'parser-input'
+      ) {
+        document.activeElement.blur();
+      }
+
+      // Fix: Reset UI mouse hover state in case editor was closed via hotkey while mouse was over it
+      if (this.editor.game) {
+        this.editor.game.isMouseOverUI = false;
+      }
     }
 
     // Update Store

@@ -1,5 +1,96 @@
 import React, { useState, useEffect } from 'react';
 import { listProjectFiles, openProjectFolder } from '../platform/fileApi';
+import { FilterInput } from './common/FilterInput';
+
+const spriteThumbnailCache = new Map<string, string>();
+
+const SpriteThumbnail: React.FC<{ jsonPath: string; alt: string }> = ({ jsonPath, alt }) => {
+  const [imgSrc, setImgSrc] = useState<string | null>(
+    () => spriteThumbnailCache.get(jsonPath) || null
+  );
+
+  useEffect(() => {
+    if (spriteThumbnailCache.has(jsonPath)) {
+      setImgSrc(spriteThumbnailCache.get(jsonPath)!);
+      return;
+    }
+    setImgSrc(null);
+
+    let active = true;
+    fetch(jsonPath)
+      .then((res) => {
+        if (!res.ok) throw new Error('Network response was not ok');
+        return res.json();
+      })
+      .then((data) => {
+        if (!active) return;
+        if (data && data.imageFile) {
+          let imagePath = data.imageFile;
+          if (imagePath.startsWith('public/')) {
+            imagePath = '/' + imagePath.substring(7);
+          } else if (!imagePath.startsWith('/') && !imagePath.startsWith('http')) {
+            imagePath = '/assets/' + imagePath;
+          }
+          spriteThumbnailCache.set(jsonPath, imagePath);
+          setImgSrc(imagePath);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load sprite json for thumbnail', err);
+      });
+    return () => {
+      active = false;
+    };
+  }, [jsonPath]);
+
+  if (!imgSrc) return null;
+  return <img src={imgSrc} loading="lazy" alt={alt} />;
+};
+
+const prefabSpriteCache = new Map<string, string | null>();
+
+const PrefabThumbnail: React.FC<{ jsonPath: string; alt: string }> = ({ jsonPath, alt }) => {
+  const [spriteJsonPath, setSpriteJsonPath] = useState<string | null>(
+    () => prefabSpriteCache.get(jsonPath) || null
+  );
+
+  useEffect(() => {
+    if (prefabSpriteCache.has(jsonPath)) {
+      setSpriteJsonPath(prefabSpriteCache.get(jsonPath)!);
+      return;
+    }
+    setSpriteJsonPath(null);
+
+    let active = true;
+    fetch(jsonPath)
+      .then((res) => {
+        if (!res.ok) throw new Error('Network response was not ok');
+        return res.json();
+      })
+      .then((data) => {
+        if (!active) return;
+        const firstObj = Array.isArray(data) ? data[0] : data;
+        if (firstObj && firstObj.spriteName) {
+          let spritePath = `/sprites/${firstObj.spriteName}`.replace(/\/{2,}/g, '/');
+          if (!spritePath.endsWith('.json')) spritePath += '.json';
+          prefabSpriteCache.set(jsonPath, spritePath);
+          setSpriteJsonPath(spritePath);
+        } else {
+          prefabSpriteCache.set(jsonPath, null);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load prefab json for thumbnail', err);
+        if (active) prefabSpriteCache.set(jsonPath, null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [jsonPath]);
+
+  if (!spriteJsonPath) return null;
+  return <SpriteThumbnail key={spriteJsonPath} jsonPath={spriteJsonPath} alt={alt} />;
+};
 
 interface FileBrowserProps {
   mode: 'save' | 'load';
@@ -22,6 +113,14 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
 }) => {
   // Current Path State
   const [currentPath, setCurrentPath] = useState(directory);
+
+  const getNormalizedUrl = (itemName: string) => {
+    let basePath = currentPath;
+    if (basePath === 'public') basePath = '';
+    else if (basePath.startsWith('public/')) basePath = basePath.substring(7);
+    return `/${basePath}/${itemName}`.replace(/\/{2,}/g, '/');
+  };
+
   // Files State
   const [items, setItems] = useState<{ name: string; isDir: boolean }[]>([]);
 
@@ -29,6 +128,22 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
   const [filename, setFilename] = useState(defaultFilename);
   // Smart Filter Term (Detached from filename)
   const [filterText, setFilterText] = useState('');
+  // View Mode
+  const isImageBrowser =
+    directory.includes('sprites') ||
+    directory.includes('prefabs') ||
+    extension?.includes('png') ||
+    extension?.includes('jpg');
+  const [viewModeState, setViewModeState] = useState<'list' | 'grid'>(() => {
+    return (localStorage.getItem('quest_fileBrowser_viewMode') as 'list' | 'grid') || 'list';
+  });
+  const viewMode = isImageBrowser ? viewModeState : 'list';
+
+  useEffect(() => {
+    if (isImageBrowser) {
+      localStorage.setItem('quest_fileBrowser_viewMode', viewModeState);
+    }
+  }, [viewModeState, isImageBrowser]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -121,9 +236,10 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
     // Removed auto-sync to filename to prevent filter collapse during navigation
   }, [selectedIndex, displayItems]);
 
-  const handleConfirm = () => {
-    if (!filename) return;
-    let finalName = filename;
+  const handleConfirm = (explicitName?: string | React.MouseEvent | React.KeyboardEvent) => {
+    const nameToUse = typeof explicitName === 'string' ? explicitName : filename;
+    if (!nameToUse) return;
+    let finalName = nameToUse;
 
     // Handle comma-separated extensions (e.g. ".mp3,.wav")
     const allowedExtensions = extension
@@ -209,17 +325,63 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
       setFilename('');
     } else {
       setFilename(item.name);
-      setTimeout(() => handleConfirm(), 0);
+      handleConfirm(item.name);
     }
+  };
+
+  const getColumnsCount = () => {
+    if (itemRefs.current.length < 2) return 1;
+    const firstTop = itemRefs.current[0]?.offsetTop;
+    if (firstTop === undefined) return 1;
+    let cols = 1;
+    for (let i = 1; i < itemRefs.current.length; i++) {
+      if (itemRefs.current[i] && itemRefs.current[i]?.offsetTop === firstTop) {
+        cols++;
+      } else {
+        break;
+      }
+    }
+    return cols;
   };
 
   const handleListKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex((prev) => Math.min(prev + 1, displayItems.length - 1));
+      const cols = getColumnsCount();
+      setSelectedIndex((prev) => Math.min(prev + cols, displayItems.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
+      const cols = getColumnsCount();
+      setSelectedIndex((prev) => Math.max(prev - cols, 0));
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      setSelectedIndex((prev) => Math.min(prev + 1, displayItems.length - 1));
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
       setSelectedIndex((prev) => Math.max(prev - 1, 0));
+    } else if (e.key === 'PageDown' || e.key === 'PageUp') {
+      e.preventDefault();
+      if (!listRef.current) return;
+      const listEl = listRef.current;
+      const sign = e.key === 'PageDown' ? 1 : -1;
+      const scrollAmount = listEl.clientHeight;
+      const newScrollTop = listEl.scrollTop + scrollAmount * sign;
+
+      listEl.scrollTop = newScrollTop;
+
+      let bestIndex = selectedIndex;
+      for (let i = 0; i < itemRefs.current.length; i++) {
+        const el = itemRefs.current[i];
+        if (el && el.offsetTop >= listEl.scrollTop) {
+          bestIndex = i;
+          break;
+        }
+      }
+      // If PageDown and we couldn't find anything below scrollTop, pick the last item
+      if (bestIndex === selectedIndex && sign > 0 && itemRefs.current.length > 0) {
+        bestIndex = itemRefs.current.length - 1;
+      }
+      setSelectedIndex(bestIndex);
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const item = displayItems[selectedIndex];
@@ -271,20 +433,53 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
           <div className="file-browser-title-row">
             <h3 style={{ margin: 0 }}>{title || (mode === 'save' ? 'Save File' : 'Load File')}</h3>
             <span className="file-browser-path">{currentPath}</span>
+            {isImageBrowser && (
+              <div style={{ display: 'flex', gap: '4px', marginLeft: '10px' }}>
+                <button
+                  className="toolbar-icon-btn"
+                  style={{ color: viewMode === 'list' ? 'var(--ui-input-text)' : undefined }}
+                  onClick={() => setViewModeState('list')}
+                  title="List View"
+                  aria-label="List View"
+                  aria-pressed={viewMode === 'list'}
+                >
+                  ☰
+                </button>
+                <button
+                  className="toolbar-icon-btn"
+                  style={{ color: viewMode === 'grid' ? 'var(--ui-input-text)' : undefined }}
+                  onClick={() => setViewModeState('grid')}
+                  title="Grid View"
+                  aria-label="Grid View"
+                  aria-pressed={viewMode === 'grid'}
+                >
+                  ⊞
+                </button>
+              </div>
+            )}
           </div>
-          <button
-            onClick={() => {
-              void openProjectFolder(currentPath);
-            }}
-            title="Open in System Explorer"
-            className="e-btn"
-            style={{ marginLeft: '10px' }}
-          >
-            📁 Explore
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              onClick={() => {
+                void openProjectFolder(currentPath);
+              }}
+              title="Open in System Explorer"
+              className="e-btn"
+            >
+              📁 Explore
+            </button>
+            <button className="e-btn" onClick={onCancel} title="Close">
+              X
+            </button>
+          </div>
         </div>
 
-        <div className="file-browser-list" ref={listRef} tabIndex={0} onKeyDown={handleListKeyDown}>
+        <div
+          className={`file-browser-list ${viewMode === 'grid' ? 'is-grid' : ''}`}
+          ref={listRef}
+          tabIndex={0}
+          onKeyDown={handleListKeyDown}
+        >
           {isLoading && <div>Loading...</div>}
           {error && <div className="file-browser-error">Error: {error}</div>}
 
@@ -309,7 +504,36 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                   }}
                   className={`file-browser-item ${item.isDir ? 'is-dir' : ''} ${isSelected ? 'is-selected' : ''}`}
                 >
-                  {item.isDir ? '📁' : '📄'} {item.name}
+                  {viewMode === 'grid' && !item.isUp && !item.isDir && (
+                    <div className="file-browser-thumb">
+                      {item.name.endsWith('.json') &&
+                      (isImageBrowser || currentPath.includes('prefabs')) ? (
+                        currentPath.includes('prefabs') ? (
+                          <PrefabThumbnail
+                            key={getNormalizedUrl(item.name)}
+                            jsonPath={getNormalizedUrl(item.name)}
+                            alt={item.name}
+                          />
+                        ) : (
+                          <SpriteThumbnail
+                            key={getNormalizedUrl(item.name)}
+                            jsonPath={getNormalizedUrl(item.name)}
+                            alt={item.name}
+                          />
+                        )
+                      ) : (
+                        <img
+                          key={getNormalizedUrl(item.name)}
+                          src={getNormalizedUrl(item.name)}
+                          loading="lazy"
+                          alt={item.name}
+                        />
+                      )}
+                    </div>
+                  )}
+                  <div className="file-browser-item-name">
+                    {item.isDir ? '📁' : viewMode === 'grid' ? '' : '📄'} {item.name}
+                  </div>
                 </div>
               );
             })}
@@ -319,28 +543,28 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
         </div>
 
         <div className="browser-footer">
-          <div className="file-browser-form-row">
+          <div className="file-browser-form-row" style={{ marginBottom: 0, alignItems: 'center' }}>
             <label className="file-browser-label">Name:</label>
-            <input
-              type="text"
-              value={filename}
-              className="e-input"
-              onChange={(e) => {
-                setFilename(e.target.value);
-                setFilterText(e.target.value); // Sync filter only on manual input
-              }}
-              style={{ flex: 1 }}
-              autoFocus
-            />
-          </div>
-          <div className="file-browser-actions">
-            <button onClick={onCancel} className="e-btn" style={{ padding: '5px 15px' }}>
-              Cancel
-            </button>
+            <div style={{ flex: 1, marginRight: '10px' }}>
+              <FilterInput
+                value={filename}
+                showClearButton={!!filterText}
+                onChange={(e) => {
+                  setFilename(e.target.value);
+                  setFilterText(e.target.value); // Sync filter only on manual input
+                }}
+                onClear={() => {
+                  setFilename('');
+                  setFilterText('');
+                }}
+                autoFocus
+                style={{ marginBottom: 0 }}
+              />
+            </div>
             <button
               onClick={handleConfirm}
               className="e-btn e-btn-enter"
-              style={{ padding: '5px 15px' }}
+              style={{ padding: '5px 15px', marginRight: 0 }}
             >
               {mode === 'save' ? 'Save' : 'Load'}
             </button>

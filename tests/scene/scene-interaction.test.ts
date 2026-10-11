@@ -1,8 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { Entity } from '../../src/entities/Entity';
-import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../../src/core/Resolution';
+import { QuadObject } from '../../src/entities/QuadObject';
+import {
+  GAME_DESIGN_HEIGHT,
+  GAME_DESIGN_WIDTH,
+  setGameDesignResolution,
+} from '../../src/core/Resolution';
 import { handleSceneClick } from '../../src/scene/SceneInteraction';
 import { createSceneFixture } from '../fixtures/sceneFactory';
+
+afterEach(() => setGameDesignResolution(GAME_DESIGN_WIDTH, GAME_DESIGN_HEIGHT));
 
 describe('Scene interaction text layer', () => {
   it('shows the triggerbox title on click when it has TA', () => {
@@ -19,10 +26,9 @@ describe('Scene interaction text layer', () => {
     );
   });
 
-  it('uses the actual canvas size for screen-to-world click mapping', () => {
+  it('uses the active source resolution for screen-to-world click mapping', () => {
     const fixture = createSceneFixture();
-    fixture.game.canvas.width = 640;
-    fixture.game.canvas.height = 360;
+    setGameDesignResolution(640, 360);
     fixture.addTriggerbox('tb_center', {
       title: 'Center Trigger',
       description: 'Centered hotspot.',
@@ -84,8 +90,7 @@ describe('Scene interaction text layer', () => {
 
   it('hits parallax entities at their rendered screen position', () => {
     const fixture = createSceneFixture();
-    fixture.game.canvas.width = 800;
-    fixture.game.canvas.height = 600;
+    setGameDesignResolution(800, 600);
     fixture.scene.camera.x = 200;
     fixture.scene.camera.y = 100;
 
@@ -201,8 +206,7 @@ describe('Scene interaction text layer', () => {
 
   it('click-to-move uses route planning around blocking colliders', () => {
     const fixture = createSceneFixture();
-    fixture.game.canvas.width = 640;
-    fixture.game.canvas.height = 360;
+    setGameDesignResolution(640, 360);
     const player = fixture.addPlayer('Hero', -80, 0);
     player.colliderWidth = 4;
     player.colliderHeight = 4;
@@ -224,5 +228,26 @@ describe('Scene interaction text layer', () => {
 
     expect(player.getMoveResult().status).toBe('started');
     expect(player.getMoveResult().route.length).toBeGreaterThan(1);
+  });
+
+  it('moves the player when clicking a Quad object with a Walkbox component instead of showing SEE title', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 100, 100);
+    const quad = new QuadObject(fixture.game as any, 'QuadFloor');
+    quad.vertices = [
+      { x: 0, y: 0, p: 1.0 },
+      { x: 640, y: 0, p: 1.0 },
+      { x: 640, y: 360, p: 1.0 },
+      { x: 0, y: 360, p: 1.0 },
+    ];
+    quad.components = [{ type: 'WalkBox', mode: 'Invert' }];
+    fixture.scene.addEntity(quad);
+    fixture.textAssets.setObject('QuadFloor', { title: 'Quad Floor Title' });
+
+    handleSceneClick(fixture.scene, 320, 180);
+
+    expect(fixture.messages).toHaveLength(0);
+    expect(fixture.scene.player?.getMoveResult().status).toBe('started');
+    expect(fixture.scene.player?.target).not.toBeNull();
   });
 });

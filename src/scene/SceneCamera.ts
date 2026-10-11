@@ -5,6 +5,22 @@ export interface CameraCenteringState {
   centeringDirY: number;
 }
 
+const playerCameraOffsets = new WeakMap<object, number>();
+
+export function getPlayerCameraOffsetY(player: {
+  baseHeight?: number;
+  modelScale?: number;
+}): number {
+  const cached = playerCameraOffsets.get(player);
+  if (cached !== undefined) return cached;
+
+  const baseHeight = Number.isFinite(player.baseHeight) ? player.baseHeight! : 0;
+  const modelScale = Number.isFinite(player.modelScale) ? player.modelScale! : 1;
+  const offset = (baseHeight * modelScale) / 2;
+  playerCameraOffsets.set(player, offset);
+  return offset;
+}
+
 export function updateSceneCamera(
   scene: Scene,
   deltaTime: number,
@@ -15,15 +31,41 @@ export function updateSceneCamera(
     return state;
   }
 
-  const pHeight = scene.player.height || 0;
+  const isEditorOpen = Boolean(scene.game?.editor?.enabled);
+  if (isEditorOpen && scene.editorCameraSuspended) {
+    if (scene.editorCameraAnchorPlayerPos) {
+      const pDx = scene.player.x - scene.editorCameraAnchorPlayerPos.x;
+      const pDy = scene.player.y - scene.editorCameraAnchorPlayerPos.y;
+      if (Math.hypot(pDx, pDy) > 0.5) {
+        scene.resumeEditorCameraFollow();
+      } else {
+        scene.collisionCamera = { x: scene.camera.x, y: scene.camera.y };
+        return state;
+      }
+    } else {
+      scene.editorCameraAnchorPlayerPos = { x: scene.player.x, y: scene.player.y };
+      scene.collisionCamera = { x: scene.camera.x, y: scene.camera.y };
+      return state;
+    }
+  } else if (!isEditorOpen && scene.editorCameraSuspended) {
+    scene.resumeEditorCameraFollow();
+  }
+
+  const playerParallax =
+    typeof scene.player.parallax === 'number' && Math.abs(scene.player.parallax) > 0.000001
+      ? scene.player.parallax
+      : 1;
   const playerCenterX = scene.player.x;
-  const playerCenterY = scene.player.y - pHeight / 2;
+  const playerCenterY = scene.player.y - getPlayerCameraOffsetY(scene.player);
 
   let targetX = scene.camera.x;
   let targetY = scene.camera.y;
 
-  const dx = playerCenterX - scene.camera.x;
-  const dy = playerCenterY - scene.camera.y;
+  // Camera deadzones are screen-space distances. A Player on a 3d-parallax
+  // surface is rendered at `world - camera * P`, so comparing raw world
+  // coordinates causes a camera/Parallax feedback loop as P changes.
+  const dx = playerCenterX - scene.camera.x * playerParallax;
+  const dy = playerCenterY - scene.camera.y * playerParallax;
 
   let dirX = state.centeringDirX;
   let dirY = state.centeringDirY;
@@ -33,7 +75,7 @@ export function updateSceneCamera(
   }
 
   if (dirX !== 0) {
-    targetX = playerCenterX + dirX * scene.camDeadzoneX;
+    targetX = (playerCenterX + dirX * scene.camDeadzoneX) / playerParallax;
     if (Math.abs(targetX - scene.camera.x) < 2) {
       dirX = 0;
       scene.camera.x = targetX;
@@ -45,7 +87,7 @@ export function updateSceneCamera(
   }
 
   if (dirY !== 0) {
-    targetY = playerCenterY + dirY * scene.camDeadzoneY;
+    targetY = (playerCenterY + dirY * scene.camDeadzoneY) / playerParallax;
     if (Math.abs(targetY - scene.camera.y) < 2) {
       dirY = 0;
       scene.camera.y = targetY;

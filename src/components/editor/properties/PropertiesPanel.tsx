@@ -16,6 +16,7 @@ import {
   getQuadCentroid,
   scalePolyByFactor,
   scaleQuadVerticesByFactor,
+  useNumericScrubbing,
 } from './propertiesUtils';
 import { normalizeGroupIdList } from '../../../utils/GroupIds';
 
@@ -25,6 +26,7 @@ import { EntityProperties } from './EntityProperties';
 import { WalkboxProperties } from './WalkboxProperties';
 import { TriggerboxProperties } from './TriggerboxProperties';
 import { QuadProperties } from './QuadProperties';
+import { Box3DProperties } from './Box3DProperties';
 import { SectionComponents } from './SectionComponents';
 import { ActorProperties } from './ActorProperties';
 import { SectionScriptEvents } from './SectionScriptEvents';
@@ -32,6 +34,11 @@ import { SectionMisc } from './SectionMisc';
 import { FolderProperties } from './FolderProperties';
 import { SceneProperties } from './SceneProperties';
 import { SettingsProperties } from './SettingsProperties';
+import { SectionParserNote } from './SectionParserNote';
+
+function getEditorTextAssetId(obj: { name?: string; groupID?: string | null }): string {
+  return obj.name || normalizeGroupIdList(obj.groupID).split(',').find(Boolean) || '';
+}
 
 export const PropertiesPanel: React.FC = () => {
   const game = useGame();
@@ -43,6 +50,7 @@ export const PropertiesPanel: React.FC = () => {
     objectVersion,
     mode,
     selectedVertexIndex,
+    setPanelConfig,
   } = useEditorStore();
 
   const [groupIdDraft, setGroupIdDraft] = React.useState('');
@@ -61,6 +69,63 @@ export const PropertiesPanel: React.FC = () => {
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   const sectionRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
   const isPanelHoveredRef = React.useRef(false);
+
+  const [anyExpanded, setAnyExpanded] = React.useState(true);
+
+  const panelStateSnapshotRef = React.useRef<{ collapsed: number[]; scrollTop: number }>({
+    collapsed: [],
+    scrollTop: 0,
+  });
+
+  const updatePanelStateSnapshot = React.useCallback(() => {
+    const panel = panelRef.current;
+    const content = contentRef.current;
+    if (!panel || !content) return;
+    const collapsed: number[] = [];
+    const sections = panel.querySelectorAll<HTMLElement>('.properties-section-block[data-section]');
+    sections.forEach((section) => {
+      if (section.classList.contains('collapsed')) {
+        collapsed.push(Number(section.dataset.section));
+      }
+    });
+    panelStateSnapshotRef.current = { collapsed, scrollTop: content.scrollTop };
+  }, []);
+
+  const checkAnyExpanded = React.useCallback(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const sections = Array.from(panel.querySelectorAll<HTMLElement>('.properties-section-block'));
+    const isExpanded = sections.some((s) => {
+      if (s.classList.contains('properties-section-empty')) return false;
+      if (!s.querySelector(':scope > .properties-section-header')) return false;
+      return !s.classList.contains('collapsed');
+    });
+    setAnyExpanded(isExpanded);
+    updatePanelStateSnapshot();
+  }, [updatePanelStateSnapshot]);
+
+  const collapseAll = React.useCallback(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const sections = panel.querySelectorAll<HTMLElement>('.properties-section-block');
+    sections.forEach((s) => {
+      if (s.classList.contains('properties-section-empty')) return;
+      if (s.querySelector(':scope > .properties-section-header')) {
+        s.classList.add('collapsed');
+      }
+    });
+    checkAnyExpanded();
+  }, [checkAnyExpanded]);
+
+  const expandAll = React.useCallback(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const sections = panel.querySelectorAll<HTMLElement>('.properties-section-block');
+    sections.forEach((s) => {
+      s.classList.remove('collapsed');
+    });
+    checkAnyExpanded();
+  }, [checkAnyExpanded]);
 
   // ─── Derived object binding ────────────────────────────────────────────────
   let obj: any = null;
@@ -192,16 +257,20 @@ export const PropertiesPanel: React.FC = () => {
     container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
   }, []);
 
-  const openSection = React.useCallback((section: number) => {
-    const node = sectionRefs.current[section];
-    if (!node) return;
-    if (node.classList.contains('properties-section-empty')) return;
-    node.classList.remove('collapsed');
-    const header = node.querySelector<HTMLElement>('.properties-section-header');
-    header?.classList.remove('properties-section-flash');
-    window.setTimeout(() => header?.classList.add('properties-section-flash'), 0);
-    window.setTimeout(() => header?.classList.remove('properties-section-flash'), 520);
-  }, []);
+  const openSection = React.useCallback(
+    (section: number) => {
+      const node = sectionRefs.current[section];
+      if (!node) return;
+      if (node.classList.contains('properties-section-empty')) return;
+      node.classList.remove('collapsed');
+      checkAnyExpanded();
+      const header = node.querySelector<HTMLElement>('.properties-section-header');
+      header?.classList.remove('properties-section-flash');
+      window.setTimeout(() => header?.classList.add('properties-section-flash'), 0);
+      window.setTimeout(() => header?.classList.remove('properties-section-flash'), 520);
+    },
+    [checkAnyExpanded]
+  );
 
   const shouldIgnoreKeyboardShortcuts = React.useCallback(() => {
     // If a modal like the file browser is open, yield key events to it
@@ -225,7 +294,7 @@ export const PropertiesPanel: React.FC = () => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       if (shouldIgnoreKeyboardShortcuts()) return;
       const key = e.key;
-      if (!/^[0-6]$/.test(key)) return;
+      if (!/^[0-7]$/.test(key)) return;
       e.preventDefault();
       const section = parseInt(key, 10);
       openSection(section);
@@ -247,6 +316,7 @@ export const PropertiesPanel: React.FC = () => {
       const section = header.closest('.properties-section-block');
       if (section?.classList.contains('properties-section-empty')) return;
       section?.classList.toggle('collapsed');
+      checkAnyExpanded();
     };
 
     panel.addEventListener('click', handleClick);
@@ -254,74 +324,62 @@ export const PropertiesPanel: React.FC = () => {
   });
 
   React.useEffect(() => {
-    const panel = panelRef.current;
-    if (!panel) return;
-    const sections = panel.querySelectorAll<HTMLElement>('.properties-section-block[data-section]');
-    sections.forEach((section) => {
-      const id = Number(section.dataset.section);
-      const hasHeader = !!section.querySelector(':scope > .properties-section-header');
-      section.classList.toggle(
-        'collapsed',
-        hasHeader &&
-          !section.classList.contains('properties-section-empty') &&
-          id !== 0 &&
-          id !== 1 &&
-          id !== 5
-      );
-    });
-  }, [selectedObjectId, selectedObjectType]);
+    const content = contentRef.current;
+    if (!content) return;
+    let timeout: number;
+    const handleScroll = () => {
+      window.clearTimeout(timeout);
+      timeout = window.setTimeout(updatePanelStateSnapshot, 200);
+    };
+    content.addEventListener('scroll', handleScroll);
+    return () => {
+      window.clearTimeout(timeout);
+      content.removeEventListener('scroll', handleScroll);
+    };
+  }, [updatePanelStateSnapshot, selectedObjectType]);
 
   React.useEffect(() => {
     const panel = panelRef.current;
-    if (!panel) return;
+    const content = contentRef.current;
+    if (!panel || !content || !selectedObjectType) return;
 
-    const setInputValue = (input: HTMLInputElement, value: string) => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-      setter?.call(input, value);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
+    // Restore or initialize config by reading directly from the store (avoids infinite loops)
+    const config = useEditorStore.getState().panelConfig[selectedObjectType];
+    const sections = panel.querySelectorAll<HTMLElement>('.properties-section-block[data-section]');
+
+    sections.forEach((section) => {
+      const id = Number(section.dataset.section);
+      const hasHeader = !!section.querySelector(':scope > .properties-section-header');
+
+      if (!hasHeader || section.classList.contains('properties-section-empty')) {
+        section.classList.remove('collapsed');
+      } else if (config) {
+        section.classList.toggle('collapsed', config.collapsed.includes(id));
+      } else {
+        // Default behavior if no config saved
+        section.classList.toggle('collapsed', id !== 0 && id !== 1 && id !== 5 && id !== 7);
+      }
+    });
+
+    if (config) {
+      // Restore scroll position
+      content.scrollTop = config.scrollTop;
+    } else {
+      content.scrollTop = 0;
+    }
+
+    checkAnyExpanded();
+
+    // Cleanup: Save config before type switches or unmount
+    return () => {
+      // ensure we don't accidentally save an empty snapshot if deselected quickly
+      if (panelStateSnapshotRef.current) {
+        setPanelConfig(selectedObjectType, panelStateSnapshotRef.current);
+      }
     };
+  }, [selectedObjectType, setPanelConfig, checkAnyExpanded]);
 
-    const decimalPlaces = (step: number) => {
-      if (!Number.isFinite(step)) return 0;
-      const text = String(step);
-      return text.includes('.') ? text.split('.')[1].length : 0;
-    };
-
-    const handleMouseDown = (event: MouseEvent) => {
-      if (event.button !== 0) return;
-      const label = (event.target as HTMLElement | null)?.closest('label.e-label');
-      if (!label || !panel.contains(label)) return;
-      const group = label.parentElement;
-      const input = group?.querySelector<HTMLInputElement>('input[type="number"]');
-      if (!input || input.disabled || input.readOnly) return;
-
-      event.preventDefault();
-      const startX = event.clientX;
-      const startValue = Number(input.value || 0);
-      const step = Number(input.step && input.step !== 'any' ? input.step : 1) || 1;
-      const precision = decimalPlaces(step);
-
-      const handleMove = (moveEvent: MouseEvent) => {
-        const delta = moveEvent.clientX - startX;
-        const next = startValue + Math.round(delta / 6) * step;
-        setInputValue(input, precision > 0 ? next.toFixed(precision) : String(Math.round(next)));
-      };
-
-      const handleUp = () => {
-        document.removeEventListener('mousemove', handleMove);
-        document.removeEventListener('mouseup', handleUp);
-        document.body.classList.remove('is-scrubbing-number');
-      };
-
-      document.body.classList.add('is-scrubbing-number');
-      document.addEventListener('mousemove', handleMove);
-      document.addEventListener('mouseup', handleUp);
-    };
-
-    panel.addEventListener('mousedown', handleMouseDown);
-    return () => panel.removeEventListener('mousedown', handleMouseDown);
-  });
+  useNumericScrubbing(panelRef);
 
   // ─── Tooltip injection ─────────────────────────────────────────────────────
   React.useEffect(() => {
@@ -537,12 +595,22 @@ export const PropertiesPanel: React.FC = () => {
       }
       if (game.editor?.selectedObject) {
         const selected = game.editor.selectedObject;
+        const textAssetId = getEditorTextAssetId(selected);
         const asset = forceReload
-          ? await game.textAssets.readObjectAsset(selected, true)
-          : await game.textAssets.readObjectAsset(selected, false);
-        setHasTextAsset(!!asset);
+          ? await game.textAssets.readObjectAssetById(textAssetId, true)
+          : await game.textAssets.readObjectAssetById(textAssetId, false);
+        const assetIds =
+          typeof (game.textAssets as any).getObjectTextAssetIds === 'function'
+            ? (game.textAssets as any).getObjectTextAssetIds(selected)
+            : [textAssetId];
+        const fallbackAssets = await Promise.all(
+          assetIds
+            .slice(1)
+            .map((id: string) => game.textAssets.readObjectAssetById(id, forceReload))
+        );
+        setHasTextAsset(!!asset || fallbackAssets.some(Boolean));
         setResolvedTitle(game.textAssets.getResolvedObjectField(selected, 'title') || '');
-        setTextAssetPath(game.textAssets.getObjectAssetProjectPath(selected.name));
+        setTextAssetPath(game.textAssets.getObjectAssetProjectPath(textAssetId));
       }
     },
     [game, obj, selectedObjectType, supportsTextAsset]
@@ -552,7 +620,7 @@ export const PropertiesPanel: React.FC = () => {
     loadResolvedTitle(false).catch((err) => {
       console.error('Failed to load text asset title:', err);
     });
-  }, [loadResolvedTitle, selectedObjectId, selectedObjectType]);
+  }, [loadResolvedTitle, objectVersion, selectedObjectId, selectedObjectType]);
 
   const handleOpenTA = async () => {
     if (!game || !obj) return;
@@ -562,7 +630,8 @@ export const PropertiesPanel: React.FC = () => {
         if (!scene) return;
         await game.textAssets.openSceneAsset(scene);
       } else if (game.editor?.selectedObject) {
-        await game.textAssets.openObjectAsset(game.editor.selectedObject);
+        const selected = game.editor.selectedObject;
+        await game.textAssets.openObjectAssetForId(selected, getEditorTextAssetId(selected));
       }
       await loadResolvedTitle(true);
     } catch (err) {
@@ -578,7 +647,9 @@ export const PropertiesPanel: React.FC = () => {
         selectedObjectType === 'SCENE'
           ? game.textAssets.getSceneAssetProjectPath(game.sceneManager.currentScene?.id || '')
           : game.editor?.selectedObject
-            ? game.textAssets.getObjectAssetProjectPath(game.editor.selectedObject.name)
+            ? game.textAssets.getObjectAssetProjectPath(
+                getEditorTextAssetId(game.editor.selectedObject)
+              )
             : '';
       const defaultContent =
         selectedObjectType === 'SCENE'
@@ -615,7 +686,9 @@ export const PropertiesPanel: React.FC = () => {
         if (!scene) return;
         await game.textAssets.deleteSceneAsset(scene);
       } else if (game.editor?.selectedObject) {
-        await game.textAssets.deleteObjectAsset(game.editor.selectedObject);
+        await game.textAssets.deleteObjectAssetById(
+          getEditorTextAssetId(game.editor.selectedObject)
+        );
       }
       await loadResolvedTitle(true);
       incrementObjectVersion();
@@ -628,7 +701,7 @@ export const PropertiesPanel: React.FC = () => {
 
   // ─── handleChange ──────────────────────────────────────────────────────────
   const handleChange = React.useCallback(
-    (field: string, value: unknown, enforceNumber = false) => {
+    async (field: string, value: unknown, enforceNumber = false) => {
       if (!obj) return;
 
       if (selectedObjectType !== 'SETTINGS' && game?.editor) {
@@ -651,14 +724,73 @@ export const PropertiesPanel: React.FC = () => {
         finalVal = normalizeGroupIdList(finalVal, { preserveEmptyTokens: true });
       }
 
-      obj[field] = finalVal;
+      if (
+        field === 'name' &&
+        selectedObjectType !== 'SCENE' &&
+        selectedObjectType !== 'SETTINGS' &&
+        selectedObjectType !== 'MULTI'
+      ) {
+        const normalizedName = String(finalVal || '').trim();
+        if (!normalizedName) return;
+
+        const previousName = String(obj.name || '').trim();
+        if (normalizedName !== previousName) {
+          const oldTextAssetId = getEditorTextAssetId(obj);
+          const newTextAssetId = getEditorTextAssetId({ ...obj, name: normalizedName });
+
+          if (
+            oldTextAssetId &&
+            newTextAssetId &&
+            oldTextAssetId !== newTextAssetId &&
+            game?.textAssets &&
+            typeof (game.textAssets as any).duplicateObjectAssetIfExists === 'function'
+          ) {
+            try {
+              await (game.textAssets as any).duplicateObjectAssetIfExists(
+                oldTextAssetId,
+                newTextAssetId
+              );
+            } catch (err) {
+              console.error('Failed to migrate text asset:', err);
+              return;
+            }
+          }
+
+          const scene = game?.sceneManager?.currentScene;
+          if (scene && typeof scene.renameObject === 'function') {
+            scene.renameObject(obj, normalizedName);
+          } else {
+            obj[field] = normalizedName;
+          }
+
+          if (obj.name !== normalizedName) {
+            return;
+          }
+        }
+      } else {
+        obj[field] = finalVal;
+      }
 
       if (obj.inheritedProps instanceof Set && obj.inheritedProps.has(field)) {
         obj.inheritedProps.delete(field);
       }
       incrementObjectVersion();
 
-      if (field === 'name') incrementHierarchyVersion();
+      if (field === 'name') {
+        const normalizedName = String(finalVal || '').trim();
+        if (
+          normalizedName &&
+          obj.name === normalizedName &&
+          selectedObjectType &&
+          selectedObjectType !== 'SCENE' &&
+          selectedObjectType !== 'SETTINGS' &&
+          selectedObjectType !== 'MULTI'
+        ) {
+          const newKey = `${selectedObjectType}:${normalizedName}`;
+          useEditorStore.getState().selectObjects([newKey], normalizedName, selectedObjectType);
+        }
+        incrementHierarchyVersion();
+      }
       if (field === 'isPlayer') {
         const scene = game?.sceneManager?.currentScene;
         if (scene && obj && (obj as any).type === 'Actor') {
@@ -698,10 +830,7 @@ export const PropertiesPanel: React.FC = () => {
           let targetFactor = modelScale;
 
           if (!isIgnored) {
-            let depthFactor = 1.0;
-            if (scene.scaling && scene.scaling.enabled) {
-              depthFactor = scene.getScaling(ent.y);
-            }
+            const depthFactor = scene.getDepthScaleFor(ent);
             targetFactor = modelScale * depthFactor;
           }
 
@@ -730,12 +859,26 @@ export const PropertiesPanel: React.FC = () => {
   }, [selectedObjectType, selectedObjectId]);
 
   // ─── Build context value ───────────────────────────────────────────────────
+  const currentObjectId =
+    selectedObjectType === 'SETTINGS'
+      ? 'SETTINGS'
+      : selectedObjectType === 'SCENE'
+        ? 'SCENE'
+        : obj?.name || selectedObjectId || null;
+
+  const headerTitle =
+    selectedObjectType === 'SETTINGS'
+      ? 'SETTINGS'
+      : selectedObjectType === 'SCENE'
+        ? 'SCENE'
+        : `${selectedObjectType?.toUpperCase() || 'OBJECT'}: ${currentObjectId || ''}`;
+
   const contextValue: PropertiesContextValue | null = game
     ? {
         game,
         obj,
         selectedObjectType: selectedObjectType || '',
-        selectedObjectId: selectedObjectId || null,
+        selectedObjectId: currentObjectId,
         mode: mode || null,
         selectedVertexIndex: selectedVertexIndex ?? null,
         uiScale,
@@ -746,6 +889,9 @@ export const PropertiesPanel: React.FC = () => {
         setSectionRef,
         scrollToSection,
         lastUndoObjectKeyRef,
+        anyExpanded,
+        collapseAll,
+        expandAll,
       }
     : null;
 
@@ -760,7 +906,12 @@ export const PropertiesPanel: React.FC = () => {
   const isSettings = selectedObjectType === 'SETTINGS';
   const isFolder = selectedObjectType === 'Folder';
   const isObjectWithScriptEvents =
-    !isSettings && !isScene && !isWalkbox && !isFolder && selectedObjectType !== 'MULTI';
+    !isSettings &&
+    !isScene &&
+    !isWalkbox &&
+    !isFolder &&
+    selectedObjectType !== 'MULTI' &&
+    selectedObjectType !== 'Box3D';
   const hasComponents =
     selectedObjectType === 'Triggerbox' ||
     selectedObjectType === 'Walkbox' ||
@@ -846,9 +997,36 @@ export const PropertiesPanel: React.FC = () => {
         {...panelEventProps}
       >
         <div className="editor-header">
-          <span>
-            {selectedObjectType === 'SETTINGS' ? 'SETTINGS' : selectedObjectType?.toUpperCase()}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+            <span
+              style={{
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                textTransform: 'none',
+              }}
+              title={headerTitle}
+            >
+              {headerTitle}
+            </span>
+            {selectedObjectType !== 'SETTINGS' && selectedObjectType !== 'SCENE' && (
+              <button
+                type="button"
+                className="toolbar-icon-btn"
+                title={anyExpanded ? 'Collapse all' : 'Expand all'}
+                onClick={anyExpanded ? collapseAll : expandAll}
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  padding: 0,
+                  fontSize: '10px',
+                  lineHeight: 1,
+                }}
+              >
+                {anyExpanded ? '▼' : '▶'}
+              </button>
+            )}
+          </div>
           <button className="e-btn" onClick={() => useEditorStore.getState().toggle(false)}>
             X
           </button>
@@ -896,6 +1074,7 @@ export const PropertiesPanel: React.FC = () => {
               translateQuadTo={translateQuadTo}
             />
           )}
+          {selectedObjectType === 'Box3D' && <Box3DProperties />}
 
           {isFolder && <FolderProperties />}
 
@@ -910,7 +1089,11 @@ export const PropertiesPanel: React.FC = () => {
 
           {/* Section 6: Lock/Disabled/Misc */}
           {!isSettings && !isScene && !isWalkbox && (
-            <SectionMisc isTriggerbox={isTriggerbox} isQuad={selectedObjectType === 'Quad'} />
+            <SectionMisc
+              isTriggerbox={isTriggerbox}
+              isQuad={selectedObjectType === 'Quad'}
+              isBox3D={selectedObjectType === 'Box3D'}
+            />
           )}
 
           {/* Scene: Camera + Scaling */}
@@ -918,6 +1101,11 @@ export const PropertiesPanel: React.FC = () => {
 
           {/* Settings: Editor + CRT */}
           {isSettings && <SettingsProperties />}
+
+          {/* Runtime-only entity Parser Note; intentionally last in Properties. */}
+          {isEntityLike && !isSettings && !isScene && String(selectedObjectType) !== 'MULTI' && (
+            <SectionParserNote />
+          )}
         </div>
       </div>
     </PropertiesContext.Provider>

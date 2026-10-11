@@ -4,6 +4,8 @@ import { SceneObject } from './SceneObject';
 import { Theme } from '../utils/Theme';
 import type { SpatialPlacement } from '../scene/spatialTypes';
 
+export type EntityDepthSortMode = 'manual' | 'parallax' | 'y';
+
 export interface EntityData {
   type: string;
   name: string;
@@ -23,6 +25,7 @@ export interface EntityData {
   modelScale?: number; // User defined scale
   layer: number;
   parallax?: number;
+  depthSortMode?: EntityDepthSortMode;
   ignoreScaling?: boolean;
   isPlayer?: boolean;
   speed?: number;
@@ -38,6 +41,12 @@ export interface EntityData {
   opacity?: number; // Added
   blendMode?: string; // Added
   blur?: number; // Added
+  brightness?: number; // Added
+  saturation?: number; // Added
+  contrast?: number; // Added
+  hueShift?: number; // Added
+  flipX?: boolean;
+  flipY?: boolean;
   spatial?: SpatialPlacement;
 }
 
@@ -55,7 +64,7 @@ export class Entity extends SceneObject {
     if (this._x === val) return;
     this._x = val;
     if (this.game.editor && this.game.editor.enabled) {
-      this.game.editor.selectionManager.notifyObjectChanged(this);
+      this.game.editor.selectionManager?.notifyObjectChanged?.(this);
     }
   }
 
@@ -68,7 +77,7 @@ export class Entity extends SceneObject {
     if (this._y === val) return;
     this._y = val;
     if (this.game.editor && this.game.editor.enabled) {
-      this.game.editor.selectionManager.notifyObjectChanged(this);
+      this.game.editor.selectionManager?.notifyObjectChanged?.(this);
     }
   }
 
@@ -120,11 +129,13 @@ export class Entity extends SceneObject {
   scale: number;
   refScale: number;
   modelScale: number;
+  depthSortMode: EntityDepthSortMode;
   // layer: number; // Inherited
   baseWidth: number;
   baseHeight: number;
   animator: Animator | null;
   flipX: boolean;
+  flipY: boolean;
 
   /**
    * Override parallax to notify editor on change.
@@ -158,6 +169,10 @@ export class Entity extends SceneObject {
   opacity: number = 1.0;
   blendMode: GlobalCompositeOperation = 'source-over';
   blur: number = 0;
+  brightness: number = 1.0;
+  saturation: number = 1.0;
+  contrast: number = 1.0;
+  hueShift: number = 0;
 
   endLoading() {
     if (this.loadingRefCount > 0) this.loadingRefCount--;
@@ -215,11 +230,18 @@ export class Entity extends SceneObject {
     'refScale',
     'modelScale',
     'parallax',
+    'depthSortMode',
     'ignoreScaling',
     'animationSpeed',
     'opacity',
     'blendMode',
     'blur',
+    'brightness',
+    'saturation',
+    'contrast',
+    'hueShift',
+    'flipX',
+    'flipY',
   ];
 
   constructor(
@@ -256,6 +278,7 @@ export class Entity extends SceneObject {
     this.opacity = 1.0;
     // this.layer = 0; // Inherited
     this._parallax = 1.0; // 1.0 = normal move, 0.5 = half speed (far), 0.0 = fixed
+    this.depthSortMode = 'y';
     this.ignoreScaling = false;
     this.subsceneItemScale = 1.0;
     this.animationSpeed = 150; // Default 150ms
@@ -267,6 +290,7 @@ export class Entity extends SceneObject {
     this._baseColliderHeight = 0;
     this.animator = null;
     this.flipX = false;
+    this.flipY = false;
     this.scene = null;
     this.loadingRefCount = 0;
   }
@@ -356,29 +380,10 @@ export class Entity extends SceneObject {
     // Dynamic Depth Scaling
     let depthFactor = 1.0;
 
-    if (!this.ignoreScaling) {
-      // Resolve scene
-      const scene =
-        this.scene ||
-        (this.game && this.game.sceneManager ? this.game.sceneManager.currentScene : null);
-
-      if (scene && scene.scaling && scene.scaling.enabled) {
-        // Use Visual Y for scaling to prevent flickering when 3d-parallax adjusts World Y
-        // Visual Y is the apparent position on screen (relative to camera center/origin logic, but scaling uses World Y relative to Horizon)
-        // Actually, 'getScaling(y)' expects a Y value that corresponds to "Distance from camera/screen plane" in a pseudo-3D way.
-        // In this engine, Y is "Distance into the scene" (higher Y is closer to front).
-        // When Parallax moves the object, its World Y changes to keep it visually stable.
-        // If we use World Y, the scale changes because the object "physically" moves.
-        // If we use Visual Y (where it looks to be), we are checking "where corresponds this visual row in the depth map?".
-
-        let checkY = this.y;
-        if (scene.camera && this.parallax !== 1.0) {
-          checkY = this.y - scene.camera.y * (this.parallax - 1.0);
-        }
-
-        depthFactor = scene.getScaling(checkY);
-      }
-    }
+    const scene =
+      this.scene ||
+      (this.game && this.game.sceneManager ? this.game.sceneManager.currentScene : null);
+    if (scene) depthFactor = scene.getDepthScaleFor(this);
 
     // Final Scale = User Model Scale * Depth Factor
     this.scale = this.modelScale * this.subsceneItemScale * depthFactor;
@@ -397,7 +402,14 @@ export class Entity extends SceneObject {
     // Apply Visual Properties
     if (this.opacity < 1.0) ctx.globalAlpha = this.opacity;
     if (this.blendMode !== 'source-over') ctx.globalCompositeOperation = this.blendMode;
-    if (this.blur > 0) ctx.filter = `blur(${this.blur}px)`;
+
+    let filterStr = '';
+    if (this.blur > 0) filterStr += `blur(${this.blur}px) `;
+    if (this.brightness !== 1.0) filterStr += `brightness(${this.brightness}) `;
+    if (this.saturation !== 1.0) filterStr += `saturate(${this.saturation}) `;
+    if (this.contrast !== 1.0) filterStr += `contrast(${this.contrast}) `;
+    if (this.hueShift !== 0) filterStr += `hue-rotate(${this.hueShift}deg) `;
+    if (filterStr) ctx.filter = filterStr.trim();
 
     // Viewport Culling
     if (this.scene && this.scene.camera && ctx.canvas) {
@@ -441,46 +453,31 @@ export class Entity extends SceneObject {
     if (this.animator && this.animator.getCurrentFrame()) {
       const frame = this.animator.getCurrentFrame();
       if (frame && this.image && this.image.complete) {
-        if (this.flipX) {
-          ctx.save();
-          ctx.scale(-1, 1);
-          ctx.drawImage(
-            this.image,
-            frame.x,
-            frame.y,
-            frame.w,
-            frame.h,
-            -(this.x + this.width / 2),
-            this.y - this.height,
-            this.width,
-            this.height
-          );
-          ctx.restore();
-        } else {
-          ctx.drawImage(
-            this.image,
-            frame.x,
-            frame.y,
-            frame.w,
-            frame.h,
-            this.x - this.width / 2,
-            this.y - this.height,
-            this.width,
-            this.height
-          );
-        }
+        ctx.save();
+        ctx.translate(this.x, this.y - this.height / 2);
+        ctx.scale(this.flipX ? -1 : 1, this.flipY ? -1 : 1);
+        ctx.drawImage(
+          this.image,
+          frame.x,
+          frame.y,
+          frame.w,
+          frame.h,
+          -this.width / 2,
+          -this.height / 2,
+          this.width,
+          this.height
+        );
+        ctx.restore();
       } else {
         ctx.fillStyle = this.color;
         ctx.fillRect(this.x - this.width / 2, this.y - this.height, this.width, this.height);
       }
     } else if (this.image && this.image.complete && this.image.naturalWidth !== 0) {
-      ctx.drawImage(
-        this.image,
-        this.x - this.width / 2,
-        this.y - this.height,
-        this.width,
-        this.height
-      );
+      ctx.save();
+      ctx.translate(this.x, this.y - this.height / 2);
+      ctx.scale(this.flipX ? -1 : 1, this.flipY ? -1 : 1);
+      ctx.drawImage(this.image, -this.width / 2, -this.height / 2, this.width, this.height);
+      ctx.restore();
     } else {
       ctx.fillStyle = this.color;
       ctx.fillRect(this.x - this.width / 2, this.y - this.height, this.width, this.height);
@@ -656,10 +653,11 @@ export class Entity extends SceneObject {
 
       // Flip X Support
       const finalNormX = this.flipX ? 1 - normX : normX;
+      const finalNormY = this.flipY ? 1 - normY : normY;
 
       // Map to Source Image Pixels
       const pixelX = Math.floor(srcX + finalNormX * srcW);
-      const pixelY = Math.floor(srcY + normY * srcH);
+      const pixelY = Math.floor(srcY + finalNormY * srcH);
 
       // Bounds Safety Check (in case of rounding errors)
       if (pixelX < srcX || pixelX >= srcX + srcW || pixelY < srcY || pixelY >= srcY + srcH)

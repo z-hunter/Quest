@@ -1,4 +1,9 @@
-import { CRTFilter, type CRTSettings } from '../graphics/CRTFilter';
+import {
+  VirtualScreenRenderer,
+  normalizeProfile,
+  profileToRenderSettings,
+  type ScreenProfile,
+} from 'scanline-virtual-screen/core';
 import { Input } from './Input';
 import { Parser } from '../mechanics/Parser';
 import { SceneManager } from '../scene/SceneManager';
@@ -10,13 +15,12 @@ import { SceneObject } from '../entities/SceneObject';
 import { Actor } from '../entities/Actor';
 import { registerDemoScripts } from '../scripts/DemoScripts';
 import { registerUserScripts } from '../scripts/main';
-import { AudioManager } from './AudioManager';
 import { TextAssetManager } from './TextAssetManager';
 import type { GameActionOutcome } from './GameActionTypes';
 import { SoundManager } from '../systems/SoundManager';
 import { ScriptRegistry } from './ScriptRegistry';
-import { OllamaProvider } from '../mechanics/llm/OllamaProvider';
-import { AnthropicProvider } from '../mechanics/llm/AnthropicProvider';
+import { createLlmProvider } from '../mechanics/llm/createLlmProvider';
+import type { ILlmProvider } from '../mechanics/llm/ILlmProvider';
 import { NpcPuppetMaster } from '../mechanics/NpcPuppetMaster';
 import { NpcWorldModelBuilder } from '../mechanics/NpcWorldModelBuilder';
 
@@ -28,15 +32,20 @@ import { InventoryManager } from '../systems/InventoryManager';
 import { GameSemanticAPI } from '../systems/GameSemanticAPI';
 import type { Scene } from '../scene/Scene';
 import type { SpatialRelationType } from '../scene/spatialTypes';
-import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from './Resolution';
+import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH, setGameDesignResolution } from './Resolution';
 import { ActorNavigationService } from '../systems/ActorNavigationService';
 import { ActorWorldQuery } from '../systems/ActorWorldQuery';
 import { ActorCommandExecutor } from '../mechanics/ActorCommandExecutor';
-
-// Toggle between Ollama local inference (true) and Claude Haiku cloud API (false)
-const USE_LOCAL_LLM = false;
-
-type EditorViewportZoom = 'fit' | '1' | '1.5' | '2';
+import { SaveManager } from '../systems/SaveManager';
+import { isTauriRuntime } from '../platform/fileApi';
+import { createDebugApi } from '../debug/debugApi';
+import {
+  createDefaultQuestSettings,
+  getQuestScreenMode,
+  loadQuestSettings,
+  QUEST_SCREEN_MODES,
+  type QuestSettings,
+} from './displaySettings';
 
 export type RelationScopedTakeCandidates =
   | { status: 'resolved'; candidates: Entity[]; hasStorage: boolean }
@@ -51,11 +60,10 @@ export class Game implements IGame {
   bufferCanvas: HTMLCanvasElement; // Design-resolution buffer (Internal)
 
   ctx: CanvasRenderingContext2D | null;
-  rendererCtx: CanvasRenderingContext2D | null; // For simple 2D upscale if CRT disabled
   uiCtx: CanvasRenderingContext2D | null;
   editorOverlayCtx: CanvasRenderingContext2D | null;
 
-  crtFilter: CRTFilter | null;
+  virtualScreen: VirtualScreenRenderer | null;
   lastTime: number;
   isRunning: boolean;
 
@@ -66,10 +74,10 @@ export class Game implements IGame {
   input: Input;
   parser: Parser;
   npcPuppetMaster: NpcPuppetMaster;
+  private readonly llmProvider: ILlmProvider;
   npcWorldModelBuilder: NpcWorldModelBuilder;
   sceneManager: SceneManager;
   assets: AssetLoader;
-  audio: AudioManager;
   textAssets: TextAssetManager;
   editor: SceneEditor;
   spriteEditor: SpriteEditor;
@@ -83,6 +91,7 @@ export class Game implements IGame {
   actorNavigation: ActorNavigationService;
   actorWorld: ActorWorldQuery;
   actorCommands: ActorCommandExecutor;
+  saveManager: SaveManager;
 
   // ─── inventory getter-proxy (Q2-A: all external call-sites unchanged) ────
   get inventory(): Entity[] {
@@ -122,16 +131,7 @@ export class Game implements IGame {
       ) => void)
     | null = null;
 
-  settings: {
-    crt: CRTSettings & { enabled: boolean };
-    editor: {
-      uiScale: number;
-      viewportZoom: EditorViewportZoom;
-    };
-    audio: {
-      attachedVolume: number;
-    };
-  };
+  settings: QuestSettings;
 
   openFileBrowser(
     mode: 'save' | 'load',
@@ -183,34 +183,8 @@ export class Game implements IGame {
     this.bufferCanvas.height = GAME_DESIGN_HEIGHT;
     this.ctx = this.bufferCanvas.getContext('2d');
 
-    // We won't strictly need 2D context for rendererCanvas if we use WebGL,
-    // but we might want it for fallback.
-    this.rendererCtx = null;
-
-    // Default Settings
-    this.settings = {
-      crt: {
-        enabled: true,
-        curvature: 0.16,
-        scanlineCount: 200,
-        scanlineIntensity: 0.4,
-        aberration: 0.2,
-        vignette: 0.9,
-        phosphor: 1.0,
-        bezelGlow: true,
-        bloom: 0.05,
-      },
-      editor: {
-        uiScale: 1.0,
-        viewportZoom: 'fit',
-      },
-      audio: {
-        attachedVolume: 1.0,
-      },
-    };
-
-    // Initialize CRT Filter on the RENDERER canvas (WebGL)
-    this.crtFilter = new CRTFilter(this.rendererCanvas);
+    this.settings = createDefaultQuestSettings();
+    this.virtualScreen = new VirtualScreenRenderer(this.rendererCanvas, true);
 
     this.lastTime = 0;
     this.isRunning = false;
@@ -226,14 +200,11 @@ export class Game implements IGame {
     // Load Settings from LocalStorage (after console exists for safe diagnostics elsewhere)
     this.loadSettings();
 
-    this.parser = new Parser(this);
+    this.llmProvider = createLlmProvider();
+    this.parser = new Parser(this, this.llmProvider);
     this.npcWorldModelBuilder = new NpcWorldModelBuilder(this);
-    this.npcPuppetMaster = new NpcPuppetMaster(
-      this,
-      USE_LOCAL_LLM ? new OllamaProvider() : new AnthropicProvider()
-    );
+    this.npcPuppetMaster = new NpcPuppetMaster(this, this.llmProvider);
     this.assets = new AssetLoader();
-    this.audio = new AudioManager();
     this.textAssets = new TextAssetManager();
     void this.textAssets.preloadServiceAssets();
     void this.textAssets.preloadParserLanguageAssets();
@@ -249,14 +220,23 @@ export class Game implements IGame {
     this.actorWorld = new ActorWorldQuery(this);
     this.actorCommands = new ActorCommandExecutor(this);
     this.semantic = new GameSemanticAPI(this);
+    this.saveManager = new SaveManager(this);
+
+    this.editor = new SceneEditor(this);
+    this.spriteEditor = new SpriteEditor(this);
 
     if (typeof window !== 'undefined') {
       const debugWindow = window as Window & {
         __QUEST_DEBUG__?: Record<string, unknown>;
+        __SCANLINE_DEBUG__?: Record<string, unknown>;
       };
+      const isWeb = !isTauriRuntime();
+      const debugApi = isWeb ? createDebugApi(this) : undefined;
+
       debugWindow.__QUEST_DEBUG__ = {
         ...(debugWindow.__QUEST_DEBUG__ || {}),
         game: this,
+        ...(debugApi ? { api: debugApi } : {}),
         profileCurrentSceneMemory: () => this.sceneManager.profileCurrentSceneMemory(),
         profileScenes: (sceneIds: string[]) => this.sceneManager.profileScenes(sceneIds),
         enablePutDebug: () => {
@@ -267,9 +247,15 @@ export class Game implements IGame {
         },
         getScriptRuntimeState: () => ScriptRegistry.getRuntimeState(),
       };
+
+      if (debugApi) {
+        debugWindow.__SCANLINE_DEBUG__ = {
+          ...(debugWindow.__SCANLINE_DEBUG__ || {}),
+          api: debugApi,
+          game: this,
+        };
+      }
     }
-    this.editor = new SceneEditor(this);
-    this.spriteEditor = new SpriteEditor(this);
 
     this.sceneManager.loadScene('test_room.json');
 
@@ -293,6 +279,8 @@ export class Game implements IGame {
 
   destroy(): void {
     this.stop();
+    this.virtualScreen?.dispose();
+    this.virtualScreen = null;
     if (this.editor) {
       this.editor.destroy();
     }
@@ -397,43 +385,17 @@ export class Game implements IGame {
       }
     }
 
-    // 2. Render Buffer to Screen via CRT Filter
-    if (this.crtFilter && this.crtFilter.isValid()) {
-      let settings = this.settings.crt;
-
-      if (!this.settings.crt.enabled) {
-        settings = {
-          enabled: false,
-          curvature: 0,
-          scanlineCount: 0,
-          scanlineIntensity: 0,
-          aberration: 0,
-          vignette: 0,
-          phosphor: 0,
-          bezelGlow: false,
-          bloom: 0,
-        };
-      }
-
+    // 2. Render Buffer to Screen through SVS.
+    if (this.virtualScreen) {
       try {
-        const designW = GAME_DESIGN_WIDTH;
-        const designH = GAME_DESIGN_HEIGHT;
-        const scaleX = this.rendererCanvas?.width ? this.rendererCanvas.width / designW : 1;
-        const scaleY = this.rendererCanvas?.height ? this.rendererCanvas.height / designH : 1;
-        const effectiveSettings = {
-          ...settings,
-          scanlineCount: (settings.scanlineCount || 0) * scaleY,
-          aberration: (settings.aberration || 0) * scaleX,
-        };
-        this.crtFilter.render(this.bufferCanvas, effectiveSettings);
+        this.virtualScreen.render(
+          this.bufferCanvas,
+          profileToRenderSettings(this.settings.screenProfile),
+          [],
+          true
+        );
       } catch (e) {
-        console.warn('CRT Filter failed, disabling:', e);
-        this.disableCRT();
-      }
-    } else {
-      if (this.uiCtx) {
-        this.uiCtx.imageSmoothingEnabled = false;
-        this.uiCtx.drawImage(this.bufferCanvas, 0, 0, this.canvas.width, this.canvas.height);
+        console.warn('SVS render failed:', e);
       }
     }
 
@@ -451,25 +413,23 @@ export class Game implements IGame {
       );
     }
 
-    if (this.uiCtx) {
-      if (this.spriteEditor.active) {
-        this.spriteEditor.render(this.uiCtx);
-      } else if (!this.editorOverlayCtx) {
-        this.editor.render(this.uiCtx);
-      }
-    }
+    if (this.uiCtx && this.spriteEditor.active) this.spriteEditor.render(this.uiCtx);
 
-    if (
-      this.editorOverlayCtx &&
-      this.editorOverlayCanvas &&
-      !this.spriteEditor.active &&
-      this.editor.enabled
-    ) {
-      const scaleX = this.editorOverlayCanvas.width / this.canvas.width;
-      const scaleY = this.editorOverlayCanvas.height / this.canvas.height;
-      this.editorOverlayCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
-      this.editor.render(this.editorOverlayCtx);
-      this.editorOverlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+    const overlayCtx = this.editorOverlayCtx;
+    const overlayCanvas = this.editorOverlayCanvas;
+    const editorCtx = overlayCtx && overlayCanvas ? overlayCtx : this.uiCtx;
+    const editorCanvas = overlayCtx && overlayCanvas ? overlayCanvas : this.canvas;
+    if (editorCtx && !this.spriteEditor.active && this.editor.enabled) {
+      editorCtx.setTransform(
+        editorCanvas.width / this.bufferCanvas.width,
+        0,
+        0,
+        editorCanvas.height / this.bufferCanvas.height,
+        0,
+        0
+      );
+      this.editor.render(editorCtx);
+      editorCtx.setTransform(1, 0, 0, 1, 0, 0);
     }
   }
 
@@ -573,10 +533,6 @@ export class Game implements IGame {
     }
   }
 
-  disableCRT(): void {
-    this.crtFilter = null;
-  }
-
   onMouseClick(x: number, y: number): void {
     if (this.console.continueClosedModal()) {
       return;
@@ -662,7 +618,7 @@ export class Game implements IGame {
           ])
         ),
       });
-      await this.npcPuppetMaster.scheduleScene(scene);
+      await this.npcPuppetMaster.scheduleScene(scene, { resetRateBudget: true });
       return;
     }
     this.npcPuppetMaster.traceWake('player_speech_stopped', {
@@ -675,12 +631,17 @@ export class Game implements IGame {
     text: string,
     options: { triggerPuppetMaster?: boolean } = {}
   ): Promise<void> {
-    const scene = this.sceneManager.currentScene;
+    const scene = this.getActorScene(actor);
     const speech = text.trim();
     if (!scene || !speech) return;
     const displayName = this.getActorDialogueName(actor);
     const knownByNpcIds = this.npcWorldModelBuilder.getNpcListenerIds(scene, actor.name);
-    this.console.log(`${displayName}: ${speech}`, 'dialogue');
+    // Dialogue is local to a scene. Autonomous NPCs can speak in cached
+    // offscreen scenes, but their lines must not appear in the player's
+    // console until an explicit cross-scene communication mechanic exists.
+    if (scene === this.sceneManager.currentScene) {
+      this.console.log(`${displayName}: ${speech}`, 'dialogue');
+    }
     scene.sceneLog.appendSpeech({
       actorId: actor.name,
       displayName,
@@ -688,8 +649,17 @@ export class Game implements IGame {
       knownByNpcIds,
     });
     if (options.triggerPuppetMaster && knownByNpcIds.length) {
-      await this.npcPuppetMaster.scheduleScene(scene);
+      await this.npcPuppetMaster.scheduleScene(scene, { resetRateBudget: false });
     }
+  }
+
+  recordNpcExitTransition(args: {
+    npcId: string;
+    sourceSceneId: string;
+    destinationSceneId: string;
+    exitId: string;
+  }): void {
+    this.npcPuppetMaster?.recordExitTransition(args);
   }
 
   emitActorAction(
@@ -698,7 +668,7 @@ export class Game implements IGame {
     subject?: SceneObject | null,
     payload: Record<string, unknown> = {}
   ): void {
-    const scene = this.sceneManager.currentScene;
+    const scene = this.getActorScene(actor);
     if (!scene) return;
     const observers = this.actorWorld.getActionObservers(actor, subject);
     if (!observers.length) return;
@@ -720,6 +690,27 @@ export class Game implements IGame {
     }
   }
 
+  /**
+   * Schedules a currently enabled NPC to react to a semantic event that is
+   * intentionally not a global PM wake trigger (for example, receiving an item).
+   */
+  wakeNpc(actor: Actor, reason?: string): void {
+    const scene = this.getActorScene(actor);
+    if (!scene || !this.npcWorldModelBuilder.getNpcActors(scene).includes(actor)) return;
+    this.npcPuppetMaster.scheduleNpc(scene, actor.name, { type: 'manual', reason });
+  }
+
+  private getActorScene(actor: Actor): ReturnType<typeof this.sceneManager.scenes.get> | null {
+    if (actor.scene) return actor.scene;
+    const current = this.sceneManager.currentScene;
+    if (current?.getObjectByName(actor.name) === actor) return current;
+    return (
+      Array.from(this.sceneManager.scenes.values()).find(
+        (scene) => scene.getObjectByName(actor.name) === actor
+      ) || null
+    );
+  }
+
   private formatObservedActorAction(
     actorTitle: string,
     action: import('./IGame').ObservedActorActionCode,
@@ -738,6 +729,7 @@ export class Game implements IGame {
       ? this.textAssets.getResolvedObjectField(subject as any, 'title')?.trim() || subject.name
       : '';
     const relation = typeof payload.relation === 'string' ? payload.relation.trim() : '';
+    const reason = typeof payload.reason === 'string' ? payload.reason.trim() : '';
     const item = titleFor(payload.itemId);
     const target = titleFor(payload.targetId, subjectTitle);
     const command =
@@ -753,17 +745,22 @@ export class Game implements IGame {
       item: item || subjectTitle || 'something',
       target: target || subjectTitle || 'something',
       relation,
+      reason: reason || 'the transfer cannot be completed',
     };
     const key =
       (action === 'look' || action === 'examine') && relation
         ? 'engine.observed_look_relation'
-        : action === 'put' && relation && target
-          ? 'engine.observed_put_relation'
-          : action === 'put' && target
-            ? 'engine.observed_put_target'
-            : action === 'put'
-              ? 'engine.observed_drop'
-              : `engine.observed_${action}`;
+        : action === 'left_immediate_area'
+          ? 'engine.observed_left_immediate_area'
+          : action === 'give_failed'
+            ? 'engine.observed_give_failed'
+            : action === 'put' && relation && target
+              ? 'engine.observed_put_relation'
+              : action === 'put' && target
+                ? 'engine.observed_put_target'
+                : action === 'put'
+                  ? 'engine.observed_drop'
+                  : `engine.observed_${action}`;
     const fallback = `[ ${actorTitle} acts. ]`;
     return this.textAssets.getServiceText(key, params, fallback);
   }
@@ -988,9 +985,18 @@ export class Game implements IGame {
 
   takeEntityForActor(
     actor: import('../entities/Actor').Actor | null,
-    entity: Entity
+    entity: Entity,
+    options?: { emitAction?: boolean }
   ): GameActionOutcome {
-    return this.semantic.takeEntityForActor(actor, entity);
+    return this.semantic.takeEntityForActor(actor, entity, options);
+  }
+
+  giveEntityForActor(
+    actor: import('../entities/Actor').Actor | null,
+    entity: Entity,
+    targetActor: import('../entities/Actor').Actor
+  ): GameActionOutcome {
+    return this.semantic.giveEntityForActor(actor, entity, targetActor);
   }
 
   canTakeEntity(entity: Entity): GameActionOutcome | null {
@@ -1125,15 +1131,40 @@ export class Game implements IGame {
   }
 
   resize(width: number, height: number): void {
+    const changed = this.rendererCanvas.width !== width || this.rendererCanvas.height !== height;
     this.rendererCanvas.width = width;
     this.rendererCanvas.height = height;
+    if (changed) this.virtualScreen?.clearPersistence();
+  }
+
+  setScreenProfile(profile: ScreenProfile): void {
+    const normalized = normalizeProfile(profile, this.settings.screenProfile, QUEST_SCREEN_MODES);
+    if (!normalized) return;
+
+    this.settings.screenProfile = normalized;
+    const mode = getQuestScreenMode(normalized.virtualScreen.modeId);
+    const width = mode.width ?? GAME_DESIGN_WIDTH;
+    const height = mode.height ?? GAME_DESIGN_HEIGHT;
+    setGameDesignResolution(width, height);
+
+    if (this.bufferCanvas.width !== width || this.bufferCanvas.height !== height) {
+      this.bufferCanvas.width = width;
+      this.bufferCanvas.height = height;
+      this.ctx = this.bufferCanvas.getContext('2d');
+      if (this.ctx) this.ctx.imageSmoothingEnabled = false;
+    }
+    this.virtualScreen?.clearPersistence();
   }
 
   saveSettings(): void {
+    this.persistSettings(true);
+  }
+
+  private persistSettings(showNotification: boolean): void {
     try {
       const json = JSON.stringify(this.settings);
       localStorage.setItem('quest_settings', json);
-      this.showNotification('Settings Saved!');
+      if (showNotification) this.showNotification('Settings Saved!');
     } catch (e) {
       console.error('Failed to save settings:', e);
     }
@@ -1142,63 +1173,11 @@ export class Game implements IGame {
   loadSettings(): void {
     try {
       const json = localStorage.getItem('quest_settings');
-      const coerceNumber = (value: unknown, fallback: number) => {
-        if (typeof value === 'number' && Number.isFinite(value)) return value;
-        if (typeof value === 'string') {
-          const n = Number.parseFloat(value);
-          return Number.isFinite(n) ? n : fallback;
-        }
-        return fallback;
-      };
-
-      if (json) {
-        const loaded = JSON.parse(json);
-        const loadedCrt = loaded?.crt ?? loaded?.settings?.crt ?? loaded?.graphics?.crt;
-        const loadedEditor = loaded?.editor ?? loaded?.settings?.editor;
-        const loadedAudio = loaded?.audio ?? loaded?.settings?.audio;
-
-        if (loadedCrt) {
-          this.settings.crt = {
-            ...this.settings.crt,
-            ...loadedCrt,
-            curvature: coerceNumber(loadedCrt.curvature, this.settings.crt.curvature),
-            scanlineCount: coerceNumber(loadedCrt.scanlineCount, this.settings.crt.scanlineCount),
-            scanlineIntensity: coerceNumber(
-              loadedCrt.scanlineIntensity,
-              this.settings.crt.scanlineIntensity
-            ),
-            aberration: coerceNumber(loadedCrt.aberration, this.settings.crt.aberration),
-            vignette: coerceNumber(loadedCrt.vignette, this.settings.crt.vignette),
-            phosphor: coerceNumber(loadedCrt.phosphor, this.settings.crt.phosphor),
-            bloom: coerceNumber(loadedCrt.bloom, this.settings.crt.bloom),
-            enabled:
-              typeof loadedCrt.enabled === 'boolean'
-                ? loadedCrt.enabled
-                : this.settings.crt.enabled,
-            bezelGlow:
-              typeof loadedCrt.bezelGlow === 'boolean'
-                ? loadedCrt.bezelGlow
-                : this.settings.crt.bezelGlow,
-          };
-        }
-
-        if (loadedEditor) {
-          this.settings.editor = { ...this.settings.editor, ...loadedEditor };
-        }
-
-        if (loadedAudio) {
-          this.settings.audio = {
-            ...this.settings.audio,
-            attachedVolume: Math.max(
-              0,
-              Math.min(
-                10,
-                coerceNumber(loadedAudio.attachedVolume, this.settings.audio.attachedVolume)
-              )
-            ),
-          };
-        }
-      }
+      const loaded = json ? JSON.parse(json) : null;
+      const result = loadQuestSettings(loaded, createDefaultQuestSettings());
+      this.settings = result.settings;
+      this.setScreenProfile(this.settings.screenProfile);
+      if (result.shouldPersist) this.persistSettings(false);
     } catch (e) {
       console.error('Failed to load settings:', e);
     }

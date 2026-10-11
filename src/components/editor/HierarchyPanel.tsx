@@ -4,6 +4,7 @@ import { useGame } from '../../hooks/useGame';
 import { Select } from '../../components/common/Select';
 import { EditorToolbar } from './EditorToolbar';
 import { Entity } from '../../entities/Entity';
+import { FilterInput } from '../common/FilterInput';
 
 export const HierarchyPanel: React.FC = () => {
   const game = useGame();
@@ -67,24 +68,98 @@ export const HierarchyPanel: React.FC = () => {
     [filterMode, filterNeedle]
   );
 
-  const filteredEntities = [...(scene?.entities || []), ...(scene?.folders || [])].filter(
-    (item: any) => matchesFilter(item)
-  );
-  const filteredWalkboxes = [...(scene?.walkbox || [])].filter((item: any) => matchesFilter(item));
-  const filteredTriggers = [...(scene?.triggerboxes || [])].filter((item: any) =>
-    matchesFilter(item)
-  );
+  const allObjects = React.useMemo(() => {
+    void hierarchyVersion;
+    const allEntities = [...(scene?.entities || []), ...(scene?.folders || [])];
+    const allWalkboxes = [...(scene?.walkbox || [])];
+    const allTriggers = [...(scene?.triggerboxes || [])];
+    return [...allEntities, ...allWalkboxes, ...allTriggers];
+  }, [scene?.entities, scene?.folders, scene?.walkbox, scene?.triggerboxes, hierarchyVersion]);
+
+  const keepSet = React.useMemo(() => {
+    if (!filterNeedle) return null;
+
+    const objectByName = new Map(allObjects.map((item: any) => [item.name, item]));
+    const folderIdToName = new Map<string, string>();
+    allObjects.forEach((item: any) => {
+      if (item.type === 'Folder' && item.folderId) {
+        folderIdToName.set(item.folderId, item.name);
+      }
+    });
+
+    const childrenByParent = new Map<string, any[]>();
+    const parentByName = new Map<string, string>();
+
+    allObjects.forEach((item: any) => {
+      const fid = typeof item?.folder === 'string' ? item.folder : '';
+      const folderParentName = fid ? folderIdToName.get(fid) || '' : '';
+      if (
+        folderParentName &&
+        folderParentName !== item.name &&
+        objectByName.has(folderParentName)
+      ) {
+        const children = childrenByParent.get(folderParentName) || [];
+        children.push(item);
+        childrenByParent.set(folderParentName, children);
+        parentByName.set(item.name, folderParentName);
+        return;
+      }
+      const parentId =
+        typeof item?.spatial?.parentNodeId === 'string' ? item.spatial.parentNodeId.trim() : '';
+      if (parentId && parentId !== item.name && objectByName.has(parentId)) {
+        const children = childrenByParent.get(parentId) || [];
+        children.push(item);
+        childrenByParent.set(parentId, children);
+        parentByName.set(item.name, parentId);
+      }
+    });
+
+    const keep = new Set<string>();
+
+    const addDescendants = (name: string) => {
+      if (keep.has(name)) return;
+      keep.add(name);
+      const kids = childrenByParent.get(name) || [];
+      kids.forEach((k) => addDescendants(k.name));
+    };
+
+    const addAncestors = (name: string) => {
+      if (keep.has(name)) return;
+      keep.add(name);
+      const p = parentByName.get(name);
+      if (p) addAncestors(p);
+    };
+
+    allObjects.forEach((item) => {
+      if (matchesFilter(item)) {
+        keep.add(item.name);
+
+        const kids = childrenByParent.get(item.name) || [];
+        kids.forEach((k) => addDescendants(k.name));
+
+        const p = parentByName.get(item.name);
+        if (p) addAncestors(p);
+      }
+    });
+
+    return keep;
+  }, [allObjects, filterNeedle, matchesFilter]);
+
   const filteredObjects = React.useMemo(() => {
-    const all = [...filteredEntities, ...filteredWalkboxes, ...filteredTriggers];
+    let list = allObjects;
+    if (keepSet) {
+      list = allObjects.filter((item: any) => keepSet.has(item.name));
+    }
     const order = scene?.displayOrder || [];
-    if (order.length === 0) return all;
+    if (order.length === 0) return list;
     const orderIndex = new Map(order.map((n, i) => [n, i]));
-    return [...all].sort((a: any, b: any) => {
+    return [...list].sort((a: any, b: any) => {
       const ai = orderIndex.get(a.name) ?? Number.MAX_SAFE_INTEGER;
       const bi = orderIndex.get(b.name) ?? Number.MAX_SAFE_INTEGER;
       return ai - bi;
     });
-  }, [filteredEntities, filteredWalkboxes, filteredTriggers, scene?.displayOrder]);
+  }, [allObjects, keepSet, scene?.displayOrder]);
+
   const filteredObjectOrder = React.useMemo(
     () => new Map(filteredObjects.map((item: any, index: number) => [item.name, index])),
     [filteredObjects]
@@ -321,6 +396,7 @@ export const HierarchyPanel: React.FC = () => {
     if (item && typeof item === 'object') {
       if (item.type === 'Folder') return `Folder:${item.name}`;
       if (item.type === 'Quad') return `Quad:${item.name}`;
+      if (item.type === 'Box3D') return `Box3D:${item.name}`;
       if (item.type === 'Walkbox') return `Walkbox:${item.name || 'Walkbox'}`;
       if (item.type === 'Triggerbox') return `Triggerbox:${item.name || 'Triggerbox'}`;
       if (item.type === 'Actor') return `Actor:${item.name}`;
@@ -423,7 +499,7 @@ export const HierarchyPanel: React.FC = () => {
 
     scene.camera.x = targetX;
     scene.camera.y = targetY;
-    scene.autoCenter = false; // Disable auto-follow
+    scene.suspendEditorCameraFollow?.();
     useEditorStore.getState().incrementObjectVersion();
   };
 
@@ -928,7 +1004,7 @@ export const HierarchyPanel: React.FC = () => {
                 lineHeight: 1,
               }}
             >
-              {anyExpanded ? '▶' : '▼'}
+              {anyExpanded ? '▼' : '▶'}
             </button>
           </div>
           <Select
@@ -937,6 +1013,7 @@ export const HierarchyPanel: React.FC = () => {
               { value: 'Static', label: 'Static (S)' },
               { value: 'Actor', label: 'Actor (A)' },
               { value: 'Quad', label: 'Quad (Q)' },
+              { value: 'Box3D', label: '3D Box' },
               { value: 'Walkbox', label: 'Walkbox (W)' },
               { value: 'Triggerbox', label: 'Triggerbox (T)' },
             ]}
@@ -954,43 +1031,16 @@ export const HierarchyPanel: React.FC = () => {
         <div style={{ marginBottom: 0 }}>
           <EditorToolbar />
 
-          <div style={{ marginTop: '5px', position: 'relative' }}>
-            <input
-              type="text"
-              ref={filterInputRef}
-              id="hierarchy-filter-input"
-              className="e-input"
-              value={filterText}
-              placeholder='Filter by ID or "#group"'
-              onChange={(e) => setFilterText(e.target.value)}
-              style={{
-                width: '100%',
-                paddingRight: filterText ? '28px' : undefined,
-              }}
-            />
-            {filterText && (
-              <button
-                className="toolbar-icon-btn"
-                type="button"
-                title="Clear filter"
-                onClick={() => setFilterText('')}
-                style={{
-                  position: 'absolute',
-                  right: '2px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  width: '22px',
-                  height: '22px',
-                  padding: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                x
-              </button>
-            )}
-          </div>
+          <FilterInput
+            ref={filterInputRef}
+            id="hierarchy-filter-input"
+            value={filterText}
+            placeholder='Filter by ID or "#group"'
+            title="Hotkey: /"
+            onChange={(e) => setFilterText(e.target.value)}
+            onClear={() => setFilterText('')}
+            containerStyle={{ marginTop: '5px' }}
+          />
         </div>
       </div>
 
@@ -1072,8 +1122,9 @@ export const HierarchyPanel: React.FC = () => {
                   : item.type === 'Triggerbox'
                     ? '⚡'
                     : '📦';
-          const label =
-            item.type === 'Walkbox'
+          const label = Number.isInteger((item as any).box3dFaceIndex)
+            ? `Face ${(item as any).box3dFaceIndex}`
+            : item.type === 'Walkbox'
               ? item.name || `Walkbox ${i}`
               : item.type === 'Triggerbox'
                 ? item.name || `Trigger ${i}`

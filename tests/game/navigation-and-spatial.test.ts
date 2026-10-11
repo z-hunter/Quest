@@ -13,6 +13,7 @@ describe('Game navigation and spatial API', () => {
     const actor = fixture.addPlayer('Hero', 0, 100);
     actor.width = 40;
     actor.height = 100;
+    actor.colliderWidth = 40;
     const headLevelTarget = fixture.addEntity('head_level_target', {
       title: 'Head-level target',
     });
@@ -198,7 +199,7 @@ describe('Game navigation and spatial API', () => {
     expect(fixture.game.actorNavigation.planApproach(actor, target).status).toBe('route_available');
   });
 
-  it('does not advertise a route when no walkable interaction point exists near the target', () => {
+  it('keeps fast approach status pathfinder-free for a target with no known route', () => {
     const fixture = createGameSemanticFixture();
     const actor = fixture.addPlayer('Hero', 0, 50);
     actor.colliderWidth = 8;
@@ -218,7 +219,14 @@ describe('Game navigation and spatial API', () => {
     target.x = 1000;
     target.y = 50;
 
-    expect(fixture.game.actorNavigation.getFastApproachStatus(actor, target)).toBe('unreachable');
+    const previewRoute = vi.spyOn(actor, 'previewWalkingRouteTo');
+    const planApproach = vi.spyOn(fixture.game.actorNavigation, 'planApproach');
+
+    expect(fixture.game.actorNavigation.getFastApproachStatus(actor, target)).toBe(
+      'route_available'
+    );
+    expect(previewRoute).not.toHaveBeenCalled();
+    expect(planApproach).not.toHaveBeenCalled();
     expect(fixture.game.actorNavigation.planApproach(actor, target).status).toBe('unreachable');
   });
 
@@ -561,7 +569,7 @@ describe('Game navigation and spatial API', () => {
     );
   });
 
-  it('switchTo hydrates surface item placements into entity scene state', () => {
+  it('switchTo keeps the entity transform and ignores legacy surface coordinates', () => {
     const fixture = createGameSemanticFixture('start');
     const target = fixture.addScene('gallery', 'Gallery', 'You are in Gallery.');
 
@@ -602,10 +610,44 @@ describe('Game navigation and spatial API', () => {
 
     expect(fixture.game.getSurfaceEntities(table, 'on')).toContain(coin);
     expect(coin.visible).toBe(true);
-    expect(coin.x).toBe(42);
-    expect(coin.y).toBe(24);
+    expect(coin.x).toBe(999);
+    expect(coin.y).toBe(999);
     expect(coin.layer).toBe(5);
     expect((coin as any).spatial).toEqual({ parentNodeId: 'table', relation: 'on' });
+    expect(table.toJSON().components).toEqual([
+      { type: 'Surface', relation: 'on', capacity: 2, groups: [], items: [{ id: 'coin' }] },
+    ]);
+  });
+
+  it('places items inside Quad vertices and clears stale surface parallax', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const floor = new QuadObject(fixture.game as any, 'floor');
+    floor.x = 1000;
+    floor.y = 1000;
+    floor.vertices = [
+      { x: 0, y: 0, p: 1 },
+      { x: 100, y: 0, p: 1 },
+      { x: 100, y: 100, p: 1 },
+      { x: 0, y: 100, p: 1 },
+    ];
+    floor.components = [{ type: 'Surface', relation: 'on', capacity: 2, groups: [], items: [] }];
+    fixture.scene.addEntity(floor);
+
+    const item = fixture.addEntity('coin', { components: [{ type: 'Item' }] });
+    item.parallax = 0.5;
+    (item as any).__surfaceParallaxBinding = { quadName: 'old-floor' };
+
+    const outcome = fixture.game.addEntityToSurface(floor, item);
+    fixture.scene.finishDropAnimation(item);
+
+    expect(outcome.status).toBe('ok');
+    expect(item.x).toBeGreaterThanOrEqual(0);
+    expect(item.x).toBeLessThanOrEqual(100);
+    expect(item.y).toBeGreaterThanOrEqual(0);
+    expect(item.y).toBeLessThanOrEqual(100);
+    expect(item.parallax).toBe(1);
+    expect((item as any).__surfaceParallaxBinding).toBeUndefined();
   });
 
   it('transfers a player actor with inventory and nested spatial descendants to the target scene', () => {
@@ -621,6 +663,8 @@ describe('Game navigation and spatial API', () => {
     staleCassette.spatial = { parentNodeId: stalePlayer.name, relation: 'in' };
     target.addEntity(staleCassette);
     fixture.game.inventoryManager.addInventoryEntity(stalePlayer, staleCassette, 'in');
+    expect(staleCassette.getInventoryPositionOwner()).toBe(stalePlayer);
+    expect(fixture.game.inventory).not.toContain(staleCassette);
 
     const cassette = fixture.addEntity('cassette', {
       title: 'Cassette',
@@ -783,8 +827,21 @@ describe('Game navigation and spatial API', () => {
 
     expect(target.entities).toContain(npc);
     expect(target.entities).toContain(badge);
+    expect(fixture.scene.entities).not.toContain(npc);
+    expect(fixture.scene.entities).not.toContain(badge);
+    expect(npc.scene).toBe(target);
     expect(target.player).not.toBe(npc);
     expect(fixture.scene.player).toBe(player);
+
+    // The player remains in `start`, but the NPC must still be transferred
+    // from its actual offscreen scene rather than from `currentScene`.
+    fixture.game.sceneManager.transferActorToScene(npc, fixture.scene.id);
+
+    expect(fixture.scene.entities).toContain(npc);
+    expect(fixture.scene.entities).toContain(badge);
+    expect(target.entities).not.toContain(npc);
+    expect(target.entities).not.toContain(badge);
+    expect(npc.scene).toBe(fixture.scene);
   });
 
   it('switchTo hydrates untitled nested surface extensions and projects them through the titled anchor', () => {
@@ -833,8 +890,8 @@ describe('Game navigation and spatial API', () => {
     fixture.game.sceneManager.switchTo(target.id);
 
     expect(fixture.game.getSurfaceEntities(hiddenShelf, 'on')).toContain(note);
-    expect(note.x).toBe(11);
-    expect(note.y).toBe(12);
+    expect(note.x).toBe(400);
+    expect(note.y).toBe(400);
     expect((note as any).spatial).toEqual({ parentNodeId: 'hidden_shelf', relation: 'on' });
 
     const outcome = fixture.game.describeSpatialRelation('desk', 'behind');
@@ -1081,7 +1138,9 @@ describe('Game navigation and spatial API', () => {
     target.x = 200;
     target.y = 50;
     target.interactionDistance = 100;
-    vi.spyOn(actor, 'previewRouteTo').mockImplementation((x, y) => (x <= 190 ? [{ x, y }] : null));
+    vi.spyOn(actor, 'previewWalkingRouteTo').mockImplementation((x, y) =>
+      x <= 190 ? [{ x, y }] : null
+    );
 
     expect(fixture.game.actorNavigation.getFastApproachStatus(actor, target)).toBe(
       'route_available'

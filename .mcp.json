@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "xerj": {
+      "command": "C:/Users/Professional/AppData/Local/Programs/xerj/xerj.exe",
+      "args": ["mcp", "--url", "http://127.0.0.1:9200", "--disable-feedback"],
+      "env": {
+        "XERJ_DISABLE_FEEDBACK": "true"
+      }
+    }
+  }
+}

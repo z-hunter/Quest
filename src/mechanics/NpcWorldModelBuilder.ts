@@ -6,6 +6,8 @@ import type { Scene } from '../scene/Scene';
 import type { SceneLogEntry } from '../scene/SceneLog';
 import { ComponentSystem, type NpcKnownEntityMemory } from '../systems/ComponentSystem';
 import type { NpcActorContext, NpcStaticEntityContext, NpcWorldModel } from './npcTypes';
+import { normalizeNpcMemory, normalizeNpcObjectives, type NpcObjective } from './npcState';
+import { compactRecord } from './compactRecord';
 
 type NpcContextTrace = {
   npcId: string;
@@ -22,26 +24,6 @@ type NpcContextTrace = {
   unreachableEntities: string[];
   actors: string[];
 };
-
-function compactRecord<T extends Record<string, unknown>>(value: T): T {
-  const result: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (entry === null || entry === undefined) continue;
-    if (Array.isArray(entry)) {
-      if (!entry.length) continue;
-      result[key] = entry;
-      continue;
-    }
-    if (typeof entry === 'object') {
-      const nested = compactRecord(entry as Record<string, unknown>);
-      if (!Object.keys(nested).length) continue;
-      result[key] = nested;
-      continue;
-    }
-    result[key] = entry;
-  }
-  return result as T;
-}
 
 export class NpcWorldModelBuilder {
   private readonly game: IGame;
@@ -89,7 +71,7 @@ export class NpcWorldModelBuilder {
           !title ||
           !this.shouldIncludeVisibleEntity(object) ||
           this.isItem(object) ||
-          this.isInsideProtectedInventory(object)
+          this.isInsideProtectedInventory(scene, object)
         )
           return null;
         const description = this.game.textAssets.getResolvedObjectField(object, 'description');
@@ -141,7 +123,7 @@ export class NpcWorldModelBuilder {
       .sort((a, b) => a.id.localeCompare(b.id));
   }
 
-  private isInsideProtectedInventory(object: SceneObject): boolean {
+  private isInsideProtectedInventory(scene: Scene, object: SceneObject): boolean {
     if (!(object instanceof Entity)) return false;
     const directOwner = object.getInventoryPositionOwner();
     if (directOwner) {
@@ -150,7 +132,6 @@ export class NpcWorldModelBuilder {
       );
     }
 
-    const scene = this.game.sceneManager.currentScene;
     const parentId =
       typeof object.spatial?.parentNodeId === 'string' ? object.spatial.parentNodeId.trim() : '';
     const parent = parentId ? scene?.getObjectByName(parentId) : null;
@@ -166,7 +147,11 @@ export class NpcWorldModelBuilder {
   getNpcListenerIds(scene: Scene, actorId?: string | null): string[] {
     const source = actorId ? scene.getObjectByName(actorId) : null;
     if (source instanceof Actor) {
-      return this.game.actorWorld.getActorListeners(source).map((npc) => npc.name);
+      // Speech is scene-local by default. Future radio-like mechanics can
+      // extend this explicitly instead of accidentally leaking dialogue
+      // through a stale scene reference.
+      if (source.scene !== scene || !scene.entities.includes(source)) return [];
+      return this.game.actorWorld.getActorListeners(source, scene).map((npc) => npc.name);
     }
     return this.getNpcActors(scene).map((npc) => npc.name);
   }
@@ -174,9 +159,13 @@ export class NpcWorldModelBuilder {
   private buildNpcContext(scene: Scene, npc: Actor): NpcActorContext {
     const startedAt = this.now();
     const component = ComponentSystem.getNpcComponent(npc);
-    const title = this.getObjectTitle(npc) || npc.name;
+    const title = this.getObjectTitle(npc) || undefined;
     const objectives = this.getOrInitializeNpcObjectives(npc, component);
-    const newEvents = scene.sceneLog.getUnreadEntries(npc.name);
+    const memory = this.getOrInitializeNpcMemory(npc, component);
+    const transientMemory = normalizeNpcMemory(component?.transientMemory);
+    const newEvents = scene.sceneLog
+      .getUnreadEntries(npc.name)
+      .filter((event) => this.isSemanticallyVisibleEvent(scene, event));
     const newEventIds = new Set(newEvents.map((entry) => entry.id));
     const recentEvents = scene.sceneLog.entries
       .filter(
@@ -184,39 +173,45 @@ export class NpcWorldModelBuilder {
           !newEventIds.has(entry.id) &&
           (entry.actorId === npc.name || entry.knownByActorIds.includes(npc.name))
       )
+      .filter((event) => this.isSemanticallyVisibleEvent(scene, event))
       .slice(-12);
 
-    const actors = scene.entities
+    const actors: NpcActorContext['actors'] = scene.entities
       .filter(
         (entity): entity is Actor =>
           entity instanceof Actor &&
           !entity.disabled &&
           (entity === npc ||
-            this.game.actorWorld.getObjectPerception(npc, entity, true).visibility === 'visible')
+            this.game.actorWorld.getObjectPerception(npc, entity, true, scene).visibility ===
+              'visible')
       )
-      .map((actor) => ({
-        id: actor.name,
-        title: this.getObjectTitle(actor) || actor.name,
-        lastSeenSceneId: undefined, // Default is current scene
-      }));
+      .map((actor) =>
+        compactRecord({
+          id: actor.name,
+          title: this.getObjectTitle(actor) || undefined,
+          lastSeenSceneId: undefined, // Default is current scene
+        })
+      );
     this.trace('pm_context_actor_perception', {
       npcId: npc.name,
       actors: actors.map((actor) => actor.id),
     });
 
-    const entityBuild = this.buildKnownEntities(npc);
+    const entityBuild = this.buildKnownEntities(scene, npc);
     this.rememberObservedEntities(scene, npc, actors, entityBuild.observedObjects);
     this.rememberObservedActionLocations(scene, npc);
     const mutableComponent = npc.components?.find(
       (candidate: any) => candidate?.type === 'NPC'
     ) as typeof component;
-    const knownEntities = Object.values(mutableComponent?.knownEntities || {}).map((entry) => ({
-      id: entry.id,
-      title: entry.title,
-      kind: entry.kind,
-      lastSeenSceneId: entry.lastSeenSceneId === scene.id ? undefined : entry.lastSeenSceneId,
-      lastSeenLocation: entry.lastSeenLocation,
-    }));
+    const knownEntities = Object.values(mutableComponent?.knownEntities || {})
+      .filter((entry) => this.isSemanticallyVisibleKnownEntity(entry))
+      .map((entry) => ({
+        id: entry.id,
+        title: entry.title,
+        kind: entry.kind,
+        lastSeenSceneId: entry.lastSeenSceneId === scene.id ? undefined : entry.lastSeenSceneId,
+        lastSeenLocation: entry.lastSeenLocation,
+      }));
     this.trace('pm_context_entity_summary', {
       ...entityBuild.trace,
       durationMs: this.elapsedMs(startedAt),
@@ -227,8 +222,11 @@ export class NpcWorldModelBuilder {
       title,
       lore: this.game.textAssets.getResolvedObjectField(npc, 'lore') || undefined,
       objectives,
-      memory: component?.memory || undefined,
-      inventory: this.game.actorWorld.getInventoryKnowledge(npc),
+      memory: memory.length ? memory : undefined,
+      transientMemory: transientMemory.length ? transientMemory : undefined,
+      // NPCs can act in cached, non-player scenes. Keep inventory resolution
+      // bound to the scene whose PM context we are building.
+      inventory: this.game.actorWorld.getInventoryKnowledge(npc, scene),
       actors,
       visibleItemIds: entityBuild.observedObjects
         .filter((object) => object instanceof Entity && this.isItem(object))
@@ -240,12 +238,15 @@ export class NpcWorldModelBuilder {
     });
   }
 
-  private buildKnownEntities(npc: Actor): {
+  private buildKnownEntities(
+    scene: Scene,
+    npc: Actor
+  ): {
     entities: NpcActorContext['entities'];
     observedObjects: SceneObject[];
     trace: NpcContextTrace;
   } {
-    const knownObjects = this.game.actorWorld.getKnownObjects(npc);
+    const knownObjects = this.game.actorWorld.getKnownObjects(npc, scene);
     const trace: NpcContextTrace = {
       npcId: npc.name,
       durationMs: 0,
@@ -272,13 +273,13 @@ export class NpcWorldModelBuilder {
           trace.skippedTechnical++;
           return null;
         }
-        const perception = this.game.actorWorld.getObjectPerception(npc, object, true);
+        const perception = this.game.actorWorld.getObjectPerception(npc, object, true, scene);
         trace.interactions[perception.interaction] =
           (trace.interactions[perception.interaction] || 0) + 1;
         trace.approaches[perception.approach] = (trace.approaches[perception.approach] || 0) + 1;
         if (perception.interaction === 'blocked') trace.blockedEntities.push(object.name);
         if (perception.approach === 'unreachable') trace.unreachableEntities.push(object.name);
-        const switchAffordance = this.game.actorWorld.getSwitchAffordance(npc, object);
+        const switchAffordance = this.game.actorWorld.getSwitchAffordance(npc, object, scene);
         const commands = this.game.actorCommands.getAffordancesForEntity(object, npc);
         if (switchAffordance) trace.switchEntities.push(object.name);
         if (commands.length) {
@@ -314,17 +315,26 @@ export class NpcWorldModelBuilder {
             value: ComponentSystem.getStateValue(object, component.id) ?? component.initialValue,
           })),
           commands,
-          exit: this.getExitContext(this.game.sceneManager.currentScene!, object),
+          exit: this.getExitContext(scene, object),
         });
       })
       .filter((entry): entry is NonNullable<typeof entry> => !!entry);
-    return { entities, observedObjects: knownObjects, trace };
+    return {
+      entities,
+      observedObjects: knownObjects.filter(
+        (object) =>
+          !!this.getObjectTitle(object) &&
+          this.shouldIncludeVisibleEntity(object) &&
+          !ComponentSystem.isNavigationOnlyExit(object)
+      ),
+      trace,
+    };
   }
 
   private rememberObservedEntities(
     scene: Scene,
     npc: Actor,
-    actors: Array<{ id: string; title: string }>,
+    actors: Array<{ id: string; title?: string }>,
     objects: SceneObject[]
   ): void {
     const component = npc.components?.find(
@@ -338,6 +348,7 @@ export class NpcWorldModelBuilder {
     );
     const lastSeenAt = Date.now();
     for (const actor of actors) {
+      if (!actor.title) continue;
       const actorObject = scene.getObjectByName(actor.id);
       known[actor.id] = {
         id: actor.id,
@@ -398,11 +409,13 @@ export class NpcWorldModelBuilder {
     const payload = event.payload || {};
     const action = typeof payload.action === 'string' ? payload.action : '';
     const itemId = typeof payload.itemId === 'string' ? payload.itemId.trim() : '';
-    if (!itemId || (action !== 'take' && action !== 'put')) return;
+    if (!itemId || (action !== 'take' && action !== 'put' && action !== 'give')) return;
 
     const item = scene.getObjectByName(itemId);
+    if (!item || !this.getObjectTitle(item)) return;
     const existing = known[itemId];
-    const title = (item ? this.getObjectTitle(item) : '') || existing?.title || itemId;
+    const title = this.getObjectTitle(item) || existing?.title;
+    if (!title) return;
     const lastSeenAt = event.timestamp || Date.now();
 
     if (action === 'take') {
@@ -420,6 +433,27 @@ export class NpcWorldModelBuilder {
           relation: 'in',
           targetId: event.actorId,
           ...(actorTitle ? { targetTitle: actorTitle } : {}),
+        },
+      };
+      return;
+    }
+
+    if (action === 'give') {
+      const targetId = typeof payload.targetId === 'string' ? payload.targetId.trim() : '';
+      if (!targetId) return;
+      const target = scene.getObjectByName(targetId);
+      const targetTitle = (target ? this.getObjectTitle(target) : '') || targetId;
+      known[itemId] = {
+        id: itemId,
+        title,
+        kind: 'item',
+        lastSeenSceneId: scene.id,
+        lastSeenAt,
+        lastSeenLocation: {
+          sceneId: scene.id,
+          relation: 'in',
+          targetId,
+          ...(targetTitle ? { targetTitle } : {}),
         },
       };
       return;
@@ -472,7 +506,7 @@ export class NpcWorldModelBuilder {
         lastSeenLocation: NpcKnownEntityMemory['lastSeenLocation'];
       }
     | Record<string, never> {
-    const location = this.game.actorWorld.getObjectPerception(npc, object, true).location;
+    const location = this.game.actorWorld.getObjectPerception(npc, object, true, scene).location;
     if (!location) return {};
     return {
       lastSeenLocation: {
@@ -514,23 +548,37 @@ export class NpcWorldModelBuilder {
   private getOrInitializeNpcObjectives(
     npc: Actor,
     component: ReturnType<typeof ComponentSystem.getNpcComponent>
-  ): string[] {
-    if (component?.objectives && component.objectives.length > 0) {
-      return component.objectives;
-    }
-
-    const initialObjectives = this.game.textAssets.getResolvedObjectListField(npc, 'objectives');
-    const taRevision = this.game.textAssets.getResolvedObjectListRevision(npc, 'objectives');
+  ): NpcObjective[] {
+    const textAssets = this.game.textAssets as any;
+    const initialObjectives: NpcObjective[] =
+      typeof textAssets.getResolvedNpcObjectives === 'function'
+        ? textAssets.getResolvedNpcObjectives(npc)
+        : normalizeNpcObjectives(
+            typeof textAssets.getResolvedObjectListField === 'function'
+              ? textAssets.getResolvedObjectListField(npc, 'objectives')
+              : []
+          );
+    const taRevision =
+      typeof textAssets.getResolvedNpcObjectivesRevision === 'function'
+        ? textAssets.getResolvedNpcObjectivesRevision(npc)
+        : typeof textAssets.getResolvedObjectListRevision === 'function'
+          ? textAssets.getResolvedObjectListRevision(npc, 'objectives')
+          : JSON.stringify(initialObjectives.map((objective) => objective.text));
     const mutableComponent = npc.components?.find((candidate: any) => candidate?.type === 'NPC') as
       | {
           type: 'NPC';
-          objectives?: string[];
+          objectives?: unknown;
           objectivesInitializedFromTA?: boolean;
           objectivesTARevision?: string;
         }
       | undefined;
+    const current = normalizeNpcObjectives(mutableComponent?.objectives ?? component?.objectives);
+    if (current.length > 0) {
+      if (mutableComponent) mutableComponent.objectives = current;
+      return current;
+    }
     if (mutableComponent?.objectivesTARevision === taRevision) {
-      return mutableComponent.objectives || [];
+      return current;
     }
     if (mutableComponent) {
       mutableComponent.objectives = [...initialObjectives];
@@ -540,12 +588,65 @@ export class NpcWorldModelBuilder {
     return initialObjectives;
   }
 
+  private getOrInitializeNpcMemory(
+    npc: Actor,
+    component: ReturnType<typeof ComponentSystem.getNpcComponent>
+  ): string[] {
+    const textAssets = this.game.textAssets as any;
+    const initialMemory =
+      typeof textAssets.getResolvedNpcMemory === 'function'
+        ? textAssets.getResolvedNpcMemory(npc)
+        : [];
+    const taRevision =
+      typeof textAssets.getResolvedNpcMemoryRevision === 'function'
+        ? textAssets.getResolvedNpcMemoryRevision(npc)
+        : JSON.stringify(initialMemory);
+    const mutableComponent = npc.components?.find((candidate: any) => candidate?.type === 'NPC') as
+      | {
+          type: 'NPC';
+          memory?: unknown;
+          memoryInitializedFromTA?: boolean;
+          memoryTARevision?: string;
+        }
+      | undefined;
+    const current = normalizeNpcMemory(mutableComponent?.memory ?? component?.memory);
+    if (current.length > 0) {
+      if (mutableComponent) mutableComponent.memory = current;
+      return current;
+    }
+    if (mutableComponent?.memoryTARevision === taRevision) return current;
+    if (mutableComponent) {
+      mutableComponent.memory = [...initialMemory];
+      mutableComponent.memoryInitializedFromTA = true;
+      mutableComponent.memoryTARevision = taRevision;
+    }
+    return initialMemory;
+  }
+
   private getObjectTitle(object: SceneObject): string | null {
+    if (ComponentSystem.isNavigationOnlyExit(object)) return null;
     const title = this.game.textAssets.getResolvedObjectField(object, 'title')?.trim();
     return title || null;
   }
 
+  private isSemanticallyVisibleEvent(scene: Scene, event: SceneLogEntry): boolean {
+    const itemId = typeof event.payload?.itemId === 'string' ? event.payload.itemId.trim() : '';
+    if (!itemId) return true;
+    const item = scene.getObjectByName(itemId);
+    return !!item && !!this.getObjectTitle(item);
+  }
+
+  private isSemanticallyVisibleKnownEntity(entry: NpcKnownEntityMemory): boolean {
+    if (!entry.title?.trim()) return false;
+    if (entry.kind !== 'item') return true;
+    const object = Array.from(this.game.sceneManager.scenes.values())
+      .map((scene) => scene.getObjectByName(entry.id))
+      .find((candidate) => !!candidate);
+    return !object || !!this.getObjectTitle(object);
+  }
+
   private shouldIncludeVisibleEntity(object: SceneObject): boolean {
+    if (ComponentSystem.isNavigationOnlyExit(object)) return false;
     if (this.hasAuthoredObjectTitle(object)) return true;
     return object.type === 'Walkbox' && ComponentSystem.getSurfaceComponents(object).length > 0;
   }
@@ -563,7 +664,31 @@ export class NpcWorldModelBuilder {
   private trace(stage: string, details: Record<string, unknown>): void {
     const console = (this.game as any).console;
     if (!console?.parserPeekPmEnabled) return;
-    const message = `--- PM CONTEXT TRACE ---\n${stage} ${JSON.stringify(details)}`;
+
+    let body = JSON.stringify(details);
+    if (stage === 'pm_context_actor_perception') {
+      const d = details as any;
+      body = `${d.npcId}: actors [${(d.actors || []).join(', ')}]`;
+    } else if (stage === 'pm_context_entity_summary') {
+      const d = details as any;
+      const cmds = d.commandEntities?.length || 0;
+      const switches = d.switchEntities?.length || 0;
+      const blocked = d.blockedEntities?.length || 0;
+      const timing =
+        d.durationMs !== undefined
+          ? ` | ${typeof d.durationMs === 'number' ? d.durationMs.toFixed(1) : d.durationMs}ms`
+          : '';
+      body = `${d.npcId}: ${d.knownObjects} known, ${d.includedEntities} incl, ${d.skippedUntitled} skipU, ${d.skippedTechnical} skipT. Interactions: ${JSON.stringify(d.interactions || {})}. Approaches: ${JSON.stringify(d.approaches || {})}. Cmds: ${cmds}, Switches: ${switches}, Blocked: ${blocked}${timing}`;
+    } else if (stage === 'pm_context_built') {
+      const d = details as any;
+      const timing =
+        d.durationMs !== undefined
+          ? ` | ${typeof d.durationMs === 'number' ? d.durationMs.toFixed(1) : d.durationMs}ms`
+          : '';
+      body = `${d.sceneId}: ${d.npcCount} NPCs${timing}`;
+    }
+
+    const message = `--- PM CONTEXT TRACE ---\n${stage}: ${body}`;
     if (typeof console.logDebug === 'function') {
       console.logDebug(message);
     } else if (typeof console.log === 'function') {

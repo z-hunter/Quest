@@ -1,5 +1,6 @@
 import { ScriptRegistry } from './ScriptRegistry';
 import { SceneSpatialValidator } from '../scene/SceneSpatialValidator';
+import { ShadowLogger } from '../mechanics/slm/ShadowLogger';
 
 export type ConsoleLineType = 'output' | 'command' | 'error' | 'info' | 'dialogue';
 
@@ -23,6 +24,20 @@ export interface ConsoleState {
   buffer: ConsoleLine[];
   history: string[];
   isOpen: boolean;
+  settings: ConsoleRuntimeSettings;
+}
+
+export interface ConsoleRuntimeSettings {
+  parserPeekEnabled: boolean;
+  parserPeekLlmEnabled: boolean;
+  parserPeekPnEnabled: boolean;
+  parserPeekPmEnabled: boolean;
+  parserPeekNavEnabled: boolean;
+  parserStage1Enabled: boolean;
+  parserStage2Enabled: boolean;
+  parserLlmEnabled: boolean;
+  parserCascade1ForceLlm: boolean;
+  slmLoggingEnabled: boolean;
 }
 
 export class Console {
@@ -33,6 +48,7 @@ export class Console {
   parserPeekLlmEnabled: boolean = false;
   parserPeekPnEnabled: boolean = false;
   parserPeekPmEnabled: boolean = false;
+  parserPeekNavEnabled: boolean = false;
   parserStage1Enabled: boolean = true;
   parserStage2Enabled: boolean = true;
   parserLlmEnabled: boolean = false;
@@ -48,7 +64,7 @@ export class Console {
   readonly CLOSED_CONSOLE_WRAP_COLUMNS = 68;
 
   // Command Registry
-  private commands: Map<string, (args: string[]) => void> = new Map();
+  private commands: Map<string, (args: string[]) => void | Promise<void>> = new Map();
 
   // Listeners
   private listeners: Set<() => void> = new Set();
@@ -69,7 +85,7 @@ export class Console {
     this.listeners.forEach((cb) => cb());
   }
 
-  registerCommand(name: string, callback: (args: string[]) => void): void {
+  registerCommand(name: string, callback: (args: string[]) => void | Promise<void>): void {
     this.commands.set(name.toUpperCase(), callback);
   }
 
@@ -123,7 +139,12 @@ export class Console {
     const handler = this.commands.get(commandName);
     if (handler) {
       try {
-        handler(args);
+        const result = handler(args);
+        if (result && typeof result.catch === 'function') {
+          void result.catch((error) => {
+            this.log(`Error executing '${commandName}': ${String(error)}`, 'error');
+          });
+        }
       } catch (e) {
         this.log(`Error executing '${commandName}': ${e}`, 'error');
       }
@@ -167,6 +188,10 @@ export class Console {
         'info'
       );
       this.log(
+        '*   #PEEKNAV-ON/OFF — Toggles NPC movement and local Exit navigation tracing.',
+        'info'
+      );
+      this.log(
         '*   #STAGE1-ON/OFF — Toggles the Stage 1 Regex processing stage of the text parser.',
         'info'
       );
@@ -188,6 +213,8 @@ export class Console {
         '*   #SLMLOG-ON/OFF — Toggles Shadow Mode logging (training data collection).',
         'info'
       );
+      this.log('*   #SAVE <name> — Saves the current game to saves/<name>.json.', 'info');
+      this.log('*   #LOAD <name> — Loads a saved game from saves/<name>.json.', 'info');
 
       const hardcoded = new Set([
         '#HELP',
@@ -203,6 +230,8 @@ export class Console {
         '#PEEKPN-OFF',
         '#PEEKPM-ON',
         '#PEEKPM-OFF',
+        '#PEEKNAV-ON',
+        '#PEEKNAV-OFF',
         '#STAGE1-ON',
         '#STAGE1-OFF',
         '#STAGE2-ON',
@@ -217,6 +246,8 @@ export class Console {
         '#SLMLOG',
         '#SLMLOG-ON',
         '#SLMLOG-OFF',
+        '#SAVE',
+        '#LOAD',
       ]);
 
       for (const cmd of this.commands.keys()) {
@@ -300,6 +331,18 @@ export class Console {
       this.log('Puppet Master peek disabled.', 'info');
     });
 
+    this.registerCommand('#PEEKNAV-ON', () => {
+      this.parserPeekNavEnabled = true;
+      this.lastPmDebugTimestamp = null;
+      this.log('NPC navigation peek enabled.', 'info');
+    });
+
+    this.registerCommand('#PEEKNAV-OFF', () => {
+      this.parserPeekNavEnabled = false;
+      this.lastPmDebugTimestamp = null;
+      this.log('NPC navigation peek disabled.', 'info');
+    });
+
     this.registerCommand('#STAGE1-OFF', () => {
       this.parserStage1Enabled = false;
       this.log(
@@ -370,7 +413,6 @@ export class Console {
     });
 
     this.registerCommand('#SLMLOG', async () => {
-      const { ShadowLogger } = await import('../mechanics/slm/ShadowLogger');
       const stats = await ShadowLogger.getStats();
       this.log(`SLM Shadow Mode Log Statistics:`, 'info');
       this.log(`* Status: ${stats.enabled ? 'ENABLED' : 'DISABLED'}`, 'info');
@@ -379,15 +421,41 @@ export class Console {
     });
 
     this.registerCommand('#SLMLOG-ON', async () => {
-      const { ShadowLogger } = await import('../mechanics/slm/ShadowLogger');
       ShadowLogger.isLoggingEnabled = true;
       this.log('SLM Shadow Mode logging ENABLED.', 'info');
     });
 
     this.registerCommand('#SLMLOG-OFF', async () => {
-      const { ShadowLogger } = await import('../mechanics/slm/ShadowLogger');
       ShadowLogger.isLoggingEnabled = false;
       this.log('SLM Shadow Mode logging DISABLED. (Tests/Diagnostics mode)', 'info');
+    });
+
+    this.registerCommand('#SAVE', async (args) => {
+      const name = args.join(' ').trim();
+      if (!name) {
+        this.log('Usage: #SAVE <name>', 'error');
+        return;
+      }
+      if (!this.game?.saveManager) {
+        this.log('Save system is not initialized.', 'error');
+        return;
+      }
+      const state = await this.game.saveManager.save(name);
+      this.log(`Game saved as '${state.metadata.name}'.`, 'info');
+    });
+
+    this.registerCommand('#LOAD', async (args) => {
+      const name = args.join(' ').trim();
+      if (!name) {
+        this.log('Usage: #LOAD <name>', 'error');
+        return;
+      }
+      if (!this.game?.saveManager) {
+        this.log('Save system is not initialized.', 'error');
+        return;
+      }
+      const state = await this.game.saveManager.load(name);
+      this.log(`Game loaded from '${state.metadata.name}'.`, 'info');
     });
   }
 
@@ -458,7 +526,8 @@ export class Console {
       this.parserPeekEnabled ||
       this.parserPeekLlmEnabled ||
       this.parserPeekPnEnabled ||
-      this.parserPeekPmEnabled;
+      this.parserPeekPmEnabled ||
+      this.parserPeekNavEnabled;
 
     if (!this.isOpen && !isAnyPeekEnabled) return undefined;
     return this.log(this.withPmDebugDelta(text), 'info', { showInClosed: false });
@@ -473,7 +542,7 @@ export class Console {
     const delta = this.lastPmDebugTimestamp === null ? 0 : now - this.lastPmDebugTimestamp;
     this.lastPmDebugTimestamp = now;
     const roundedDelta = Math.round(delta * 10) / 10;
-    return text.replace(/^--- PM ([^-]+) ---/, `--- PM $1 (+${roundedDelta}ms) ---`);
+    return text.replace(/^--- PM ([^-]+) ---\n?/, `[PM $1 +${roundedDelta}ms] `);
   }
 
   logResponse(
@@ -639,17 +708,48 @@ export class Console {
   // Serialization for Save/Load
   toJSON(): ConsoleState {
     return {
-      buffer: this.buffer,
-      history: this.history,
-      isOpen: this.isOpen, // Typically we might not save isOpen, but GDD says "Open/Closed state" isn't explicitly saved, but buffer/history is. "Console has two states". Let's save it for persistence of UI state if preferred.
+      buffer: this.buffer.map((line) => ({ ...line })),
+      history: [...this.history],
+      isOpen: this.isOpen,
+      settings: {
+        parserPeekEnabled: this.parserPeekEnabled,
+        parserPeekLlmEnabled: this.parserPeekLlmEnabled,
+        parserPeekPnEnabled: this.parserPeekPnEnabled,
+        parserPeekPmEnabled: this.parserPeekPmEnabled,
+        parserPeekNavEnabled: this.parserPeekNavEnabled,
+        parserStage1Enabled: this.parserStage1Enabled,
+        parserStage2Enabled: this.parserStage2Enabled,
+        parserLlmEnabled: this.parserLlmEnabled,
+        parserCascade1ForceLlm: this.parserCascade1ForceLlm,
+        slmLoggingEnabled: ShadowLogger.isLoggingEnabled,
+      },
     };
   }
 
-  fromJSON(state: ConsoleState): void {
-    if (state.buffer) this.buffer = state.buffer;
-    if (state.history) this.history = state.history;
+  fromJSON(state: Partial<ConsoleState>): void {
+    if (Array.isArray(state.buffer)) {
+      this.buffer = state.buffer.slice(-this.MAX_BUFFER_LINES).map((line) => ({ ...line }));
+    }
+    if (Array.isArray(state.history)) {
+      this.history = state.history.slice(-this.MAX_HISTORY);
+    }
     if (state.isOpen !== undefined) this.isOpen = state.isOpen;
+    if (state.settings) {
+      const settings = state.settings;
+      this.parserPeekEnabled = settings.parserPeekEnabled ?? this.parserPeekEnabled;
+      this.parserPeekLlmEnabled = settings.parserPeekLlmEnabled ?? this.parserPeekLlmEnabled;
+      this.parserPeekPnEnabled = settings.parserPeekPnEnabled ?? this.parserPeekPnEnabled;
+      this.parserPeekPmEnabled = settings.parserPeekPmEnabled ?? this.parserPeekPmEnabled;
+      this.parserPeekNavEnabled = settings.parserPeekNavEnabled ?? this.parserPeekNavEnabled;
+      this.parserStage1Enabled = settings.parserStage1Enabled ?? this.parserStage1Enabled;
+      this.parserStage2Enabled = settings.parserStage2Enabled ?? this.parserStage2Enabled;
+      this.parserLlmEnabled = settings.parserLlmEnabled ?? this.parserLlmEnabled;
+      this.parserCascade1ForceLlm = settings.parserCascade1ForceLlm ?? this.parserCascade1ForceLlm;
+      ShadowLogger.isLoggingEnabled = settings.slmLoggingEnabled ?? ShadowLogger.isLoggingEnabled;
+    }
     this.isClosedModal = false;
     this.closedModalDisplayLines = [];
+    this.lastPmDebugTimestamp = null;
+    this.notifyListeners();
   }
 }

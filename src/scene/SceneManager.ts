@@ -7,14 +7,24 @@ import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import type { EntryTrigger } from '../entities/TriggerComponents';
 import { QuadObject } from '../entities/QuadObject';
+import { Box3DObject } from '../entities/Box3DObject';
 import { listProjectFiles } from '../platform/fileApi';
 import { Folder } from '../entities/Folder';
 import { SoundManager } from '../systems/SoundManager';
 import { ScriptRegistry } from '../core/ScriptRegistry';
 import { StateEventSystem } from '../systems/StateEventSystem';
+import { assertSceneData } from '../contracts/runtimeSchemas';
+import type { SceneLogData } from './SceneLog';
+import { traceNavigation } from '../systems/navigation/navigationDebug';
+import { SceneSpatialValidator } from './SceneSpatialValidator';
+import {
+  ThreeDParallaxSystem,
+  type ThreeDParallaxComponent,
+} from '../systems/ThreeDParallaxSystem';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
+export const HARD_OVER_BUDGET_FACTOR = 1.5;
 
 export interface SceneDescriptor {
   id: string;
@@ -84,6 +94,19 @@ export type ActorSceneTransferOptions = {
   activateScene?: boolean;
 };
 
+export type SceneRuntimeSnapshot = {
+  revealedHiddenEntities: string[];
+  revealedHiddenEntitiesByActor?: Record<string, string[]>;
+  parserNote: string;
+  parserNoteNeedsCheck: boolean;
+  entityParserNotes: Record<string, string>;
+  entityParserNoteNeedsCheck: Record<string, boolean>;
+  parserRecentTurns: Array<{ command: string; response: string }>;
+  activeSubscene: string | null;
+  camera: { x: number; y: number; zoom: number };
+  sceneLog?: SceneLogData;
+};
+
 export class SceneManager {
   game: IGame;
   currentScene: Scene | null;
@@ -92,7 +115,10 @@ export class SceneManager {
 
   scenes: Map<string, Scene>;
   sceneRegistry: Map<string, SceneDescriptor>;
+  private authoredSceneData: Map<string, any>;
+  private sceneRuntimeSnapshots: Map<string, SceneRuntimeSnapshot>;
   private sceneCacheMeta: Map<string, CachedSceneEntry>;
+  private sceneTextPreloads: Map<string, Promise<void>>;
   private sceneCacheBudget: number;
 
   constructor(game: IGame) {
@@ -100,7 +126,10 @@ export class SceneManager {
     this.currentScene = null;
     this.scenes = new Map();
     this.sceneRegistry = new Map();
+    this.authoredSceneData = new Map();
+    this.sceneRuntimeSnapshots = new Map();
     this.sceneCacheMeta = new Map();
+    this.sceneTextPreloads = new Map();
 
     const memoryProfile = this.detectDeviceMemoryProfile();
     this.sceneCacheBudget = memoryProfile.sceneCacheBudget;
@@ -116,7 +145,7 @@ export class SceneManager {
   }
 
   addScene(scene: Scene): void {
-    this.syncSceneRegistration(scene);
+    this.syncSceneRegistration(scene, undefined, scene.toJSON());
     this.cacheScene(scene, false);
   }
 
@@ -174,7 +203,7 @@ export class SceneManager {
     const index = scene.entities.indexOf(entity);
     if (index === -1) return;
     scene.entities.splice(index, 1);
-    scene.revealedHiddenEntities.delete(entity.name);
+    scene.forgetHiddenEntityReveal(entity.name);
     scene.subsceneEntities.delete(entity);
     if (scene.player === entity) {
       scene.player = null;
@@ -255,13 +284,35 @@ export class SceneManager {
     if (targetX === null || targetY === null) return entryObj;
     actor.layer = entryObj.layer;
     actor.parallax = entryObj.parallax;
-    const walkableTarget = this.resolveEntryPlacementPosition(scene, actor, targetX, targetY);
-    actor.x = walkableTarget.x;
-    actor.y = walkableTarget.y;
+    ThreeDParallaxSystem.clearTargetBinding(actor);
+    const refreshSurfaceParallax = () => {
+      const quad = scene.getNearestSpatialQuadWithComponent(actor, '3d-parallax');
+      const component = quad?.components?.find((item: any) => item?.type === '3d-parallax');
+      if (quad && component) {
+        ThreeDParallaxSystem.update(quad, component as ThreeDParallaxComponent);
+      }
+    };
+    // Entry placement can cross a depth-scaled Quad boundary. Update once at
+    // the destination first so the search uses the destination collider size,
+    // then re-check after each placement because changing Y can change scale.
+    actor.x = targetX;
+    actor.y = targetY;
+    actor.update(0);
+    refreshSurfaceParallax();
+    actor.update(0);
+    let walkableTarget = this.resolveEntryPlacementPosition(scene, actor, targetX, targetY);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      actor.x = walkableTarget.x;
+      actor.y = walkableTarget.y;
+      actor.update(0);
+      refreshSurfaceParallax();
+      actor.update(0);
+      if (scene.isWalkable(actor.x, actor.y, actor)) break;
+      walkableTarget = this.resolveEntryPlacementPosition(scene, actor, actor.x, actor.y);
+    }
     if (entryComp.direction && typeof (actor as any).setDirection === 'function') {
       (actor as any).setDirection(entryComp.direction);
     }
-    actor.update(0);
     return entryObj;
   }
 
@@ -328,7 +379,11 @@ export class SceneManager {
     targetSceneId: string,
     options: ActorSceneTransferOptions = {}
   ): Scene | null {
-    const sourceScene = this.currentScene;
+    // Autonomous NPCs can move through cached scenes while the player stays in
+    // `currentScene`. The actor's owning scene is therefore authoritative;
+    // using `currentScene` here would leave the NPC in its real source scene
+    // and treat a return to the player's scene as a local teleport.
+    const sourceScene = actor.scene ?? this.currentScene;
     const targetScene = this.ensureSceneLoaded(targetSceneId);
     if (!targetScene) {
       console.error(`Scene ${targetSceneId} not found!`);
@@ -370,7 +425,34 @@ export class SceneManager {
     const targetEntryId =
       options.targetEntryId ??
       (sourceScene !== targetScene ? this.findFirstEntryId(targetScene) : null);
-    this.applyEntryPlacement(targetScene, actor, targetEntryId);
+    const positionBeforePlacement = { x: actor.x, y: actor.y };
+    const entryPlacement = this.applyEntryPlacement(targetScene, actor, targetEntryId);
+    if (entryPlacement) {
+      traceNavigation(this.game, 'scene_transfer_entry_placement', {
+        actorId: actor.name,
+        sourceSceneId: sourceScene?.id ?? null,
+        destinationSceneId: targetScene.id,
+        entryId: targetEntryId,
+        positionBeforePlacement,
+        positionAfterPlacement: { x: actor.x, y: actor.y },
+        localTeleportRevision: actor.getLocalTeleportRevision(),
+        actorCollider: { width: actor.colliderWidth, height: actor.colliderHeight },
+        placementDiagnostics: targetScene.getWalkabilityDiagnostics(actor.x, actor.y, actor),
+      });
+    }
+    if (sourceScene === targetScene && entryPlacement) {
+      const resumed = actor.resumePlannedMovementAfterLocalTeleport();
+      traceNavigation(this.game, 'local_exit_replanned', {
+        actorId: actor.name,
+        sceneId: targetScene.id,
+        entryId: targetEntryId,
+        positionBeforePlacement,
+        positionAfterPlacement: { x: actor.x, y: actor.y },
+        previousRouteLength: resumed?.previousRouteLength ?? 0,
+        target: resumed?.target ?? null,
+        result: resumed?.result.status ?? 'not_walking',
+      });
+    }
     if (transfersPlayerActor && sourceScene !== targetScene && targetScene.defaultCamera) {
       targetScene.camera.zoom = targetScene.defaultCamera.zoom;
     }
@@ -421,6 +503,11 @@ export class SceneManager {
   update(deltaTime: number): void {
     if (!this.currentScene) return;
     this.currentScene.update(deltaTime);
+    for (const scene of this.scenes.values()) {
+      if (scene !== this.currentScene) {
+        scene.updateAutonomousNpcs(deltaTime);
+      }
+    }
     this.refreshCurrentSceneGraphWeight();
   }
 
@@ -460,6 +547,7 @@ export class SceneManager {
       }
 
       const pathValue = explicitPath || `${sceneId.replace(/\\/g, '/')}.json`;
+      this.sceneRuntimeSnapshots.delete(sceneId);
       const newScene = this.instantiateScene(sceneId, data, pathValue);
 
       this.syncSceneRegistration(newScene, undefined, data);
@@ -501,7 +589,12 @@ export class SceneManager {
     await Promise.all(promises);
   }
 
-  syncSceneRegistration(scene: Scene, previousId?: string, sourceData?: any): void {
+  syncSceneRegistration(
+    scene: Scene,
+    previousId?: string,
+    sourceData?: any,
+    updateAuthored: boolean = true
+  ): void {
     const sceneId = scene.id;
     const pathValue = this.getScenePathFromScene(scene);
     const existingMeta = this.sceneCacheMeta.get(sceneId);
@@ -517,6 +610,21 @@ export class SceneManager {
       textureWeightUnits: existingMeta?.textureWeightUnits,
       totalWeightUnits: existingMeta?.totalWeightUnits,
     };
+
+    if (previousId && previousId !== sceneId) {
+      const previousAuthored = this.authoredSceneData.get(previousId);
+      if (previousAuthored && !this.authoredSceneData.has(sceneId)) {
+        this.authoredSceneData.set(sceneId, previousAuthored);
+      }
+      this.authoredSceneData.delete(previousId);
+      const previousRuntime = this.sceneRuntimeSnapshots.get(previousId);
+      if (previousRuntime) this.sceneRuntimeSnapshots.set(sceneId, previousRuntime);
+      this.sceneRuntimeSnapshots.delete(previousId);
+    }
+
+    if (sourceData && (updateAuthored || !this.authoredSceneData.has(sceneId))) {
+      this.authoredSceneData.set(sceneId, JSON.parse(JSON.stringify(sourceData)));
+    }
 
     if (previousId && previousId !== sceneId) {
       this.sceneRegistry.delete(previousId);
@@ -620,6 +728,7 @@ export class SceneManager {
           textureWeightUnits: existingMeta?.textureWeightUnits,
           totalWeightUnits: existingMeta?.totalWeightUnits,
         };
+        this.authoredSceneData.set(sceneId, JSON.parse(JSON.stringify(data)));
         this.sceneRegistry.set(sceneId, descriptor);
       }
 
@@ -710,7 +819,131 @@ export class SceneManager {
     return results;
   }
 
+  getSaveSceneSources(): Array<{
+    id: string;
+    path: string;
+    authored: any;
+    current: any;
+    scene: Scene | null;
+    runtime: SceneRuntimeSnapshot | undefined;
+  }> {
+    const ids = new Set([...this.sceneRegistry.keys(), ...this.scenes.keys()]);
+    const result: Array<{
+      id: string;
+      path: string;
+      authored: any;
+      current: any;
+      scene: Scene | null;
+      runtime: SceneRuntimeSnapshot | undefined;
+    }> = [];
+
+    for (const id of ids) {
+      const scene = this.scenes.get(id) || null;
+      const descriptor = this.sceneRegistry.get(id);
+      const authored = this.authoredSceneData.get(id) || descriptor?.sourceData || scene?.toJSON();
+      const current = scene?.toJSON() || descriptor?.sourceData;
+      if (!authored || !current) continue;
+      result.push({
+        id,
+        path: descriptor?.path || `${id.replace(/\\/g, '/')}.json`,
+        authored: JSON.parse(JSON.stringify(authored)),
+        current: JSON.parse(JSON.stringify(current)),
+        scene,
+        runtime: scene
+          ? this.captureSceneRuntimeSnapshot(scene)
+          : this.cloneSceneRuntimeSnapshot(this.sceneRuntimeSnapshots.get(id)),
+      });
+    }
+    return result;
+  }
+
+  restoreSavedScenes(
+    savedScenes: Array<{ id: string; path: string; data: any }>,
+    currentSceneId: string
+  ): void {
+    const preparedScenes = savedScenes.map((saved) => ({
+      saved,
+      scene: this.instantiateScene(saved.id, saved.data, saved.path),
+    }));
+    if (
+      !preparedScenes.some(({ saved }) => saved.id === currentSceneId) &&
+      !this.sceneRegistry.get(currentSceneId)?.sourceData
+    ) {
+      throw new Error(`Save references unavailable current scene '${currentSceneId}'.`);
+    }
+
+    ScriptRegistry.stopAll();
+    this.currentScene = null;
+    this.scenes.clear();
+    this.sceneCacheMeta.clear();
+    this.sceneRuntimeSnapshots.clear();
+
+    for (const [id, authored] of this.authoredSceneData) {
+      const descriptor = this.sceneRegistry.get(id);
+      if (descriptor) descriptor.sourceData = JSON.parse(JSON.stringify(authored));
+    }
+
+    for (const { saved, scene } of preparedScenes) {
+      this.syncSceneRegistration(scene, undefined, saved.data, false);
+      this.cacheScene(scene, false);
+    }
+
+    this.switchTo(currentSceneId);
+  }
+
+  restoreSceneRuntimeSnapshot(sceneId: string, runtime: SceneRuntimeSnapshot): void {
+    const snapshot = this.cloneSceneRuntimeSnapshot(runtime);
+    if (!snapshot) return;
+    this.sceneRuntimeSnapshots.set(sceneId, snapshot);
+    const scene = this.scenes.get(sceneId);
+    if (!scene) return;
+    scene.revealedHiddenEntities = new Set(snapshot.revealedHiddenEntities);
+    scene.revealedHiddenEntitiesByActor = new Map(
+      Object.entries(snapshot.revealedHiddenEntitiesByActor || {}).map(([actorId, ids]) => [
+        actorId,
+        new Set(ids),
+      ])
+    );
+    scene.parserNote = snapshot.parserNote;
+    scene.parserNoteNeedsCheck = snapshot.parserNoteNeedsCheck;
+    scene.entityParserNotes = { ...snapshot.entityParserNotes };
+    scene.entityParserNoteNeedsCheck = { ...snapshot.entityParserNoteNeedsCheck };
+    scene.restoreParserRecentTurns(snapshot.parserRecentTurns);
+    scene.activeSubscene = snapshot.activeSubscene;
+    scene.camera = { ...snapshot.camera };
+    // Older v1 saves have no SceneLog snapshot; they must not retain a live session's events.
+    scene.sceneLog.load(snapshot.sceneLog || {});
+  }
+
+  private captureSceneRuntimeSnapshot(scene: Scene): SceneRuntimeSnapshot {
+    return {
+      revealedHiddenEntities: [...scene.revealedHiddenEntities],
+      revealedHiddenEntitiesByActor: Object.fromEntries(
+        [...scene.revealedHiddenEntitiesByActor].map(([actorId, ids]) => [actorId, [...ids]])
+      ),
+      parserNote: scene.parserNote,
+      parserNoteNeedsCheck: scene.parserNoteNeedsCheck,
+      entityParserNotes: { ...scene.entityParserNotes },
+      entityParserNoteNeedsCheck: { ...scene.entityParserNoteNeedsCheck },
+      parserRecentTurns: scene.getParserRecentTurns(),
+      activeSubscene: scene.activeSubscene,
+      camera: { ...scene.camera },
+      sceneLog: scene.sceneLog.toJSON(),
+    };
+  }
+
+  private cloneSceneRuntimeSnapshot(
+    runtime: SceneRuntimeSnapshot | undefined
+  ): SceneRuntimeSnapshot | undefined {
+    return runtime ? JSON.parse(JSON.stringify(runtime)) : undefined;
+  }
+
+  dryRunInstantiateScene(sceneId: string, data: any, pathValue?: string): Scene {
+    return this.instantiateScene(sceneId, data, pathValue);
+  }
+
   private instantiateScene(sceneId: string, data: any, pathValue?: string): Scene {
+    assertSceneData(data);
     const newScene = new Scene(this.game, sceneId, data.name || 'Untitled');
 
     if (pathValue) {
@@ -736,14 +969,18 @@ export class SceneManager {
     if (data.camMaxX !== undefined) newScene.camMaxX = data.camMaxX;
     if (data.camMinY !== undefined) newScene.camMinY = data.camMinY;
     if (data.camMaxY !== undefined) newScene.camMaxY = data.camMaxY;
+    if (
+      typeof data.box3dPerspective === 'number' &&
+      Number.isFinite(data.box3dPerspective) &&
+      data.box3dPerspective >= 0
+    )
+      newScene.box3dPerspective = data.box3dPerspective;
+    if (data.box3dOcclusionMode === 'fast' || data.box3dOcclusionMode === 'exact')
+      newScene.box3dOcclusionMode = data.box3dOcclusionMode;
     if (data.scaling) newScene.scaling = { ...newScene.scaling, ...data.scaling };
 
     if (data.soundEnv) {
       newScene.soundEnv = { ...newScene.soundEnv, ...data.soundEnv };
-    }
-
-    if (data.sceneLog) {
-      newScene.sceneLog.load(data.sceneLog);
     }
 
     if (data.walkbox) {
@@ -766,30 +1003,72 @@ export class SceneManager {
 
     if (data.entities) {
       data.entities.forEach((entityData: any) => {
-        if (entityData.type === 'Folder') {
-          const folder = Folder.fromData(this.game, entityData);
-          newScene.addFolder(folder);
-          return;
+        try {
+          if (entityData.type === 'Folder') {
+            const folder = Folder.fromData(this.game, entityData);
+            newScene.addFolder(folder);
+            return;
+          }
+
+          let entity: Entity | Box3DObject;
+
+          const hasActorComponent = Array.isArray(entityData.components)
+            ? entityData.components.some((component: any) => component?.type === 'Actor')
+            : false;
+
+          if (entityData.type === 'Player') {
+            entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor', isPlayer: true });
+          } else if (entityData.type === 'Actor' || hasActorComponent) {
+            entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor' });
+          } else if (entityData.type === 'Quad' || entityData.type === 'Rect') {
+            entity = QuadObject.fromJSON(this.game, entityData);
+          } else if (entityData.type === 'Box3D') {
+            entity = Box3DObject.fromJSON(this.game, entityData);
+          } else {
+            entity = Entity.fromJSON(this.game, entityData);
+          }
+
+          newScene.addEntity(entity as any);
+        } catch (e: any) {
+          newScene.loadWarnings.push(
+            `Failed to load object "${entityData.name || entityData.id}": ${e.message}`
+          );
+          console.warn(
+            `Failed to instantiate entity ${entityData.name || entityData.id}: ${e.message}`
+          );
         }
-
-        let entity: Entity;
-
-        const hasActorComponent = Array.isArray(entityData.components)
-          ? entityData.components.some((component: any) => component?.type === 'Actor')
-          : false;
-
-        if (entityData.type === 'Player') {
-          entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor', isPlayer: true });
-        } else if (entityData.type === 'Actor' || hasActorComponent) {
-          entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor' });
-        } else if (entityData.type === 'Quad' || entityData.type === 'Rect') {
-          entity = QuadObject.fromJSON(this.game, entityData);
-        } else {
-          entity = Entity.fromJSON(this.game, entityData);
-        }
-
-        newScene.addEntity(entity);
       });
+      for (const box of (newScene.entities as any[]).filter(
+        (entity) => entity instanceof Box3DObject
+      ) as Box3DObject[]) {
+        const present = new Set(
+          (newScene.entities as any[])
+            .filter(
+              (entity) =>
+                entity instanceof QuadObject &&
+                entity.spatial?.parentNodeId === box.name &&
+                Number.isInteger(entity.box3dFaceIndex)
+            )
+            .map((entity) => entity.box3dFaceIndex)
+        );
+        for (let index = 0; index < 6; index++) {
+          if (present.has(index)) continue;
+          const face = QuadObject.fromJSON(this.game, {
+            type: 'Quad',
+            name: `${box.name}_face_${index}`,
+            vertices: [],
+            parallax: 1,
+            ignoreScaling: true,
+            perspective: true,
+            perspectiveAmount: 1,
+            spatial: { parentNodeId: box.name, relation: 'in' },
+            box3dFaceIndex: index,
+          });
+          newScene.addEntity(face);
+          newScene.loadWarnings.push(`Restored missing Box3D face ${index} for ${box.name}`);
+        }
+        box.syncFaces(newScene);
+      }
     }
 
     if (data.folders) {
@@ -803,6 +1082,61 @@ export class SceneManager {
       newScene.displayOrder = data.displayOrder.filter((n: any) => typeof n === 'string');
     }
 
+    // Auto-repair spatial relations and components
+    const validationResult = SceneSpatialValidator.validate(newScene, this.game);
+    if (validationResult.errors.length > 0) {
+      for (const issue of validationResult.errors) {
+        if (issue.objectId) {
+          const obj = newScene.getObjectByName(issue.objectId);
+          if (obj) {
+            if (issue.code === 'missing_related_object' || issue.code === 'relation_cycle') {
+              if (obj.spatial) {
+                delete (obj as any).spatial;
+                newScene.loadWarnings.push(
+                  `Repaired object "${obj.name}": removed invalid spatial relation.`
+                );
+              }
+            } else if (
+              issue.code === 'missing_component_inventory' ||
+              issue.code === 'missing_component_surface'
+            ) {
+              if (obj.spatial) {
+                delete (obj as any).spatial;
+                newScene.loadWarnings.push(
+                  `Repaired object "${obj.name}": removed spatial relation to non-container.`
+                );
+              }
+            } else {
+              if (obj instanceof Triggerbox) {
+                newScene.removeTriggerbox(obj);
+                newScene.loadWarnings.push(
+                  `Removed broken triggerbox "${obj.name}": ${issue.message}`
+                );
+              } else if (obj instanceof Walkbox) {
+                newScene.removeWalkbox(obj);
+                newScene.loadWarnings.push(
+                  `Removed broken walkbox "${obj.name}": ${issue.message}`
+                );
+              } else if (obj instanceof Folder) {
+                newScene.folders = newScene.folders.filter((f) => f.name !== obj.name);
+                newScene.loadWarnings.push(`Removed broken folder "${obj.name}": ${issue.message}`);
+              } else if (obj instanceof Entity) {
+                newScene.removeEntity(obj);
+                newScene.loadWarnings.push(`Removed broken object "${obj.name}": ${issue.message}`);
+              } else {
+                newScene.loadWarnings.push(
+                  `Removed broken object "${(obj as any).name}": ${issue.message}`
+                );
+              }
+              if (Array.isArray(newScene.displayOrder)) {
+                newScene.displayOrder = newScene.displayOrder.filter((n) => n !== obj.name);
+              }
+            }
+          }
+        }
+      }
+    }
+
     return newScene;
   }
 
@@ -814,12 +1148,19 @@ export class SceneManager {
     if (!descriptor?.sourceData) return null;
 
     const scene = this.instantiateScene(sceneId, descriptor.sourceData, descriptor.path);
+    const runtime = this.sceneRuntimeSnapshots.get(sceneId);
     this.cacheScene(scene, false);
-    void this.game.textAssets
+    if (runtime) this.restoreSceneRuntimeSnapshot(sceneId, runtime);
+    const textPreload = this.game.textAssets
       .preloadScene(scene)
       .then(() => StateEventSystem.syncSceneStateParserNotes(this.game, scene));
+    this.sceneTextPreloads.set(scene.id, textPreload);
     void this.refreshSceneFootprint(scene.id);
     return scene;
+  }
+
+  waitForTextAssets(scene: Scene): Promise<void> {
+    return this.sceneTextPreloads.get(scene.id) || Promise.resolve();
   }
 
   private cacheScene(scene: Scene, pinned: boolean): void {
@@ -908,13 +1249,36 @@ export class SceneManager {
     if (stats.estimatedMemory <= this.sceneCacheBudget) return;
 
     const candidates = [...this.sceneCacheMeta.entries()]
-      .filter(([sceneId, entry]) => sceneId !== this.currentScene?.id && !entry.pinned)
+      .filter(([sceneId, entry]) => {
+        const scene = this.scenes.get(sceneId);
+        return sceneId !== this.currentScene?.id && !entry.pinned && !scene?.hasAutonomousNpcs();
+      })
       .sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
 
     for (const [sceneId] of candidates) {
       if (stats.estimatedMemory <= this.sceneCacheBudget) break;
       this.evictScene(sceneId);
       stats = this.getSceneCacheStats();
+    }
+
+    const hardOverBudgetThreshold = Math.round(this.sceneCacheBudget * HARD_OVER_BUDGET_FACTOR);
+    if (stats.estimatedMemory > hardOverBudgetThreshold) {
+      const autonomousCandidates = [...this.sceneCacheMeta.entries()]
+        .filter(([sceneId, entry]) => {
+          const scene = this.scenes.get(sceneId);
+          return (
+            sceneId !== this.currentScene?.id &&
+            !entry.pinned &&
+            Boolean(scene?.hasAutonomousNpcs())
+          );
+        })
+        .sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+
+      for (const [sceneId] of autonomousCandidates) {
+        if (stats.estimatedMemory <= this.sceneCacheBudget) break;
+        this.evictScene(sceneId);
+        stats = this.getSceneCacheStats();
+      }
     }
   }
 
@@ -935,6 +1299,7 @@ export class SceneManager {
     descriptor.name = scene.name;
     descriptor.title = this.game.textAssets.getResolvedSceneField(scene, 'title') || scene.name;
     descriptor.sourceData = scene.toJSON();
+    this.sceneRuntimeSnapshots.set(sceneId, this.captureSceneRuntimeSnapshot(scene));
     descriptor.lastIndexed = Date.now();
     descriptor.graphWeightUnits = entry?.graphWeightUnits;
     descriptor.textureBytes = entry?.textureBytes;

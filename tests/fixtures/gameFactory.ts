@@ -96,7 +96,9 @@ export function createTestGame(): TestGameHarness {
       const targetScene = this.scenes.get(sceneId);
       if (!targetScene) return null;
 
-      const oldScene = this.currentScene;
+      // NPCs may transfer while the player remains in a different current
+      // scene, so ownership of the transferred actor is the source of truth.
+      const oldScene = actor.scene || this.currentScene;
       const removeExistingPlayer = options.removeExistingPlayer ?? !!actor.isPlayer;
       const setAsScenePlayer = options.setAsScenePlayer ?? !!actor.isPlayer;
       const transfersPlayerActor =
@@ -174,6 +176,7 @@ export function createTestGame(): TestGameHarness {
                 object.components?.some((component: any) => component.type === 'Entry')
               )?.name || null
           : null);
+      let placedAtEntry = false;
       if (targetEntryId) {
         const entryObj = targetScene.getObjectByName(targetEntryId);
         const entryComp = entryObj?.components?.find(
@@ -188,6 +191,7 @@ export function createTestGame(): TestGameHarness {
           actor.y = (entryObj as any).y;
         }
         if (entryComp) {
+          placedAtEntry = true;
           actor.layer = entryObj.layer;
           actor.parallax = entryObj.parallax;
           if (!targetScene.isWalkable(actor.x, actor.y, actor)) {
@@ -217,6 +221,9 @@ export function createTestGame(): TestGameHarness {
           }
           actor.update?.(0);
         }
+      }
+      if (oldScene === targetScene && placedAtEntry) {
+        actor.resumePlannedMovementAfterLocalTeleport?.();
       }
       if (transfersPlayerActor && oldScene !== targetScene && targetScene.defaultCamera) {
         targetScene.camera.zoom = targetScene.defaultCamera.zoom;
@@ -264,7 +271,6 @@ export function createTestGame(): TestGameHarness {
       },
       estimateSpritesTextureBytes: async () => ({ bytes: 0 }),
     } as any,
-    audio: {} as any,
     textAssets: textAssets as any,
     sceneManager: sceneManager as any,
     editor: {
@@ -453,6 +459,7 @@ export function createTestGame(): TestGameHarness {
     playSound(name: string) {
       sounds.push(name);
     },
+    wakeNpc(_actor: Actor, _reason?: string) {},
     openFileBrowser() {},
     setCommandInput() {},
     getCommandInput() {
@@ -465,9 +472,9 @@ export function createTestGame(): TestGameHarness {
       isDown: () => false,
     },
     isMouseOverUI: false,
-    canvas: {} as HTMLCanvasElement,
+    canvas: { width: 420, height: 300 } as HTMLCanvasElement,
     ctx: null,
-    bufferCanvas: {} as HTMLCanvasElement,
+    bufferCanvas: { width: 420, height: 300 } as HTMLCanvasElement,
   };
 
   sceneManager.game = game;

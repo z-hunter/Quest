@@ -1,10 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use tauri::Emitter;
+use std::sync::Mutex;
+use tauri::{Emitter, State};
 use notify::{Watcher, RecursiveMode, Event as NotifyEvent};
+
+mod file_io;
 
 #[derive(Serialize, Clone)]
 struct FileEventPayload {
@@ -18,6 +22,33 @@ struct FileListItem {
   name: String,
   #[serde(rename = "isDir")]
   is_dir: bool,
+}
+
+#[derive(Deserialize)]
+struct LlmRequestPayload {
+  provider: String,
+  payload: serde_json::Value,
+  #[serde(rename = "requestId")]
+  request_id: Option<String>,
+  #[serde(rename = "timeoutMs")]
+  timeout_ms: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct LlmResponsePayload {
+  status: u16,
+  headers: std::collections::HashMap<String, String>,
+  body: String,
+}
+
+#[derive(Default)]
+struct LlmRequestRegistry {
+  requests: Mutex<HashMap<String, LlmRequestControl>>,
+}
+
+struct LlmRequestControl {
+  cancelled: bool,
+  task: Option<tauri::async_runtime::JoinHandle<()>>,
 }
 
 fn project_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -127,6 +158,158 @@ fn open_with_system(target: &Path) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn invoke_llm(
+  request: LlmRequestPayload,
+  registry: State<'_, LlmRequestRegistry>,
+) -> Result<LlmResponsePayload, String> {
+  let request_id = request.request_id.clone().filter(|id| !id.trim().is_empty());
+  let Some(request_id) = request_id else {
+    return send_llm(request).await;
+  };
+
+  {
+    let mut requests = registry
+      .requests
+      .lock()
+      .map_err(|_| "LLM cancellation registry is unavailable.".to_string())?;
+    if requests.contains_key(&request_id) {
+      return Err("LLM request is already running.".into());
+    }
+    requests.insert(
+      request_id.clone(),
+      LlmRequestControl {
+        cancelled: false,
+        task: None,
+      },
+    );
+  }
+
+  let (sender, mut receiver) = tauri::async_runtime::channel(1);
+  let mut task = Some(tauri::async_runtime::spawn(async move {
+    let _ = sender.send(send_llm(request).await).await;
+  }));
+  let cancelled = {
+    let mut requests = registry
+      .requests
+      .lock()
+      .map_err(|_| "LLM cancellation registry is unavailable.".to_string())?;
+    let control = requests
+      .get_mut(&request_id)
+      .ok_or_else(|| "LLM request was cancelled.".to_string())?;
+    if control.cancelled {
+      requests.remove(&request_id);
+      true
+    } else {
+      control.task = task.take();
+      false
+    }
+  };
+  if cancelled {
+    task.expect("LLM task must be present before cancellation").abort();
+    return Err("LLM request was cancelled.".into());
+  }
+
+  let result = receiver
+    .recv()
+    .await
+    .ok_or_else(|| "LLM request was cancelled.".to_string());
+  registry
+    .requests
+    .lock()
+    .map_err(|_| "LLM cancellation registry is unavailable.".to_string())?
+    .remove(&request_id);
+  result?
+}
+
+#[tauri::command]
+fn cancel_invoke_llm(
+  request_id: String,
+  registry: State<'_, LlmRequestRegistry>,
+) -> Result<(), String> {
+  if let Some(task) = registry
+    .requests
+    .lock()
+    .map_err(|_| "LLM cancellation registry is unavailable.".to_string())?
+    .get_mut(&request_id)
+    .map(|control| {
+      control.cancelled = true;
+      control.task.take()
+    })
+    .flatten()
+  {
+    task.abort();
+  }
+  Ok(())
+}
+
+async fn send_llm(request: LlmRequestPayload) -> Result<LlmResponsePayload, String> {
+  let timeout_ms = request
+    .timeout_ms
+    .unwrap_or_else(|| match request.provider.as_str() {
+      "anthropic" => 10_000,
+      "ollama" => 600_000,
+      _ => 10_000,
+    })
+    .clamp(1, 600_000);
+  let client = match request.provider.as_str() {
+    "anthropic" | "ollama" => reqwest::Client::builder()
+      .timeout(std::time::Duration::from_millis(timeout_ms)),
+    _ => return Err("Unsupported LLM provider.".into()),
+  }
+  .build()
+  .map_err(|error| format!("Failed to create LLM client: {error}"))?;
+
+  let response = match request.provider.as_str() {
+    "anthropic" => {
+      let api_key = std::env::var("ANTHROPIC_API_KEY")
+        .map_err(|_| "ANTHROPIC_API_KEY is not configured.".to_string())?;
+      client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&request.payload)
+        .send()
+        .await
+    }
+    "ollama" => {
+      let base_url = std::env::var("OLLAMA_BASE_URL")
+        .unwrap_or_else(|_| "http://localhost:11434/v1/chat/completions".into());
+      client
+        .post(base_url)
+        .header("content-type", "application/json")
+        .json(&request.payload)
+        .send()
+        .await
+    }
+    _ => unreachable!(),
+  }
+  .map_err(|error| format!("LLM request failed: {error}"))?;
+
+  let status = response.status().as_u16();
+  let headers = ["content-type", "retry-after", "x-request-id"]
+    .iter()
+    .filter_map(|name| {
+      response
+        .headers()
+        .get(*name)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| ((*name).to_string(), value.to_string()))
+    })
+    .collect();
+  let body = response
+    .text()
+    .await
+    .map_err(|error| format!("Failed to read LLM response: {error}"))?;
+
+  Ok(LlmResponsePayload {
+    status,
+    headers,
+    body,
+  })
+}
+
+#[tauri::command]
 fn list_project_files(app: tauri::AppHandle, path: String) -> Result<Vec<FileListItem>, String> {
   let target = resolve_project_path(&app, &path)?;
   if !target.exists() {
@@ -171,7 +354,16 @@ fn ensure_project_file(
 fn save_project_file(app: tauri::AppHandle, path: String, content: String) -> Result<(), String> {
   let target = resolve_project_path(&app, &path)?;
   ensure_parent_dir(&target)?;
-  fs::write(target, content).map_err(|error| format!("Failed to write file: {error}"))
+  file_io::atomic_write(&target, content.as_bytes())
+    .map_err(|error| format!("Failed to write file: {error}"))
+}
+
+#[tauri::command]
+fn append_project_file(app: tauri::AppHandle, path: String, content: String) -> Result<(), String> {
+  let target = resolve_project_path(&app, &path)?;
+  ensure_parent_dir(&target)?;
+  file_io::append(&target, content.as_bytes())
+    .map_err(|error| format!("Failed to append file: {error}"))
 }
 
 #[tauri::command]
@@ -240,6 +432,9 @@ fn setup_file_watcher(app_handle: tauri::AppHandle) {
   };
 
   std::thread::spawn(move || {
+    // The event callback owns its root so it can calculate relative paths;
+    // retain a separate handle for registering the watcher.
+    let watch_root = root.clone();
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<NotifyEvent>| {
       match res {
         Ok(event) => {
@@ -265,7 +460,7 @@ fn setup_file_watcher(app_handle: tauri::AppHandle) {
       }
     }).unwrap();
 
-    watcher.watch(&root, RecursiveMode::Recursive).unwrap();
+    watcher.watch(&watch_root, RecursiveMode::Recursive).unwrap();
     
     // keep thread alive
     loop {
@@ -276,6 +471,7 @@ fn setup_file_watcher(app_handle: tauri::AppHandle) {
 
 fn main() {
   tauri::Builder::default()
+    .manage(LlmRequestRegistry::default())
     .setup(|app| {
       setup_file_watcher(app.handle().clone());
       Ok(())
@@ -284,12 +480,15 @@ fn main() {
       list_project_files,
       ensure_project_file,
       save_project_file,
+      append_project_file,
       read_project_file,
       read_project_file_existing,
       read_project_file_base64,
       open_project_file,
       delete_project_file,
-      open_project_folder
+      open_project_folder,
+      invoke_llm,
+      cancel_invoke_llm
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

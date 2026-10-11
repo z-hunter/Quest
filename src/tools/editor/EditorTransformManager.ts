@@ -6,11 +6,50 @@ import { Walkbox } from '../../entities/Walkbox';
 import { Triggerbox } from '../../entities/Triggerbox';
 import { Folder } from '../../entities/Folder';
 import { SceneObject } from '../../entities/SceneObject';
+import {
+  Box3DObject,
+  intersectBox3DFaceAtScreen,
+  isManagedBox3DFace,
+  raycastBox3DFace,
+} from '../../entities/Box3DObject';
 
 import { Geometry } from '../../utils/Geometry';
 import { EditorSnappingSystem } from './EditorSnappingSystem';
-import { DefaultActorData, DefaultEntityData, DefaultQuadData } from '../../entities/EntityPrefabs';
+import {
+  DefaultActorData,
+  DefaultBox3DData,
+  DefaultEntityData,
+  DefaultQuadData,
+} from '../../entities/EntityPrefabs';
 import { useEditorStore } from '../../store/editorStore';
+
+function clearReciprocalVertexBinding(scene: any, quad: QuadObject, index: number): void {
+  const binding = quad.vertices[index]?.binding;
+  if (!binding || binding.type !== 'vertex') return;
+
+  const target = scene.entities.find((entity: any) => entity.name === binding.targetName);
+  const targetVertex = target?.type === 'Quad' ? target.vertices[binding.index ?? 0] : undefined;
+  if (
+    targetVertex?.binding?.type === 'vertex' &&
+    targetVertex.binding.targetName === quad.name &&
+    targetVertex.binding.index === index
+  ) {
+    delete targetVertex.binding;
+  }
+}
+
+function applyVertexBinding(
+  scene: any,
+  source: QuadObject,
+  sourceIndex: number,
+  binding: QuadVertexBinding
+): void {
+  const group = QuadObject.getConnectedVertices(scene, source, sourceIndex);
+  group.forEach((ref) => clearReciprocalVertexBinding(scene, ref.quad, ref.index));
+  group.forEach((ref) => {
+    ref.v.binding = { ...binding };
+  });
+}
 
 export class EditorTransformManager {
   private editor: SceneEditor;
@@ -33,6 +72,16 @@ export class EditorTransformManager {
   private boxSelectActive: boolean = false;
   private boxSelectStart: { x: number; y: number } | null = null;
   private boxSelectCurrent: { x: number; y: number } | null = null;
+  private box3dDrag: {
+    box: Box3DObject;
+    folder?: Folder;
+    mode: 'move' | 'scale' | 'top' | 'bottom' | 'rotate' | 'rotateZMoveZ' | 'face';
+    lastScreen: { x: number; y: number };
+    lastWorld: { x: number; y: number };
+    faceVertices?: Array<{ x: number; y: number; z: number }>;
+    faceStart?: { x: number; y: number; z: number };
+    boxStart?: { x: number; y: number; z: number };
+  } | null = null;
 
   constructor(editor: SceneEditor) {
     this.editor = editor;
@@ -41,8 +90,8 @@ export class EditorTransformManager {
   // Helper: Screen -> World
   getMousePos(e: MouseEvent): { x: number; y: number } {
     const rect = this.editor.game.canvas.getBoundingClientRect();
-    const scaleX = this.editor.game.canvas.width / rect.width;
-    const scaleY = this.editor.game.canvas.height / rect.height;
+    const scaleX = this.editor.game.bufferCanvas.width / rect.width;
+    const scaleY = this.editor.game.bufferCanvas.height / rect.height;
     return {
       x: (e.clientX - rect.left) * scaleX,
       y: (e.clientY - rect.top) * scaleY,
@@ -78,6 +127,206 @@ export class EditorTransformManager {
     return { start: this.boxSelectStart, current: this.boxSelectCurrent };
   }
 
+  private tryStartBox3DDrag(
+    e: MouseEvent,
+    pos: { x: number; y: number },
+    scene: any,
+    hitObject: SceneObject | null
+  ): boolean {
+    if ((e.button !== 0 && e.button !== 1) || !isManagedBox3DFace(hitObject)) return false;
+    const face = hitObject as QuadObject;
+    const box = scene.entities.find(
+      (object: any) => object instanceof Box3DObject && object.name === face.spatial?.parentNodeId
+    ) as Box3DObject | undefined;
+    if (!box) return false;
+
+    const selectedFolder =
+      this.editor.selectedObject instanceof Folder ? this.editor.selectedObject : null;
+    const compoundFolder =
+      selectedFolder &&
+      this.editor.selectionManager
+        .getCompoundBox3DObjects(selectedFolder)
+        .some((candidate) => candidate === box)
+        ? selectedFolder
+        : null;
+
+    if (e.button === 0 && e.ctrlKey && this.editor.selectedObject !== box && !compoundFolder) {
+      this.editor.selectObject(box);
+      e.stopPropagation();
+      return true;
+    }
+
+    let mode: NonNullable<EditorTransformManager['box3dDrag']>['mode'] | null = null;
+    if (this.editor.selectedObject === box || compoundFolder) {
+      mode =
+        e.button === 1
+          ? e.ctrlKey
+            ? 'rotateZMoveZ'
+            : 'rotate'
+          : e.ctrlKey
+            ? 'scale'
+            : e.altKey
+              ? 'top'
+              : e.shiftKey
+                ? 'bottom'
+                : 'move';
+    } else if (
+      e.button === 0 &&
+      isManagedBox3DFace(this.editor.selectedObject) &&
+      this.editor.selectedObject?.spatial?.parentNodeId === box.name
+    ) {
+      mode = 'face';
+    }
+    if (
+      !mode ||
+      (compoundFolder
+        ? compoundFolder.disabled || compoundFolder.locked
+        : box.disabled || box.locked)
+    )
+      return false;
+
+    const camera = scene.camera;
+    const world = {
+      x: (pos.x - this.editor.game.bufferCanvas.width / 2) / camera.zoom + camera.x,
+      y: (pos.y - this.editor.game.bufferCanvas.height / 2) / camera.zoom + camera.y,
+    };
+    this.editor.saveUndoState();
+    this.box3dDrag = {
+      box,
+      ...(compoundFolder ? { folder: compoundFolder } : {}),
+      mode,
+      lastScreen: pos,
+      lastWorld: world,
+    };
+    if (mode === 'face' && face.box3dWorldVertices) {
+      const vertices = face.box3dWorldVertices.map((vertex) => ({ ...vertex }));
+      const point = intersectBox3DFaceAtScreen(scene, vertices, pos.x, pos.y);
+      if (!point) {
+        this.box3dDrag = null;
+        return false;
+      }
+      this.box3dDrag.faceVertices = vertices;
+      this.box3dDrag.faceStart = point;
+      this.box3dDrag.boxStart = { x: box.x, y: box.y, z: box.z };
+    }
+    this.isDragging = true;
+    e.preventDefault?.();
+    e.stopPropagation();
+    return true;
+  }
+
+  private updateBox3DDrag(pos: { x: number; y: number }, scene: any): void {
+    const drag = this.box3dDrag;
+    if (!drag) return;
+    const { box, folder } = drag;
+    const camera = scene.camera;
+    const world = {
+      x: (pos.x - this.editor.game.bufferCanvas.width / 2) / camera.zoom + camera.x,
+      y: (pos.y - this.editor.game.bufferCanvas.height / 2) / camera.zoom + camera.y,
+    };
+    const dx = world.x - drag.lastWorld.x;
+    const dy = world.y - drag.lastWorld.y;
+    const screenDx = pos.x - drag.lastScreen.x;
+    const screenDy = pos.y - drag.lastScreen.y;
+
+    if (folder) {
+      const state = this.editor.selectionManager.getCompoundBox3DState(folder);
+      if (!state) return;
+      if (drag.mode === 'move') {
+        this.editor.selectionManager.applyCompoundBox3DField(folder, 'x', state.x + dx);
+        this.editor.selectionManager.applyCompoundBox3DField(folder, 'y', state.y + dy);
+      } else if (drag.mode === 'scale') {
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'scaleX',
+          state.scaleX + dx / 100
+        );
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'scaleY',
+          state.scaleY + dy / 100
+        );
+      } else if (drag.mode === 'top') {
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'topWidth',
+          state.topWidth + dx / 100
+        );
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'topDepth',
+          state.topDepth + dy / 100
+        );
+      } else if (drag.mode === 'bottom') {
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'bottomWidth',
+          state.bottomWidth + dx / 100
+        );
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'bottomDepth',
+          state.bottomDepth + dy / 100
+        );
+      } else if (drag.mode === 'rotate') {
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'rotationY',
+          state.rotationY + screenDx * 0.5
+        );
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'rotationX',
+          state.rotationX + screenDy * 0.5
+        );
+      } else if (drag.mode === 'rotateZMoveZ') {
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'rotationZ',
+          state.rotationZ + screenDx * 0.5
+        );
+        this.editor.selectionManager.applyCompoundBox3DField(
+          folder,
+          'z',
+          state.z + screenDy / camera.zoom
+        );
+      }
+    } else if (drag.mode === 'move') {
+      box.x += dx;
+      box.y += dy;
+    } else if (drag.mode === 'scale') {
+      box.scaleX = Math.max(0.01, box.scaleX + dx / Math.max(box.bottomWidth, box.topWidth, 1));
+      box.scaleY = Math.max(0.01, box.scaleY + dy / Math.max(box.height, 1));
+    } else if (drag.mode === 'top') {
+      box.topWidth = Math.max(0, box.topWidth + dx);
+      box.topDepth = Math.max(0, box.topDepth + dy);
+    } else if (drag.mode === 'bottom') {
+      box.bottomWidth = Math.max(0, box.bottomWidth + dx);
+      box.bottomDepth = Math.max(0, box.bottomDepth + dy);
+    } else if (drag.mode === 'rotate') {
+      box.rotationY += screenDx * 0.5;
+      box.rotationX += screenDy * 0.5;
+    } else if (drag.mode === 'rotateZMoveZ') {
+      box.rotationZ += screenDx * 0.5;
+      box.z += screenDy / camera.zoom;
+    } else if (drag.faceVertices && drag.faceStart && drag.boxStart) {
+      // Once a face drag starts, retain its physical plane after the cursor
+      // leaves the projected polygon.
+      const point = intersectBox3DFaceAtScreen(scene, drag.faceVertices, pos.x, pos.y, false);
+      if (point) {
+        box.x = drag.boxStart.x + point.x - drag.faceStart.x;
+        box.y = drag.boxStart.y + point.y - drag.faceStart.y;
+        box.z = drag.boxStart.z + point.z - drag.faceStart.z;
+      }
+    }
+
+    drag.lastScreen = pos;
+    drag.lastWorld = world;
+    if (!folder) box.syncFaces(scene);
+    useEditorStore.getState().incrementObjectVersion();
+    this.editor.updateUIFromObject();
+  }
+
   private rectIntersects(
     a: { l: number; t: number; r: number; b: number },
     b: { l: number; t: number; r: number; b: number }
@@ -94,10 +343,22 @@ export class EditorTransformManager {
     halfW: number,
     halfH: number
   ): SceneObject | null {
-    const entities = scene.entities || [];
-    for (let i = entities.length - 1; i >= 0; i--) {
-      const entity = entities[i];
+    const entities = [...(scene.entities || [])]
+      .filter((entity: any) => !entity.box3dHidden)
+      .sort((a: any, b: any) => {
+        if ((a.layer || 0) !== (b.layer || 0)) return (b.layer || 0) - (a.layer || 0);
+        const aDepth = a.box3dDepth;
+        const bDepth = b.box3dDepth;
+        if (Number.isFinite(aDepth) && Number.isFinite(bDepth)) return aDepth - bDepth;
+        return 0;
+      });
+    const boxHit = raycastBox3DFace(scene, pos.x, pos.y, entities);
+    for (const entity of entities) {
       if (entity.disabled || entity.locked) continue;
+      if (isManagedBox3DFace(entity)) {
+        if (entity === boxHit) return entity;
+        continue;
+      }
 
       const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
       const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
@@ -153,9 +414,10 @@ export class EditorTransformManager {
       if (entity.disabled || entity.locked) return;
 
       if ((entity as any).type === 'Quad' && entity.vertices) {
-        const pts = entity.vertices.map((v: any) => ({
-          x: (v.x - camX * v.p) * zoom + halfW,
-          y: (v.y - camY * v.p) * zoom + halfH,
+        const globalP = entity.parallax !== undefined ? entity.parallax : 1.0;
+        const pts = entity.getVisualVertices().map((v: any) => ({
+          x: (v.x - camX * globalP) * zoom + halfW,
+          y: (v.y - camY * globalP) * zoom + halfH,
         }));
         const minX = Math.min(...pts.map((p: any) => p.x));
         const maxX = Math.max(...pts.map((p: any) => p.x));
@@ -211,17 +473,10 @@ export class EditorTransformManager {
     // Right Click Panning
     if (e.button === 2) {
       this.isPanning = true;
-      this.lastPanPos = { x: e.clientX, y: e.clientY };
+      this.lastPanPos = this.getMousePos(e);
 
-      // Disable Auto-Center automatically
       if (editor.game.sceneManager.currentScene) {
-        editor.game.sceneManager.currentScene.autoCenter = false;
-
-        // Notify UI immediately
-        const store = useEditorStore.getState();
-        if (!store.selectedObjectId || store.selectedObjectId === 'SCENE') {
-          store.incrementObjectVersion();
-        }
+        editor.game.sceneManager.currentScene.suspendEditorCameraFollow();
       }
       e.preventDefault();
       return;
@@ -237,9 +492,22 @@ export class EditorTransformManager {
       const camY = scene.camera ? scene.camera.y : 0;
       const zoom = scene.camera ? scene.camera.zoom : 1.0;
 
-      const halfW = editor.game.canvas.width / 2;
-      const halfH = editor.game.canvas.height / 2;
+      const halfW = editor.game.bufferCanvas.width / 2;
+      const halfH = editor.game.bufferCanvas.height / 2;
       const hitObject = this.findHitSelectable(pos, scene, camX, camY, zoom, halfW, halfH);
+
+      if (this.tryStartBox3DDrag(e, pos, scene, hitObject)) return;
+
+      const selectedManagedFace =
+        editor.selectedObject instanceof QuadObject &&
+        editor.selectedObject.box3dFaceIndex !== undefined;
+      if (e.button === 0 && selectedManagedFace) {
+        if (hitObject && hitObject !== editor.selectedObject) editor.selectObject(hitObject);
+        else if (!hitObject) editor.selectObject(null);
+        // Managed faces are selectable surfaces, but their geometry belongs to Box3D.
+        e.stopPropagation();
+        return;
+      }
 
       if (e.button === 0 && e.ctrlKey && hitObject) {
         editor.toggleObjectSelection(hitObject);
@@ -249,6 +517,10 @@ export class EditorTransformManager {
 
       if (e.button === 0 && editor.selectionManager.hasMultiSelection()) {
         if (hitObject && editor.selectionManager.isInMultiSelection(hitObject)) {
+          if (editor.selectionManager.hasPreparedAssemblyInSelection()) {
+            editor.game.showNotification('Detach 3D before moving a prepared Assembly in 2D');
+            return;
+          }
           editor.saveUndoState();
           this.isDragging = true;
           this.draggingVertexIndex = -1;
@@ -279,21 +551,26 @@ export class EditorTransformManager {
         if (editor.selectedObject.disabled) return; // Prevent interaction if disabled
 
         let poly: any[] = [];
-        // Only Quads use projected vertices for Hit Test logic in original code
-        if ((editor.selectedObject as any).type === 'Quad') {
-          // Project Quad Vertices to World P=1 for Hit Test
-          poly = (editor.selectedObject as QuadObject).vertices.map((v: any) => ({
-            x: v.x - camX * (v.p - 1.0),
-            y: v.y - camY * (v.p - 1.0),
-          }));
-        } else {
-          poly = (editor.selectedObject as any).poly;
-        }
-
+        const isQuad = (editor.selectedObject as any).type === 'Quad';
         const selectedParallax =
           (editor.selectedObject as any).parallax !== undefined
             ? (editor.selectedObject as any).parallax
             : 1.0;
+        // Only Quads use projected vertices for Hit Test logic in original code
+        if (isQuad) {
+          const quad = editor.selectedObject as QuadObject;
+          const globalP = selectedParallax;
+          // Project Quad Vertices relative to Quad globalP layer
+          poly = quad.vertices.map((v: any) => {
+            const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
+            return {
+              x: v.x - camX * (effP - globalP),
+              y: v.y - camY * (effP - globalP),
+            };
+          });
+        } else {
+          poly = (editor.selectedObject as any).poly;
+        }
 
         const vertexRadius = 6 / zoom; // Hit radius
 
@@ -456,27 +733,11 @@ export class EditorTransformManager {
         }
       }
 
-      // 1. Check Entities
-      const entities = scene.entities;
-      for (let i = entities.length - 1; i >= 0; i--) {
-        const entity = entities[i];
-        if (entity.disabled) continue;
-        if (entity.locked) continue;
-
-        // @ts-ignore
-        const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
-        // @ts-ignore
-        const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
-
-        // Entity.hitTest expects visual world coordinates; it applies its own parallax projection.
-        const worldX = (pos.x - halfW) / zoom + camX - vOx;
-        const worldY = (pos.y - halfH) / zoom + camY - vOy;
-
-        if (entity.hitTest(worldX, worldY)) {
-          this.editor.selectObject(entity);
-          e.stopPropagation();
-          return;
-        }
+      // 1. Select through the shared resolver so managed Box3D faces use raycast/culling.
+      if (hitObject) {
+        this.editor.selectObject(hitObject);
+        e.stopPropagation();
+        return;
       }
 
       // 2. Check Walkboxes
@@ -531,21 +792,15 @@ export class EditorTransformManager {
 
     // PANNING
     if (this.isPanning && editor.game.sceneManager.currentScene) {
-      const dx = e.clientX - this.lastPanPos.x;
-      const dy = e.clientY - this.lastPanPos.y;
-      this.lastPanPos = { x: e.clientX, y: e.clientY };
+      const dx = this.lastMousePos.x - this.lastPanPos.x;
+      const dy = this.lastMousePos.y - this.lastPanPos.y;
+      this.lastPanPos = this.lastMousePos;
 
       const s = editor.game.sceneManager.currentScene;
       s.camera.x -= dx / s.camera.zoom;
       s.camera.y -= dy / s.camera.zoom;
 
-      if (s.autoCenter) {
-        s.autoCenter = false;
-        const store = useEditorStore.getState();
-        if (!store.selectedObjectId || store.selectedObjectId === 'SCENE') {
-          store.incrementObjectVersion();
-        }
-      }
+      s.suspendEditorCameraFollow();
 
       // React Properties Panel Update
       if (useEditorStore.getState().selectedObjectId === 'SCENE') {
@@ -565,13 +820,18 @@ export class EditorTransformManager {
     const scene = editor.game.sceneManager.currentScene;
 
     if (scene) {
+      if (this.box3dDrag) {
+        this.updateBox3DDrag(pos, scene);
+        return;
+      }
       const camX = scene.camera ? scene.camera.x : 0;
       const camY = scene.camera ? scene.camera.y : 0;
       const zoom = scene.camera ? scene.camera.zoom : 1.0;
-      const halfW = editor.game.canvas.width / 2;
-      const halfH = editor.game.canvas.height / 2;
+      const halfW = editor.game.bufferCanvas.width / 2;
+      const halfH = editor.game.bufferCanvas.height / 2;
       const store = useEditorStore.getState();
       if (editor.selectionManager.hasMultiSelection()) {
+        if (editor.selectionManager.hasPreparedAssemblyInSelection()) return;
         const worldPos = {
           x: (pos.x - halfW) / zoom + camX,
           y: (pos.y - halfH) / zoom + camY,
@@ -618,6 +878,15 @@ export class EditorTransformManager {
           // Use Snapping System
           const zoom = scene.camera.zoom;
           const isQuad = (editor.selectedObject as any).type === 'Quad';
+          const excludedVertexRefs = isQuad
+            ? new Set(
+                QuadObject.getConnectedVertices(
+                  scene,
+                  editor.selectedObject as QuadObject,
+                  this.draggingVertexIndex
+                ).map((ref) => `${ref.quad.name}:${ref.index}`)
+              )
+            : undefined;
 
           // 1. Calculate Snapped Position for the PRIMARY dragged vertex
           const snapResult = EditorSnappingSystem.snapVertex(
@@ -631,7 +900,8 @@ export class EditorTransformManager {
             editor.selectedObject as Entity,
             e.shiftKey,
             e.altKey && isQuad,
-            zoom
+            zoom,
+            excludedVertexRefs
           );
 
           // 2. Determine Delta for the Primary Vertex
@@ -655,20 +925,24 @@ export class EditorTransformManager {
           }
 
           // ── Quad path ──────────────────────────────────────────────────────
-          // Calculate effective delta from current visual position
-          // Note: v.x/v.y are RAW. newX/newY are VISUAL.
-          const currentVisX = v.x - camX * (v.p - 1.0);
-          const currentVisY = v.y - camY * (v.p - 1.0);
+          const quad = editor.selectedObject as QuadObject;
+          const globalP = quad.parallax !== undefined ? quad.parallax : 1.0;
+          const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
+
+          // Calculate effective delta from current visual position relative to Quad globalP layer
+          // Note: v.x/v.y are RAW. newX/newY are VISUAL relative to Quad globalP layer.
+          const currentVisX = v.x - camX * (effP - globalP);
+          const currentVisY = v.y - camY * (effP - globalP);
 
           const diffX = newX - currentVisX;
           const diffY = newY - currentVisY;
-          const nextPrimaryP = snapResult.p !== undefined ? snapResult.p : v.p;
+          const nextPrimaryEffP = snapResult.p !== undefined ? snapResult.p : effP;
 
           // If NO interaction (diff is 0), skip
           if (
             Math.abs(diffX) < 0.001 &&
             Math.abs(diffY) < 0.001 &&
-            Math.abs(nextPrimaryP - v.p) < 0.001
+            Math.abs(nextPrimaryEffP - effP) < 0.001
           ) {
             return;
           }
@@ -739,12 +1013,16 @@ export class EditorTransformManager {
 
           // 4. Move Group
           group.forEach((ref) => {
-            const nextP = snapResult.p !== undefined ? snapResult.p : ref.v.p;
-            const refVisX = ref.v.x - camX * (ref.v.p - 1.0);
-            const refVisY = ref.v.y - camY * (ref.v.p - 1.0);
+            const refGlobalP = ref.quad.parallax !== undefined ? ref.quad.parallax : 1.0;
+            const refEffP = (ref.v.p !== undefined ? ref.v.p : 1.0) * refGlobalP;
+            const nextEffP = snapResult.p !== undefined ? snapResult.p : refEffP;
+            const nextP = refGlobalP !== 0 ? nextEffP / refGlobalP : nextEffP;
+
+            const refVisX = ref.v.x - camX * (refEffP - refGlobalP);
+            const refVisY = ref.v.y - camY * (refEffP - refGlobalP);
             ref.v.p = nextP;
-            ref.v.x = refVisX + diffX + camX * (nextP - 1.0);
-            ref.v.y = refVisY + diffY + camY * (nextP - 1.0);
+            ref.v.x = refVisX + diffX + camX * (nextEffP - refGlobalP);
+            ref.v.y = refVisY + diffY + camY * (nextEffP - refGlobalP);
             ref.v.x = Math.round(ref.v.x);
             ref.v.y = Math.round(ref.v.y);
           });
@@ -784,8 +1062,10 @@ export class EditorTransformManager {
               // snapVertex input `mouseWorldPos` is treated as Visual P=1.
               // So we need to convert Proposed Raw -> Proposed Visual.
               // Visual = Raw - Cam * (P-1)
-              const visualPropX = propX - camX * (v.p - 1.0);
-              const visualPropY = propY - camY * (v.p - 1.0);
+              const qGlobalP = q.parallax !== undefined ? q.parallax : 1.0;
+              const qEffP = (v.p !== undefined ? v.p : 1.0) * qGlobalP;
+              const visualPropX = propX - camX * (qEffP - qGlobalP);
+              const visualPropY = propY - camY * (qEffP - qGlobalP);
 
               const snapResult = EditorSnappingSystem.snapVertex(
                 { x: visualPropX, y: visualPropY },
@@ -1009,8 +1289,8 @@ export class EditorTransformManager {
           entity.y = Math.round(newB);
 
           // Recalc Base Dims
-          if (!entity.ignoreScaling && scene.scaling.enabled) {
-            const factor = scene.getScaling(entity.y) * entity.modelScale;
+          if (!entity.ignoreScaling) {
+            const factor = scene.getDepthScaleFor(entity) * entity.modelScale;
             if (factor !== 0) {
               entity.baseWidth = entity.width / factor;
               entity.baseHeight = entity.height / factor;
@@ -1041,8 +1321,8 @@ export class EditorTransformManager {
           entity.y = Math.round(wy);
 
           // Update Scaling if Y changed
-          if (!entity.ignoreScaling && scene.scaling.enabled) {
-            const factor = scene.getScaling(entity.y) * entity.modelScale;
+          if (!entity.ignoreScaling) {
+            const factor = scene.getDepthScaleFor(entity) * entity.modelScale;
             entity.scale = factor;
             entity.width = entity.baseWidth * factor;
             entity.height = entity.baseHeight * factor;
@@ -1055,6 +1335,7 @@ export class EditorTransformManager {
   }
 
   onMouseUp(_e: MouseEvent): void {
+    this.box3dDrag = null;
     if (this.boxSelectActive && this.boxSelectStart && this.boxSelectCurrent) {
       const editor = this.editor;
       const scene = editor.game.sceneManager.currentScene;
@@ -1062,8 +1343,8 @@ export class EditorTransformManager {
         const camX = scene.camera ? scene.camera.x : 0;
         const camY = scene.camera ? scene.camera.y : 0;
         const zoom = scene.camera ? scene.camera.zoom : 1.0;
-        const halfW = editor.game.canvas.width / 2;
-        const halfH = editor.game.canvas.height / 2;
+        const halfW = editor.game.bufferCanvas.width / 2;
+        const halfH = editor.game.bufferCanvas.height / 2;
 
         const rect = {
           l: Math.min(this.boxSelectStart.x, this.boxSelectCurrent.x),
@@ -1108,33 +1389,15 @@ export class EditorTransformManager {
       ) {
         const q = this.editor.selectedObject as QuadObject;
         if (q.vertices[this.draggingVertexIndex]) {
-          const sourceVertex = q.vertices[this.draggingVertexIndex];
-          sourceVertex.binding = this.currentSnapBinding;
-
-          // MUTUAL BINDING LOGIC
-          // If we bind A -> B, we also want B -> A (if B is compatible and not already bound to a third party C in a way that conflicts,
-          // although our new group-move logic handles chains, mutual links are more robust).
+          const scene = this.editor.game.sceneManager.currentScene;
           if (this.currentSnapBinding.type === 'vertex') {
-            const scene = this.editor.game.sceneManager.currentScene;
-            const targetEnt = scene.entities.find(
-              (e: any) => e.name === this.currentSnapBinding!.targetName
-            );
-            if (targetEnt && (targetEnt as any).type === 'Quad') {
-              const targetQuad = targetEnt as QuadObject;
-              const targetVIndex = this.currentSnapBinding.index;
-              if (targetVIndex !== undefined && targetQuad.vertices[targetVIndex]) {
-                const targetVertex = targetQuad.vertices[targetVIndex];
-
-                // Only create back-link if not already bound, OR if we want to enforce strong pairing.
-                // User said: "that vertex binds to the one that bound".
-                // So we force it.
-                targetVertex.binding = {
-                  targetName: q.name,
-                  type: 'vertex',
-                  index: this.draggingVertexIndex,
-                };
-              }
-            }
+            applyVertexBinding(scene, q, this.draggingVertexIndex, this.currentSnapBinding);
+          } else {
+            // Grid snapping is positional only. Keep direct vertex bindings
+            // intact, but drop any legacy live grid constraint being edited.
+            QuadObject.getConnectedVertices(scene, q, this.draggingVertexIndex).forEach((ref) => {
+              if (ref.v.binding?.type === 'grid') delete ref.v.binding;
+            });
           }
         }
       } else if (
@@ -1166,8 +1429,8 @@ export class EditorTransformManager {
       const camY = scene && scene.camera ? scene.camera.y : 0;
       const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
-      const halfW = this.editor.game.canvas.width / 2;
-      const halfH = this.editor.game.canvas.height / 2;
+      const halfW = this.editor.game.bufferCanvas.width / 2;
+      const halfH = this.editor.game.bufferCanvas.height / 2;
 
       const worldX = (x - halfW) / zoom + camX;
       const worldY = (y - halfH) / zoom + camY;
@@ -1201,7 +1464,7 @@ export class EditorTransformManager {
 
     const scene = editor.game.sceneManager.currentScene;
 
-    if (type === 'Static' || type === 'Actor' || type === 'Quad') {
+    if (type === 'Static' || type === 'Actor' || type === 'Quad' || type === 'Box3D') {
       const nameInput = document.getElementById('new-object-name') as HTMLInputElement;
       let name = nameInput ? nameInput.value : '';
 
@@ -1210,7 +1473,7 @@ export class EditorTransformManager {
         if (nameInput) nameInput.value = name;
       }
 
-      let ent: Entity;
+      let ent: any;
       if (type === 'Actor') {
         const data = JSON.parse(JSON.stringify(DefaultActorData));
         data.name = name;
@@ -1236,6 +1499,12 @@ export class EditorTransformManager {
         }
 
         ent = QuadObject.fromJSON(editor.game, data);
+      } else if (type === 'Box3D') {
+        const data = JSON.parse(JSON.stringify(DefaultBox3DData));
+        data.name = name;
+        data.x = x !== undefined ? x : scene.camera.x;
+        data.y = y !== undefined ? y : scene.camera.y;
+        ent = editor.createObjectFromData(data);
       } else {
         const data = JSON.parse(JSON.stringify(DefaultEntityData));
         data.name = name;
@@ -1244,7 +1513,7 @@ export class EditorTransformManager {
         ent = Entity.fromJSON(editor.game, data);
       }
 
-      scene.addEntity(ent);
+      if (type !== 'Box3D') scene.addEntity(ent);
       editor.selectObject(ent);
       useEditorStore.getState().incrementHierarchyVersion();
       this.drawMode = false;
@@ -1304,6 +1573,34 @@ export class EditorTransformManager {
 
     const scene = editor.game.sceneManager.currentScene;
     if (scene && scene.camera) {
+      const compoundFolder =
+        editor.selectedObject instanceof Folder &&
+        editor.selectionManager.isCompoundBox3DFolder(editor.selectedObject)
+          ? editor.selectedObject
+          : null;
+      if (
+        (editor.selectedObject instanceof Box3DObject || compoundFolder) &&
+        (e.ctrlKey || e.shiftKey)
+      ) {
+        editor.saveUndoState();
+        const step = e.deltaY < 0 ? 5 : -5;
+        if (compoundFolder) {
+          const state = editor.selectionManager.getCompoundBox3DState(compoundFolder)!;
+          editor.selectionManager.applyCompoundBox3DField(
+            compoundFolder,
+            e.ctrlKey ? 'topOffsetX' : 'topOffsetZ',
+            (e.ctrlKey ? state.topOffsetX : state.topOffsetZ) + step
+          );
+        } else {
+          const box = editor.selectedObject as Box3DObject;
+          if (e.ctrlKey) box.topOffsetX += step;
+          else box.topOffsetZ += step;
+          box.syncFaces(scene);
+        }
+        useEditorStore.getState().incrementObjectVersion();
+        editor.updateUIFromObject();
+        return;
+      }
       if (e.deltaY < 0) {
         // Zoom In
         scene.camera.zoom *= 1.1;

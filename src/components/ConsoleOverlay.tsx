@@ -50,10 +50,32 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
     }
   }, [game, isOpen]);
 
+  const mouseButtonsRef = useRef<number>(0);
+
+  useEffect(() => {
+    const updateMouseButtons = (e: MouseEvent) => {
+      mouseButtonsRef.current = e.buttons;
+    };
+    window.addEventListener('mousedown', updateMouseButtons);
+    window.addEventListener('mouseup', updateMouseButtons);
+    window.addEventListener('mousemove', updateMouseButtons);
+    return () => {
+      window.removeEventListener('mousedown', updateMouseButtons);
+      window.removeEventListener('mouseup', updateMouseButtons);
+      window.removeEventListener('mousemove', updateMouseButtons);
+    };
+  }, []);
+
   // Auto-scroll to bottom
   useEffect(() => {
     if (isOpen && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'auto' });
+      // Prevent auto-scroll if right (2) or middle (4) mouse button is held down
+      const buttons = mouseButtonsRef.current;
+      const isBlockingScroll = (buttons & 2) !== 0 || (buttons & 4) !== 0;
+
+      if (!isBlockingScroll) {
+        bottomRef.current.scrollIntoView({ behavior: 'auto' });
+      }
     }
   }, [lines, isOpen]);
 

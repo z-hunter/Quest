@@ -1,12 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useGame } from '../../hooks/useGame';
 import { useEditorStore } from '../../store/editorStore';
+import { useNumericScrubbing } from '../editor/properties/propertiesUtils';
 
 export const SpritePropertiesPanel: React.FC = () => {
   const { spriteVersion, incrementSpriteVersion, toggleSpriteEditor } = useEditorStore();
   const game = useGame();
   const spriteEditor = game.spriteEditor;
   const uiScale = game.settings.editor?.uiScale || 1.0;
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useNumericScrubbing(panelRef);
 
   // Force re-render when spriteVersion changes
   const [, setTick] = useState(0);
@@ -30,6 +34,7 @@ export const SpritePropertiesPanel: React.FC = () => {
   return (
     <div
       id="editor-panel"
+      ref={panelRef}
       className="editor-sidebar right"
       style={{ fontSize: `${12 * uiScale}px` }}
     >

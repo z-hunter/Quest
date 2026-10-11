@@ -6,10 +6,16 @@ import type { SpatialRelationType } from '../scene/spatialTypes';
 import { Actor } from '../entities/Actor';
 import { Geometry } from '../utils/Geometry';
 import { toVisualPosition } from '../utils/Parallax';
+import {
+  normalizeNpcMemory,
+  normalizeNpcObjectives,
+  type NpcObjective,
+} from '../mechanics/npcState';
 
 import { ShadowSystem, type ShadowComponent } from './ShadowSystem';
 
 import { BackfaceSystem, type BackfaceComponent } from './BackfaceSystem';
+import { traceNavigation } from './navigation/navigationDebug';
 
 export interface SubsceneComponent {
   type: 'Subscene';
@@ -50,6 +56,8 @@ export interface ExitComponent {
   targetEntryId: string;
   collider?: boolean;
   portal?: boolean;
+  /** Keeps a local Exit available to navigation without exposing it to text systems. */
+  navigationOnly?: boolean;
 }
 
 export interface EntryComponent {
@@ -69,8 +77,13 @@ export interface ActorComponent {
 export interface NpcComponent {
   type: 'NPC';
   enabled?: boolean;
-  memory?: string;
-  objectives?: string[];
+  /** Legacy scalar/string-list values are accepted at the persisted-scene boundary. */
+  memory?: string[] | string;
+  /** Runtime-only one-turn facts, such as a just-completed scene arrival. */
+  transientMemory?: string[] | string;
+  objectives?: NpcObjective[] | string[];
+  memoryInitializedFromTA?: boolean;
+  memoryTARevision?: string;
   objectivesInitializedFromTA?: boolean;
   objectivesTARevision?: string;
   knownEntities?: Record<string, NpcKnownEntityMemory>;
@@ -101,8 +114,9 @@ export interface InventoryComponent {
 
 export interface SurfaceItemPlacement {
   id: string;
-  x: number;
-  y: number;
+  /** Legacy scene data. Runtime placement comes from the entity transform. */
+  x?: number;
+  y?: number;
 }
 
 export interface SurfaceComponent {
@@ -131,6 +145,13 @@ import type { ActivationSceneContext } from './types';
 export interface WalkBoxComponent {
   type: 'WalkBox';
   mode?: 'Invert' | 'Add' | 'Subtract';
+  perspectiveWalk3D?: boolean;
+}
+
+export interface DepthScalingControllerComponent {
+  type: 'Depth scaling controller';
+  min?: number;
+  max?: number;
 }
 
 export type AnyComponent = (
@@ -147,6 +168,7 @@ export type AnyComponent = (
   | SurfaceComponent
   | StateComponent
   | WalkBoxComponent
+  | DepthScalingControllerComponent
   | ShadowComponent
   | BackfaceComponent
   | ThreeDParallaxComponent
@@ -155,6 +177,12 @@ export type AnyComponent = (
 import type { IGame } from '../core/IGame';
 
 export class ComponentSystem {
+  static isNavigationOnlyExit(object: SceneObject | null | undefined): boolean {
+    return !!object?.components?.some(
+      (component: any) => component?.type === 'Exit' && component.navigationOnly === true
+    );
+  }
+
   static isStateValueType(value: unknown): value is StateValueType {
     return value === 'string' || value === 'number' || value === 'boolean';
   }
@@ -268,13 +296,24 @@ export class ComponentSystem {
       (candidate: any): candidate is NpcComponent => candidate?.type === 'NPC'
     );
     if (!component) return null;
+    // Migrate persisted v1 cognition lazily at the component boundary so saves and
+    // authored scenes may still contain scalar memory or string-list objectives.
+    if (component.memory !== undefined) component.memory = normalizeNpcMemory(component.memory);
+    if (component.transientMemory !== undefined) {
+      component.transientMemory = normalizeNpcMemory(component.transientMemory);
+    }
+    if (Array.isArray(component.objectives)) {
+      component.objectives = normalizeNpcObjectives(component.objectives);
+    }
     return {
       type: 'NPC',
       enabled: component.enabled !== false,
-      memory: typeof component.memory === 'string' ? component.memory : '',
-      objectives: Array.isArray(component.objectives)
-        ? component.objectives.filter((item): item is string => typeof item === 'string')
-        : undefined,
+      memory: normalizeNpcMemory(component.memory),
+      transientMemory: normalizeNpcMemory(component.transientMemory),
+      objectives: component.objectives,
+      memoryInitializedFromTA: component.memoryInitializedFromTA === true,
+      memoryTARevision:
+        typeof component.memoryTARevision === 'string' ? component.memoryTARevision : undefined,
       objectivesInitializedFromTA: component.objectivesInitializedFromTA === true,
       objectivesTARevision:
         typeof component.objectivesTARevision === 'string'
@@ -580,9 +619,30 @@ export class ComponentSystem {
     }
 
     if (activator) {
-      scene.game?.emitActorAction?.(activator, 'traverse_exit', exitObject, {
-        targetId: exitObject.name,
+      traceNavigation(scene.game, 'exit_activated', {
+        actorId: activator.name,
+        exitId: exitObject.name,
+        sourceSceneId: scene.id,
+        targetSceneId,
+        targetEntryId: exit.targetEntryId?.trim() || null,
+        navigationOnly: ComponentSystem.isNavigationOnlyExit(exitObject),
+        actorPosition: { x: activator.x, y: activator.y },
       });
+      if (ComponentSystem.isNavigationOnlyExit(exitObject)) {
+        scene.game?.emitActorAction?.(activator, 'left_immediate_area');
+      } else {
+        scene.game?.emitActorAction?.(activator, 'traverse_exit', exitObject, {
+          targetId: exitObject.name,
+        });
+      }
+      if (ComponentSystem.getNpcComponent(activator)) {
+        scene.game?.recordNpcExitTransition?.({
+          npcId: activator.name,
+          sourceSceneId: scene.id,
+          destinationSceneId: targetSceneId,
+          exitId: exitObject.name,
+        });
+      }
       sceneManager.transferActorToScene(activator, targetSceneId, {
         targetEntryId: exit.targetEntryId?.trim() || null,
         activateScene: activator === sceneManager.currentScene?.player,
@@ -676,12 +736,9 @@ export class ComponentSystem {
 
   private static getQuadVisualPolygon(
     quad: QuadObject,
-    scene: ActivationSceneContext
+    _scene: ActivationSceneContext
   ): { x: number; y: number }[] {
-    return quad.vertices.map((v) => {
-      const p = v.p !== undefined ? v.p : quad.parallax !== undefined ? quad.parallax : 1.0;
-      return toVisualPosition({ x: v.x, y: v.y }, scene.camera, p);
-    });
+    return quad.getVisualVertices();
   }
 
   private static getPolygonVisualPolygon(
@@ -816,10 +873,7 @@ export class ComponentSystem {
     const allowedDist = interactionWidth * 2;
 
     if (dist > allowedDist) {
-      const isPortableItem = !!entity.components?.some(
-        (component: any) => component?.type === 'Item'
-      );
-      if (!options?.ignoreSpatialAncestors && !isPortableItem) {
+      if (!options?.ignoreSpatialAncestors) {
         const scene = game?.sceneManager?.currentScene;
         const visited = new Set<string>([String(entity.name || '')]);
         let parentId = String((entity as any).spatial?.parentNodeId || '').trim();
@@ -828,6 +882,9 @@ export class ComponentSystem {
           visited.add(parentId);
           const parent = scene.getObjectByName(parentId);
           if (!parent) break;
+          // A walkbox is the floor/navigation mesh, not a physical parent that
+          // can put a distant item within arm's reach.
+          if (parent.type === 'Walkbox') break;
           if (
             !this.getInteractionDistanceError(parent, player, {
               ignoreSpatialAncestors: true,
@@ -868,9 +925,10 @@ export class ComponentSystem {
     for (const candidate of scene.getAllSceneObjects?.() || []) {
       if (candidate.name !== parentId) continue;
       for (const component of this.getSurfaceComponents(candidate)) {
-        const placement = component.items?.find((item: any) => item?.id === entityId);
-        const x = Number((placement as any)?.x);
-        const y = Number((placement as any)?.y);
+        if (!component.items?.some((item: any) => item?.id === entityId)) continue;
+        const placedEntity = scene.getObjectByName(entityId);
+        const x = Number((placedEntity as any)?.x);
+        const y = Number((placedEntity as any)?.y);
         if (Number.isFinite(x) && Number.isFinite(y)) {
           return { x, y };
         }

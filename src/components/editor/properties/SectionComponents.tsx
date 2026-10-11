@@ -5,6 +5,13 @@ import { Select } from '../../common/Select';
 import { SceneObject } from '../../../entities/SceneObject';
 import { Actor } from '../../../entities/Actor';
 import { Entity } from '../../../entities/Entity';
+import {
+  materializeNpcObjectives,
+  formatNpcObjectivesForEditor,
+  normalizeNpcMemory,
+  normalizeNpcObjectives,
+  parseNpcObjectivesFromEditor,
+} from '../../../mechanics/npcState';
 
 const iconModules = import.meta.glob('../../../assets/components-icon/*.svg', { eager: true });
 function getIconUrl(type: string): string | undefined {
@@ -20,6 +27,9 @@ export const SectionComponents: React.FC = () => {
   const o = obj;
   const [stateParserNoteRows, setStateParserNoteRows] = React.useState<
     Record<string, Array<{ id: string; value: string; field: string }>>
+  >({});
+  const [npcDrafts, setNpcDrafts] = React.useState<
+    Record<string, { memory?: string; objectives?: string; objectiveError?: string }>
   >({});
   const title = game.textAssets.getResolvedObjectField(o, 'title');
   const hasTitle = !!title?.trim();
@@ -68,6 +78,7 @@ export const SectionComponents: React.FC = () => {
     return typeof value === 'boolean' ? value : value === 'true';
   };
   const getStateParserNoteRowsKey = (idx: number): string => `${o.name || 'object'}:${idx}`;
+  const getNpcDraftKey = (idx: number): string => `${o.name || 'object'}:npc:${idx}`;
   const getStateParserNoteRows = (comp: any, idx: number) => {
     const key = getStateParserNoteRowsKey(idx);
     const draft = stateParserNoteRows[key];
@@ -196,6 +207,33 @@ export const SectionComponents: React.FC = () => {
     }
   }, [hasRenderedComponents]);
 
+  React.useEffect(() => {
+    if (!o.components) return;
+    const npcComp = o.components.find((c: any) => c.type === 'NPC') as any;
+    if (!npcComp) return;
+
+    let lastMemory = npcComp.memory;
+    let lastObjectives = JSON.stringify(npcComp.objectives);
+
+    const interval = setInterval(() => {
+      let changed = false;
+      if (npcComp.memory !== lastMemory) {
+        lastMemory = npcComp.memory;
+        changed = true;
+      }
+      const currentObj = JSON.stringify(npcComp.objectives);
+      if (currentObj !== lastObjectives) {
+        lastObjectives = currentObj;
+        changed = true;
+      }
+      if (changed) {
+        incrementObjectVersion();
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [o, incrementObjectVersion]);
+
   return (
     <div
       ref={(node) => {
@@ -231,6 +269,7 @@ export const SectionComponents: React.FC = () => {
                 ? [
                     { value: 'Backface', label: 'Backface' },
                     { value: '3d-parallax', label: '3d-parallax' },
+                    { value: 'Depth scaling controller', label: 'Depth scaling controller' },
                     { value: 'WalkBox', label: 'WalkBox (Collider)' },
                   ]
                 : []),
@@ -301,7 +340,7 @@ export const SectionComponents: React.FC = () => {
                 }
                 o.components.unshift({
                   type: 'Surface',
-                  relation: relation || 'in',
+                  relation: relation || 'on',
                   capacity: 8,
                   groups: [],
                   items: [],
@@ -347,11 +386,13 @@ export const SectionComponents: React.FC = () => {
                 o.components.unshift({
                   type: 'NPC',
                   enabled: true,
-                  memory: '',
+                  memory: [],
                   objectives: [],
                 });
               } else if (type === '3d-parallax') {
                 o.components.unshift({ type: '3d-parallax' });
+              } else if (type === 'Depth scaling controller') {
+                o.components.unshift({ type: 'Depth scaling controller', min: 0.5, max: 1 });
               } else if (type === 'WalkBox') {
                 o.components.unshift({ type: 'WalkBox', mode: 'Invert' });
               }
@@ -478,14 +519,38 @@ export const SectionComponents: React.FC = () => {
                 </div>
                 <div className="e-row">
                   <label className="e-label" style={{ fontSize: '10px' }}>
-                    Memory
+                    Memory (one fact per line)
                   </label>
                   <textarea
                     className="e-input"
                     rows={3}
-                    value={comp.memory || ''}
+                    value={(() => {
+                      const key = getNpcDraftKey(idx);
+                      if (npcDrafts[key]?.memory !== undefined) return npcDrafts[key].memory;
+                      const current = normalizeNpcMemory(comp.memory);
+                      const revision = game.textAssets.getResolvedNpcMemoryRevision(o);
+                      const memory =
+                        current.length || comp.memoryTARevision === revision
+                          ? current
+                          : game.textAssets.getResolvedNpcMemory(o);
+                      return memory.join('\n');
+                    })()}
                     onChange={(e) => {
-                      comp.memory = e.target.value;
+                      const key = getNpcDraftKey(idx);
+                      setNpcDrafts((current) => ({
+                        ...current,
+                        [key]: { ...current[key], memory: e.target.value },
+                      }));
+                    }}
+                    onBlur={(e) => {
+                      const key = getNpcDraftKey(idx);
+                      comp.memory = normalizeNpcMemory(e.target.value.split(/\r?\n/));
+                      comp.memoryInitializedFromTA = true;
+                      comp.memoryTARevision = game.textAssets.getResolvedNpcMemoryRevision(o);
+                      setNpcDrafts((current) => ({
+                        ...current,
+                        [key]: { ...current[key], memory: undefined },
+                      }));
                       incrementObjectVersion();
                     }}
                   />
@@ -496,28 +561,67 @@ export const SectionComponents: React.FC = () => {
                   </label>
                   <textarea
                     className="e-input"
-                    rows={3}
-                    value={
-                      Array.isArray(comp.objectives) &&
-                      (comp.objectives.length > 0 ||
-                        comp.objectivesTARevision ===
-                          game.textAssets.getResolvedObjectListRevision(o, 'objectives'))
-                        ? comp.objectives.join('\n')
-                        : game.textAssets.getResolvedObjectListField(o, 'objectives').join('\n')
-                    }
+                    rows={5}
+                    value={(() => {
+                      const key = getNpcDraftKey(idx);
+                      if (npcDrafts[key]?.objectives !== undefined)
+                        return npcDrafts[key].objectives;
+                      const current = normalizeNpcObjectives(comp.objectives);
+                      const revision = game.textAssets.getResolvedNpcObjectivesRevision(o);
+                      const objectives =
+                        current.length || comp.objectivesTARevision === revision
+                          ? current
+                          : game.textAssets.getResolvedNpcObjectives(o);
+                      return formatNpcObjectivesForEditor(objectives);
+                    })()}
                     onChange={(e) => {
-                      comp.objectives = e.target.value
-                        .split(/\r?\n/)
-                        .map((objective: string) => objective.trim())
-                        .filter(Boolean);
+                      const key = getNpcDraftKey(idx);
+                      const parsed = parseNpcObjectivesFromEditor(e.target.value);
+                      setNpcDrafts((current) => ({
+                        ...current,
+                        [key]: {
+                          ...current[key],
+                          objectives: e.target.value,
+                          objectiveError: 'error' in parsed ? parsed.error : undefined,
+                        },
+                      }));
+                    }}
+                    onBlur={(e) => {
+                      const key = getNpcDraftKey(idx);
+                      const parsed = parseNpcObjectivesFromEditor(e.target.value);
+                      if ('error' in parsed) {
+                        setNpcDrafts((current) => ({
+                          ...current,
+                          [key]: { ...current[key], objectiveError: parsed.error },
+                        }));
+                        return;
+                      }
+                      comp.objectives = materializeNpcObjectives(parsed.objectives);
                       comp.objectivesInitializedFromTA = true;
-                      comp.objectivesTARevision = game.textAssets.getResolvedObjectListRevision(
-                        o,
-                        'objectives'
-                      );
+                      comp.objectivesTARevision =
+                        game.textAssets.getResolvedNpcObjectivesRevision(o);
+                      setNpcDrafts((current) => ({
+                        ...current,
+                        [key]: {
+                          ...current[key],
+                          objectives: undefined,
+                          objectiveError: undefined,
+                        },
+                      }));
                       incrementObjectVersion();
                     }}
                   />
+                  {npcDrafts[getNpcDraftKey(idx)]?.objectiveError && (
+                    <div
+                      style={{
+                        color: 'var(--ui-danger-color)',
+                        fontSize: '10px',
+                        marginTop: '3px',
+                      }}
+                    >
+                      {npcDrafts[getNpcDraftKey(idx)]?.objectiveError}
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -1171,7 +1275,16 @@ export const SectionComponents: React.FC = () => {
                       color: 'var(--ui-label-color)',
                     }}
                   >
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <label
+                      className="e-label"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontWeight: 'normal',
+                        marginBottom: 0,
+                      }}
+                    >
                       <input
                         type="checkbox"
                         checked={comp.collider !== false}
@@ -1182,7 +1295,16 @@ export const SectionComponents: React.FC = () => {
                       />
                       Collider
                     </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <label
+                      className="e-label"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontWeight: 'normal',
+                        marginBottom: 0,
+                      }}
+                    >
                       <input
                         type="checkbox"
                         checked={!!comp.portal}
@@ -1320,6 +1442,49 @@ export const SectionComponents: React.FC = () => {
               </>
             )}
 
+            {comp.type === 'Depth scaling controller' && (
+              <div className="e-row">
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: 'var(--ui-label-color)',
+                    fontStyle: 'italic',
+                    marginBottom: '5px',
+                  }}
+                >
+                  Controls depth scaling inside this Quad from its top edge to its bottom edge.
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                  <label className="e-label">
+                    Min
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="e-input"
+                      value={comp.min ?? 0.5}
+                      onChange={(event) => {
+                        comp.min = Number(event.target.value) || 0;
+                        incrementObjectVersion();
+                      }}
+                    />
+                  </label>
+                  <label className="e-label">
+                    Max
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="e-input"
+                      value={comp.max ?? 1}
+                      onChange={(event) => {
+                        comp.max = Number(event.target.value) || 0;
+                        incrementObjectVersion();
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
             {comp.type === 'WalkBox' && (
               <>
                 <div className="e-row">
@@ -1351,6 +1516,25 @@ export const SectionComponents: React.FC = () => {
                       style={{ width: '100%' }}
                     />
                   </div>
+                  {(obj as any)?.type === 'Quad' && (
+                    <div className="e-row" style={{ marginTop: '8px' }}>
+                      <label
+                        className="e-label"
+                        style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!(comp as any).perspectiveWalk3D}
+                          onChange={(e) => {
+                            (comp as any).perspectiveWalk3D = e.target.checked;
+                            incrementObjectVersion();
+                          }}
+                          style={{ marginRight: '6px' }}
+                        />
+                        3d-perspective walk
+                      </label>
+                    </div>
+                  )}
                 </div>
               </>
             )}

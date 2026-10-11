@@ -1,4 +1,5 @@
 import React from 'react';
+import { useGame } from '../../../hooks/useGame';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
 import { Entity } from '../../../entities/Entity';
@@ -10,6 +11,7 @@ import {
   getSharedValue,
   getSharedBooleanState,
   renderOpacityBlurControls,
+  renderSpriteEffectsControls,
   renderSection,
 } from './propertiesUtils';
 
@@ -42,13 +44,12 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
   getSpatialRelationOptions,
   getMultiSpatialParentOptions,
 }) => {
-  const {
-    game,
-    formatPanelNumber,
-    setSectionRef,
-    incrementObjectVersion,
-    incrementHierarchyVersion,
-  } = usePropertiesContext();
+  const game = useGame();
+  const propertiesContext = usePropertiesContext();
+
+  const { formatPanelNumber, setSectionRef, incrementObjectVersion, incrementHierarchyVersion } =
+    propertiesContext;
+
   const getMultiKey = () =>
     `MULTI:${multiObjects
       .map((item: any) => item?.name || '')
@@ -63,6 +64,9 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
   };
 
   const group = game.editor.selectionManager.getGroupTransform();
+  const assemblyState = game.editor.selectionManager.get3DAssemblyState();
+  const showLegacy3DAssemblyControls = false;
+  const assemblyLocked = game.editor.selectionManager.hasPreparedAssemblyInSelection();
   const entitiesAndQuads = multiObjects.filter((o: any) => o instanceof Entity);
   const parallaxObjects = multiObjects.filter(
     (o: any) => o instanceof Entity || o instanceof Triggerbox || (o as any).type === 'Quad'
@@ -76,20 +80,29 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
   );
   const sharedOpacity = getSharedValue(entitiesAndQuads, (o: any) => o.opacity ?? 1);
   const sharedBlur = getSharedValue(entitiesAndQuads, (o: any) => o.blur || 0);
+  const sharedBrightness = getSharedValue(entitiesAndQuads, (o: any) => o.brightness ?? 1);
+  const sharedSaturation = getSharedValue(entitiesAndQuads, (o: any) => o.saturation ?? 1);
+  const sharedContrast = getSharedValue(entitiesAndQuads, (o: any) => o.contrast ?? 1);
+  const sharedHueShift = getSharedValue(entitiesAndQuads, (o: any) => o.hueShift ?? 0);
   const sharedColor = getSharedValue(
     multiObjects.filter((o: any) => (o as any).color !== undefined),
     (o: any) => o.color || '#ffffff'
   );
   const sharedIsGrid = getSharedBooleanState(quads, (q: any) => !!q.isGrid);
   const sharedFilled = getSharedBooleanState(quads, (q: any) => q.filled !== false);
+  const sharedCheckerboard = getSharedBooleanState(quads, (q: any) => !!q.checkerboard);
+  const sharedSecondColor = getSharedValue(quads, (q: any) => q.secondColor || '#000000');
   const sharedGridX = getSharedValue(quads, (q: any) => q.gridLinesX ?? 5);
   const sharedGridY = getSharedValue(quads, (q: any) => q.gridLinesY ?? 5);
   const sharedGridWidth = getSharedValue(quads, (q: any) => q.lineWidth ?? 1.0);
   const sharedGridColor = getSharedValue(quads, (q: any) => q.gridColor || '#ffffff');
+  const sharedPerspective = getSharedBooleanState(quads, (q: any) => q.perspective !== false);
+  const sharedPerspectiveAmount = getSharedValue(quads, (q: any) => q.perspectiveAmount ?? 1.0);
   const sharedIgnoreScaling = getSharedBooleanState(
     entitiesAndQuads,
     (o: any) => !!o.ignoreScaling
   );
+  const sharedReceive3DParallax = getSharedBooleanState(quads, (q: any) => !!q.receive3DParallax);
   const sharedParentNodeId = getSharedValue(
     multiObjects,
     (o: any) => o.spatial?.parentNodeId || ''
@@ -100,7 +113,28 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
   return (
     <div>
       <div className="editor-header">
-        <span>MULTI SELECTION ({multiObjects.length})</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span>MULTI SELECTION ({multiObjects.length})</span>
+          <button
+            type="button"
+            className="toolbar-icon-btn"
+            title={propertiesContext.anyExpanded ? 'Collapse all' : 'Expand all'}
+            onClick={
+              propertiesContext.anyExpanded
+                ? propertiesContext.collapseAll
+                : propertiesContext.expandAll
+            }
+            style={{
+              width: '20px',
+              height: '20px',
+              padding: 0,
+              fontSize: '10px',
+              lineHeight: 1,
+            }}
+          >
+            {propertiesContext.anyExpanded ? '▼' : '▶'}
+          </button>
+        </div>
         <button className="e-btn" onClick={() => useEditorStore.getState().toggle(false)}>
           X
         </button>
@@ -239,6 +273,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                 <input
                   type="number"
                   className="e-input"
+                  disabled={assemblyLocked}
                   value={formatPanelNumber(group.offsetX)}
                   onChange={(e) => {
                     saveUndoIfNeeded();
@@ -257,6 +292,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                 <input
                   type="number"
                   className="e-input"
+                  disabled={assemblyLocked}
                   value={formatPanelNumber(group.offsetY)}
                   onChange={(e) => {
                     saveUndoIfNeeded();
@@ -282,6 +318,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                   type="number"
                   step="0.01"
                   className="e-input"
+                  disabled={assemblyLocked}
                   value={formatPanelNumber(group.scale)}
                   onChange={(e) => {
                     saveUndoIfNeeded();
@@ -320,6 +357,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                       type="number"
                       step="0.1"
                       className="e-input ui-text-muted"
+                      disabled={assemblyLocked}
                       placeholder="mixed"
                       value={
                         sharedParallax === '' ? '' : formatPanelNumber(sharedParallax as number)
@@ -345,8 +383,208 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
               </div>
             </div>
 
-            {entitiesAndQuads.length > 0 && (
+            {showLegacy3DAssemblyControls && assemblyState.kind === 'unprepared' && (
               <div className="e-row">
+                <button
+                  type="button"
+                  className="e-button"
+                  disabled={!assemblyState.canPrepare}
+                  title={
+                    (assemblyState as any).message ||
+                    'Normalize a bound Box/Prism into a rigid temporary 3D Assembly.'
+                  }
+                  onClick={() => {
+                    const result = game.editor.selectionManager.beginPrepare3D();
+                    if (!result.ok)
+                      game.showNotification(
+                        result.message || 'Cannot prepare this selection as a Box/Prism'
+                      );
+                    else game.showNotification('3D preparation preview — Apply or Cancel');
+                    incrementObjectVersion();
+                  }}
+                >
+                  Prepare 3D
+                </button>
+              </div>
+            )}
+
+            {showLegacy3DAssemblyControls && assemblyState.kind === 'preview' && (
+              <div
+                className="e-row"
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
+              >
+                <button
+                  type="button"
+                  className="e-button"
+                  onClick={() => {
+                    if (game.editor.selectionManager.applyPrepare3D()) {
+                      game.showNotification('3D Assembly prepared');
+                      incrementObjectVersion();
+                    }
+                  }}
+                >
+                  Apply 3D
+                </button>
+                <button
+                  type="button"
+                  className="e-button"
+                  onClick={() => {
+                    if (game.editor.selectionManager.cancelPrepare3D()) {
+                      game.editor.updateUIFromObject();
+                      game.editor.refreshHierarchy();
+                      game.showNotification('3D preparation cancelled');
+                      incrementObjectVersion();
+                    }
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {showLegacy3DAssemblyControls && assemblyState.kind === 'partial' && (
+              <div className="e-row">
+                <button
+                  type="button"
+                  className="e-button"
+                  onClick={() => game.editor.selectionManager.selectPreparedAssembly()}
+                >
+                  Select Assembly
+                </button>
+              </div>
+            )}
+
+            {showLegacy3DAssemblyControls && assemblyState.kind === 'prepared' && (
+              <>
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}
+                >
+                  <div>
+                    <label
+                      className="e-label"
+                      title="Turns selected Quad surfaces around the vertical virtual axis."
+                    >
+                      3D Rotate Y
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      className="e-input"
+                      value={formatPanelNumber(group.rotateY)}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        if (isNaN(value)) return;
+                        saveUndoIfNeeded();
+                        if (
+                          !game.editor.selectionManager.applyGroupRotation(
+                            value,
+                            group.axisX,
+                            group.axisP
+                          )
+                        ) {
+                          game.showNotification(
+                            '3D rotation would place a Quad vertex behind the camera'
+                          );
+                          return;
+                        }
+                        incrementObjectVersion();
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      className="e-label"
+                      title="World X coordinate of the vertical 3D rotation axis."
+                    >
+                      Axis X
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      className="e-input"
+                      value={formatPanelNumber(group.axisX)}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        if (isNaN(value)) return;
+                        saveUndoIfNeeded();
+                        if (
+                          !game.editor.selectionManager.applyGroupRotation(
+                            group.rotateY,
+                            value,
+                            group.axisP
+                          )
+                        ) {
+                          game.showNotification(
+                            '3D rotation would place a Quad vertex behind the camera'
+                          );
+                          return;
+                        }
+                        incrementObjectVersion();
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      className="e-label"
+                      title="Effective parallax P (inverse depth) of the vertical 3D rotation axis."
+                    >
+                      Axis P (Z)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      className="e-input"
+                      value={formatPanelNumber(group.axisP)}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        if (isNaN(value)) return;
+                        saveUndoIfNeeded();
+                        if (
+                          !game.editor.selectionManager.applyGroupRotation(
+                            group.rotateY,
+                            group.axisX,
+                            value
+                          )
+                        ) {
+                          game.showNotification('Axis P must stay in front of the camera');
+                          return;
+                        }
+                        incrementObjectVersion();
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="e-row">
+                  <button
+                    type="button"
+                    className="e-button"
+                    onClick={() => {
+                      saveUndoIfNeeded();
+                      if (game.editor.selectionManager.detachPreparedAssembly()) {
+                        game.showNotification(
+                          '3D Assembly detached; Quad vertices are editable again'
+                        );
+                        incrementObjectVersion();
+                      }
+                    }}
+                  >
+                    Detach 3D
+                  </button>
+                </div>
+              </>
+            )}
+
+            {entitiesAndQuads.length > 0 && (
+              <div
+                className="e-row"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: quads.length > 0 ? '1fr 1fr' : '1fr',
+                  gap: '6px',
+                }}
+              >
                 <label
                   className="e-label"
                   style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
@@ -365,6 +603,26 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                   />
                   Disable Depth Scaling
                 </label>
+                {quads.length > 0 && (
+                  <label
+                    className="e-label"
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={sharedReceive3DParallax === 'on'}
+                      ref={(el) => {
+                        if (el) el.indeterminate = sharedReceive3DParallax === 'mixed';
+                      }}
+                      onChange={(e) => {
+                        applyToMulti((o: any) => {
+                          if (o.type === 'Quad') o.receive3DParallax = e.target.checked;
+                        });
+                      }}
+                    />
+                    Receive 3d-parallax
+                  </label>
+                )}
               </div>
             )}
           </>,
@@ -389,6 +647,34 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                 (nextBlur) => {
                   applyToMulti((o: any) => {
                     if (o instanceof Entity) o.blur = nextBlur;
+                  });
+                }
+              )}
+
+            {entitiesAndQuads.length > 0 &&
+              renderSpriteEffectsControls(
+                sharedBrightness as number | '',
+                sharedSaturation as number | '',
+                sharedContrast as number | '',
+                sharedHueShift as number | '',
+                (v) => {
+                  applyToMulti((o: any) => {
+                    if (o instanceof Entity) o.brightness = v;
+                  });
+                },
+                (v) => {
+                  applyToMulti((o: any) => {
+                    if (o instanceof Entity) o.saturation = v;
+                  });
+                },
+                (v) => {
+                  applyToMulti((o: any) => {
+                    if (o instanceof Entity) o.contrast = v;
+                  });
+                },
+                (v) => {
+                  applyToMulti((o: any) => {
+                    if (o instanceof Entity) o.hueShift = v;
                   });
                 }
               )}
@@ -502,9 +788,71 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                       });
                     }}
                   />
-                  Retro Grid
+                  Grid
                 </label>
               </div>
+            )}
+
+            {quads.length > 0 && (
+              <>
+                <div className="e-row">
+                  <label
+                    className="e-label"
+                    style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                  >
+                    <input
+                      type="checkbox"
+                      style={{ marginRight: '5px' }}
+                      checked={sharedPerspective === 'on'}
+                      ref={(el) => {
+                        if (el) el.indeterminate = sharedPerspective === 'mixed';
+                      }}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        applyToMulti((o: any) => {
+                          if ((o as any).type === 'Quad') (o as any).perspective = checked;
+                        });
+                      }}
+                    />
+                    Surface Perspective
+                  </label>
+                </div>
+
+                {sharedPerspective !== 'off' && (
+                  <div className="e-row">
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <label className="e-label">Perspective Amount</label>
+                      <span style={{ fontSize: '11px', opacity: 0.8 }}>
+                        {sharedPerspectiveAmount === ''
+                          ? 'mixed'
+                          : formatPanelNumber(sharedPerspectiveAmount as number)}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      style={{ width: '100%', cursor: 'pointer' }}
+                      min={0}
+                      max={2}
+                      step={0.05}
+                      value={
+                        sharedPerspectiveAmount === '' ? 1.0 : (sharedPerspectiveAmount as number)
+                      }
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        applyToMulti((o: any) => {
+                          if ((o as any).type === 'Quad') (o as any).perspectiveAmount = v;
+                        });
+                      }}
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             {quads.length > 0 && sharedIsGrid !== 'off' && (
@@ -600,6 +948,69 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                     />
                   </div>
                 </div>
+
+                {sharedFilled !== 'off' && (
+                  <>
+                    <div className="e-row">
+                      <label
+                        className="e-label"
+                        style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                      >
+                        <input
+                          type="checkbox"
+                          style={{ marginRight: '5px' }}
+                          checked={sharedCheckerboard === 'on'}
+                          ref={(el) => {
+                            if (el) el.indeterminate = sharedCheckerboard === 'mixed';
+                          }}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            applyToMulti((o: any) => {
+                              if ((o as any).type === 'Quad') (o as any).checkerboard = checked;
+                            });
+                          }}
+                        />
+                        Checkerboard
+                      </label>
+                    </div>
+
+                    {sharedCheckerboard !== 'off' && (
+                      <div className="e-row">
+                        <label className="e-label" style={{ marginBottom: '4px' }}>
+                          Second Fill Color
+                        </label>
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                          <input
+                            type="color"
+                            className="e-input"
+                            style={{ width: '32px', padding: 0 }}
+                            value={
+                              sharedSecondColor === '' ? '#000000' : (sharedSecondColor as string)
+                            }
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              applyToMulti((o: any) => {
+                                if ((o as any).type === 'Quad') (o as any).secondColor = v;
+                              });
+                            }}
+                          />
+                          <input
+                            type="text"
+                            className="e-input"
+                            placeholder="mixed"
+                            value={sharedSecondColor === '' ? '' : (sharedSecondColor as string)}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              applyToMulti((o: any) => {
+                                if ((o as any).type === 'Quad') (o as any).secondColor = v;
+                              });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </>
             )}
           </>,

@@ -4,42 +4,7 @@
   "description": "You are in New Scene.",
   "textRedirects": {},
   "filename": "Corridor",
-  "walkbox": [
-    {
-      "name": "Walk_main2",
-      "type": "Walkbox",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "parallax": 1,
-      "poly": [
-        {
-          "x": 1626,
-          "y": -14
-        },
-        {
-          "x": 1811,
-          "y": -19
-        },
-        {
-          "x": 1812,
-          "y": 291
-        },
-        {
-          "x": 1358,
-          "y": 283
-        }
-      ],
-      "mode": "Add"
-    }
-  ],
+  "walkbox": [],
   "triggerboxes": [
     {
       "name": "E1",
@@ -189,23 +154,6 @@
         }
       ],
       "script": ""
-    },
-    {
-      "name": "Trig_656",
-      "type": "Triggerbox",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "parallax": 1,
-      "poly": [],
-      "script": ""
     }
   ],
   "scaling": {
@@ -236,7 +184,8 @@
         },
         {
           "type": "WalkBox",
-          "mode": "Add"
+          "mode": "Add",
+          "perspectiveWalk3D": true
         }
       ],
       "layer": 0,
@@ -278,6 +227,11 @@
           }
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#41050c",
       "sortMode": "ignore",
       "opacity": 1,
@@ -287,8 +241,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
+      "gridPerspective": false,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -333,7 +295,7 @@
         },
         {
           "x": -923,
-          "y": 117,
+          "y": 116.99999999999997,
           "p": 1,
           "binding": {
             "targetName": "Quad_650",
@@ -343,6 +305,11 @@
           }
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#111624",
       "sortMode": "ignore",
       "opacity": 1,
@@ -352,8 +319,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -387,7 +362,7 @@
         },
         {
           "x": -632,
-          "y": -75,
+          "y": -75.00000000000001,
           "p": 1,
           "binding": {
             "targetName": "Quad_650",
@@ -402,6 +377,11 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#111624",
       "sortMode": "ignore",
       "opacity": 1,
@@ -411,8 +391,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -455,6 +443,11 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#303030",
       "sortMode": "ignore",
       "opacity": 1,
@@ -464,8 +457,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#161616",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -505,6 +506,10 @@
       "opacity": 1,
       "blendMode": "source-over",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -538,6 +543,10 @@
       "opacity": 1,
       "blendMode": "source-over",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -580,6 +589,11 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#271c39",
       "sortMode": "ignore",
       "opacity": 1,
@@ -589,8 +603,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -633,6 +655,11 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#3c2b57",
       "sortMode": "ignore",
       "opacity": 1,
@@ -642,8 +669,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -701,6 +736,11 @@
           }
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#41050c",
       "sortMode": "ignore",
       "opacity": 1,
@@ -710,8 +750,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -754,6 +802,11 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#121212",
       "sortMode": "v2",
       "opacity": 1,
@@ -763,8 +816,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -812,6 +873,11 @@
           }
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#391a3c",
       "sortMode": "ignore",
       "opacity": 1,
@@ -821,8 +887,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -830,41 +904,46 @@
       "name": "shadow",
       "type": "Quad",
       "locked": false,
-      "disabled": true,
+      "disabled": false,
       "groupID": null,
       "customName": "",
       "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
-      "visible": false,
+      "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": -550.6457352112014,
-      "y": -139.79715935854634,
+      "x": -647.1930135075106,
+      "y": -54.37709465148374,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": -550.6457352112014,
-          "y": -139.79715935854634,
+          "x": -647.1930135075106,
+          "y": -54.37709465148374,
           "p": 1.0431424643929696
         },
         {
-          "x": -522.9013512835288,
-          "y": -140.0055142061039,
+          "x": -594.7047250015895,
+          "y": -54.92916549467441,
           "p": 1.0424314168264899
         },
         {
-          "x": -391.5258070795587,
-          "y": -131.67931926909367,
+          "x": -303.12398480376584,
+          "y": -38.18029947138137,
           "p": 1.0467476902559403
         },
         {
-          "x": -416.4691613474825,
-          "y": -131.26263919107012,
+          "x": -356.7051155511017,
+          "y": -38.759964215503864,
           "p": 1.0405613305364574
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#830a83",
       "sortMode": "ignore",
       "opacity": 0.95,
@@ -874,8 +953,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 7,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -923,6 +1010,11 @@
           }
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#391a3c",
       "sortMode": "ignore",
       "opacity": 1,
@@ -932,8 +1024,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -976,6 +1076,11 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#1c2439",
       "sortMode": "ignore",
       "opacity": 1,
@@ -985,8 +1090,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -1037,6 +1150,11 @@
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#1c2439",
       "sortMode": "ignore",
       "opacity": 1,
@@ -1046,8 +1164,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -1055,41 +1181,46 @@
       "name": "shadow2",
       "type": "Quad",
       "locked": false,
-      "disabled": false,
+      "disabled": true,
       "groupID": null,
       "customName": "",
       "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
-      "visible": true,
+      "visible": false,
       "hidden": false,
       "parallax": 1,
-      "x": 1646.9214689253608,
-      "y": 81.06503356313719,
+      "x": 1759.1025914362363,
+      "y": 36.88014426334833,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 1646.9214689253608,
-          "y": 81.06503356313719,
+          "x": 1759.1025914362363,
+          "y": 36.88014426334833,
           "p": 1
         },
         {
-          "x": 1666.3416895886883,
-          "y": 82.48864305587472,
+          "x": 1820.0436160035233,
+          "y": 41.3474581304337,
           "p": 1
         },
         {
-          "x": 1652.0767513493884,
-          "y": 124.17356320268614,
+          "x": 1775.279966467161,
+          "y": 172.15553630790265,
           "p": 1
         },
         {
-          "x": 1585.0247133091552,
-          "y": 157.82097034648677,
+          "x": 1564.8693862613036,
+          "y": 277.7417446689632,
           "p": 1
         }
       ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
       "color": "#52779aff",
       "sortMode": "ignore",
       "opacity": 1,
@@ -1099,8 +1230,16 @@
       "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
       "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
       "blur": 4,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -1127,7 +1266,7 @@
         {
           "type": "NPC",
           "enabled": true,
-          "memory": "",
+          "memory": [],
           "objectives": [],
           "objectivesInitializedFromTA": true,
           "knownEntities": {
@@ -1176,6 +1315,10 @@
       "opacity": 1,
       "blendMode": "source-over",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "isPlayer": false,
       "speed": 0.24,
       "perceptionRadius": 600,
@@ -1204,7 +1347,7 @@
       "type": "Entity",
       "locked": false,
       "disabled": false,
-      "groupID": null,
+      "groupID": "#aaa",
       "customName": "",
       "textRedirects": {},
       "interactions": {},
@@ -1244,6 +1387,82 @@
       "opacity": 1,
       "blendMode": "source-over",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Quad_30",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "WalkBox",
+          "mode": "Add",
+          "perspectiveWalk3D": true
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 1682.7451928923542,
+      "y": 69.58086613466526,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": 1638,
+          "y": -22,
+          "p": 1
+        },
+        {
+          "x": 1813,
+          "y": -21,
+          "p": 1
+        },
+        {
+          "x": 1768,
+          "y": 289,
+          "p": 1
+        },
+        {
+          "x": 1358,
+          "y": 286,
+          "p": 1
+        }
+      ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "texturePerspective": true,
+      "color": "#52779aff",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "gridPerspective": true,
+      "gridPerspectiveAmount": 1,
+      "filled": false,
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -1272,7 +1491,7 @@
           "capacity": 10,
           "groups": [],
           "protected": true,
-          "items": ["test"],
+          "items": [],
           "relation": "in"
         },
         {
@@ -1287,15 +1506,15 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 1656.984621622974,
-      "y": 92.80537837701903,
-      "width": 124.11221660389366,
-      "height": 296.8630045795835,
+      "x": -588,
+      "y": -37,
+      "width": 71.51623111111113,
+      "height": 171.54231111111113,
       "baseWidth": 148,
-      "baseHeight": 354,
-      "spriteName": "miles2_ds-idle-down.json",
+      "baseHeight": 355,
+      "spriteName": "miles2_ds-idle-left.json",
       "color": "#00ffff",
-      "scale": 0.8385960581344166,
+      "scale": 0.48321777777777786,
       "refScale": 0.84,
       "modelScale": 0.84,
       "ignoreScaling": false,
@@ -1303,10 +1522,14 @@
       "opacity": 1,
       "blendMode": "source-over",
       "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
       "isPlayer": true,
       "speed": 0.24,
       "perceptionRadius": 600,
-      "direction": "down",
+      "direction": "right",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -1325,47 +1548,6 @@
       },
       "colliderWidth": 88,
       "colliderHeight": 4
-    },
-    {
-      "name": "test",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": "#compact_cassete",
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Item"
-        }
-      ],
-      "layer": 4,
-      "visible": false,
-      "hidden": false,
-      "spatial": {
-        "parentNodeId": "Miles",
-        "relation": "in"
-      },
-      "parallax": 1,
-      "x": 1656.984621622974,
-      "y": 92.80537837701903,
-      "width": 15.733550418321286,
-      "height": 22.35820322603551,
-      "baseWidth": 19.69986357435198,
-      "baseHeight": 27.994542974079128,
-      "spriteName": null,
-      "color": "#AAAAAA",
-      "scale": 0.7986629125089683,
-      "refScale": 0.8,
-      "modelScale": 0.8,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0,
-      "colliderWidth": 0,
-      "colliderHeight": 0
     }
   ],
   "folders": [],
@@ -1387,55 +1569,5 @@
     "pannerRolloffFactor": 0.7,
     "panningModel": "HRTF",
     "distanceModel": "linear"
-  },
-  "sceneLog": {
-    "entries": [
-      {
-        "id": "1783380368175-2",
-        "kind": "action",
-        "timestamp": 1783380368175,
-        "actorId": "Miles",
-        "displayName": "Miles",
-        "text": "[ Miles goes through Ex3 ]",
-        "knownByActorIds": ["npc_Rick"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783380377091-2",
-        "kind": "action",
-        "timestamp": 1783380377091,
-        "actorId": "Miles",
-        "displayName": "Miles",
-        "text": "[ Miles goes through Ex3 ]",
-        "knownByActorIds": ["npc_Rick"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783380430710-3",
-        "kind": "action",
-        "timestamp": 1783380430710,
-        "actorId": "Miles",
-        "displayName": "Miles",
-        "text": "[ Miles goes through Ex3 ]",
-        "knownByActorIds": ["npc_Rick"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      }
-    ],
-    "lastPmProcessedAt": 0,
-    "lastPmProcessedAtByNpc": {
-      "npc_Rick": 1783264260430
-    }
   }
 }

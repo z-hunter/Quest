@@ -93,4 +93,23 @@ describe('ComponentSystem State components', () => {
       },
     ]);
   });
+
+  it('migrates legacy NPC scalar memory and objective strings when read from a save', () => {
+    const { game } = createTestGame();
+    const entity = new Entity(game as any, 0, 0, 10, 10, 'guard');
+    entity.components = [
+      { type: 'NPC', enabled: true, memory: 'Met the player.', objectives: ['Check IDs'] },
+    ] as any;
+
+    const npc = ComponentSystem.getNpcComponent(entity);
+
+    expect(npc?.memory).toEqual(['Met the player.']);
+    expect(npc?.objectives).toEqual([expect.objectContaining({ text: 'Check IDs', subtasks: [] })]);
+    expect(entity.components[0]).toEqual(
+      expect.objectContaining({
+        memory: ['Met the player.'],
+        objectives: [expect.objectContaining({ id: expect.any(String), text: 'Check IDs' })],
+      })
+    );
+  });
 });

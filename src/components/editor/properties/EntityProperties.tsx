@@ -1,7 +1,11 @@
 import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
-import { renderOpacityBlurControls, renderSection } from './propertiesUtils';
+import {
+  renderOpacityBlurControls,
+  renderSpriteEffectsControls,
+  renderSection,
+} from './propertiesUtils';
 
 interface EntityObject {
   x: number;
@@ -12,6 +16,7 @@ interface EntityObject {
   modelScale: number;
   layer: number;
   parallax: number;
+  depthSortMode: 'manual' | 'parallax' | 'y';
   colliderHeight: number;
   colliderWidth: number;
   ignoreScaling: boolean;
@@ -19,7 +24,13 @@ interface EntityObject {
   blendMode: string;
   opacity: number;
   blur: number;
+  brightness: number;
+  saturation: number;
+  contrast: number;
+  hueShift: number;
   spriteName: string | null;
+  flipX: boolean;
+  flipY: boolean;
 }
 
 export const EntityProperties: React.FC = () => {
@@ -132,6 +143,20 @@ export const EntityProperties: React.FC = () => {
             </div>
           </div>
 
+          <div className="e-row">
+            <label className="e-label">Depth Sort mode</label>
+            <Select
+              value={entity.depthSortMode || 'y'}
+              onChange={(value) => handleChange('depthSortMode', value)}
+              options={[
+                { value: 'y', label: 'By Y' },
+                { value: 'parallax', label: 'By Parallax' },
+                { value: 'manual', label: 'Manual (Layer only)' },
+              ]}
+              style={{ width: '100%' }}
+            />
+          </div>
+
           <div
             className="e-row"
             style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
@@ -230,6 +255,17 @@ export const EntityProperties: React.FC = () => {
             (nextBlur) => handleChange('blur', nextBlur)
           )}
 
+          {renderSpriteEffectsControls(
+            entity.brightness !== undefined ? entity.brightness : 1.0,
+            entity.saturation !== undefined ? entity.saturation : 1.0,
+            entity.contrast !== undefined ? entity.contrast : 1.0,
+            entity.hueShift !== undefined ? entity.hueShift : 0,
+            (v) => handleChange('brightness', v),
+            (v) => handleChange('saturation', v),
+            (v) => handleChange('contrast', v),
+            (v) => handleChange('hueShift', v)
+          )}
+
           <div className="e-row">
             <label className="e-label">Sprite</label>
             <div style={{ display: 'flex', gap: '5px' }}>
@@ -252,6 +288,36 @@ export const EntityProperties: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {entity.spriteName && (
+            <div
+              className="e-row"
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
+            >
+              <label
+                className="e-label"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={entity.flipX}
+                  onChange={(e) => handleChange('flipX', e.target.checked)}
+                />
+                Flip X
+              </label>
+              <label
+                className="e-label"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={entity.flipY}
+                  onChange={(e) => handleChange('flipY', e.target.checked)}
+                />
+                Flip Y
+              </label>
+            </div>
+          )}
         </>,
         setSectionRef
       )}

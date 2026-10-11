@@ -2,7 +2,8 @@ import { Entity, type EntityData } from './Entity';
 import { Animator } from '../core/Animator';
 import { useEditorStore } from '../store/editorStore';
 import type { IGame } from '../core/IGame';
-import { toWorldPosition } from '../utils/Parallax';
+import { toVisualPosition, toWorldPosition } from '../utils/Parallax';
+import { Geometry } from '../utils/Geometry';
 import type { SceneObject } from './SceneObject';
 
 export type ActorState = 'idle' | 'walk' | 'talk' | 'interact' | string;
@@ -43,6 +44,47 @@ export interface ActorData extends EntityData {
   perceptionRadius?: number;
 }
 
+class MinHeap {
+  private readonly values: Array<{ key: string; score: number }> = [];
+
+  get size(): number {
+    return this.values.length;
+  }
+
+  push(value: { key: string; score: number }): void {
+    this.values.push(value);
+    let index = this.values.length - 1;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (this.values[parent].score <= value.score) break;
+      this.values[index] = this.values[parent];
+      index = parent;
+    }
+    this.values[index] = value;
+  }
+
+  pop(): { key: string; score: number } | undefined {
+    const first = this.values[0];
+    const last = this.values.pop();
+    if (!first || !last) return first;
+    let index = 0;
+    while (index * 2 + 1 < this.values.length) {
+      let child = index * 2 + 1;
+      if (
+        child + 1 < this.values.length &&
+        this.values[child + 1].score < this.values[child].score
+      ) {
+        child += 1;
+      }
+      if (this.values[child].score >= last.score) break;
+      this.values[index] = this.values[child];
+      index = child;
+    }
+    this.values[index] = last;
+    return first;
+  }
+}
+
 export class Actor extends Entity {
   direction: ActorDirection;
   state: ActorState;
@@ -61,6 +103,17 @@ export class Actor extends Entity {
   readonly type: string = 'Actor';
   private localTeleportTarget: { x: number; y: number } | null = null;
   private localTeleportExit: SceneObject | null = null;
+  /** Final intent survives a same-scene Exit placement so its stale route can be rebuilt. */
+  private plannedMoveTarget: { x: number; y: number } | null = null;
+  /** Increments when a same-scene Exit relocates an in-progress movement. */
+  private localTeleportRevision = 0;
+  private lastRouteBlockDiagnostic: {
+    position: { x: number; y: number };
+    attemptedPosition: { x: number; y: number };
+    target: { x: number; y: number } | null;
+    routeIndex: number;
+    routeLength: number;
+  } | null = null;
 
   isPlayer: boolean = false;
 
@@ -164,16 +217,36 @@ export class Actor extends Entity {
   }
 
   moveTo(x: number, y: number): ActorMoveResult {
+    this.lastRouteBlockDiagnostic = null;
     const target = { x, y };
     if (Math.abs(x - this.x) < 1.0 && Math.abs(y - this.y) < 1.0) {
       this.stopWithMoveResult(this.createMoveResult('arrived', 'arrived', target, []));
       return this.lastMoveResult;
     }
 
-    const walkingRoute = this.planWalkingRouteTo(target);
-    const teleportPlan = walkingRoute
-      ? null
-      : this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null);
+    this.plannedMoveTarget = { ...target };
+    const isWalkable = (wx: number, wy: number) =>
+      !this.scene || typeof this.scene.isWalkable !== 'function'
+        ? true
+        : this.scene.isWalkable(wx, wy, this);
+
+    const targetIsWalkable = isWalkable(target.x, target.y);
+    let walkingRoute: { x: number; y: number }[] | null = null;
+    if (
+      targetIsWalkable &&
+      this.isRouteSegmentClear({ x: this.x, y: this.y }, target, isWalkable)
+    ) {
+      walkingRoute = [target];
+    }
+
+    const teleportPlan =
+      !walkingRoute && targetIsWalkable
+        ? this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null)
+        : null;
+
+    if (!walkingRoute && !teleportPlan) {
+      walkingRoute = this.planWalkingRouteTo(target);
+    }
     if (
       teleportPlan?.firstLeg.status === 'already_reachable' &&
       teleportPlan.exits[0] &&
@@ -223,6 +296,7 @@ export class Actor extends Entity {
       this.scene?.camera || { x: 0, y: 0 },
       this.parallax !== undefined ? this.parallax : 1.0
     );
+    this.plannedMoveTarget = { ...worldTarget };
     const route = this.planWalkingRouteTo(worldTarget);
 
     if (!route) {
@@ -242,6 +316,35 @@ export class Actor extends Entity {
     return this.lastMoveResult;
   }
 
+  /**
+   * Starts a route prepared by the navigation worker. The caller has already
+   * validated the route against the current Scene; this deliberately avoids
+   * re-running synchronous A* in moveTo().
+   */
+  startPlannedRoute(
+    target: { x: number; y: number },
+    route: { x: number; y: number }[]
+  ): ActorMoveResult {
+    if (route.length === 0) {
+      this.stopWithMoveResult(this.createMoveResult('arrived', 'arrived', target, []));
+      return this.lastMoveResult;
+    }
+    this.plannedMoveTarget = { ...target };
+    this.route = route.map((point) => ({ ...point }));
+    this.routeIndex = 0;
+    this.target = this.route[0];
+    this.visualTarget = null;
+
+    const teleportPlan = this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null);
+    this.localTeleportTarget = target;
+    this.localTeleportExit = teleportPlan?.exits[0] || null;
+
+    this.setState('walk');
+    this.overrideAnimSet = null;
+    this.lastMoveResult = this.createMoveResult('started', 'route_started', target, this.route);
+    return this.lastMoveResult;
+  }
+
   stop(): void {
     this.target = null;
     this.visualTarget = null;
@@ -249,11 +352,68 @@ export class Actor extends Entity {
     this.routeIndex = 0;
     this.localTeleportTarget = null;
     this.localTeleportExit = null;
+    this.plannedMoveTarget = null;
     this.setState('idle');
+  }
+
+  /**
+   * A same-scene Exit can move an actor many screens away while it is walking.
+   * Worker routes are expressed in the pre-teleport coordinate space, so they
+   * must never be resumed from the Entry position.
+   */
+  resumePlannedMovementAfterLocalTeleport(): {
+    target: { x: number; y: number };
+    previousRouteLength: number;
+    result: ActorMoveResult;
+  } | null {
+    const target = this.plannedMoveTarget;
+    if (!target || this.state !== 'walk') {
+      return null;
+    }
+
+    // If this teleport was NOT part of an intentional teleport plan (e.g., player clicking the floor
+    // and accidentally pathing over a teleport), we stop the navigation to avoid bouncing back.
+    if (!this.localTeleportTarget) {
+      this.stopWithMoveResult(this.createMoveResult('arrived', 'arrived', target, []));
+      return null;
+    }
+
+    const distanceToTarget = Math.hypot(target.x - this.x, target.y - this.y);
+    if (distanceToTarget <= 48 || this.localTeleportRevision >= 3) {
+      this.stopWithMoveResult(this.createMoveResult('arrived', 'arrived', target, []));
+      return null;
+    }
+
+    const previousRouteLength = this.route.length;
+    this.localTeleportRevision += 1;
+    const result = this.moveTo(target.x, target.y);
+    return { target: { ...target }, previousRouteLength, result };
+  }
+
+  getLocalTeleportRevision(): number {
+    return this.localTeleportRevision;
   }
 
   getMoveResult(): ActorMoveResult {
     return this.lastMoveResult;
+  }
+
+  getRouteBlockDiagnostic(): {
+    position: { x: number; y: number };
+    attemptedPosition: { x: number; y: number };
+    target: { x: number; y: number } | null;
+    routeIndex: number;
+    routeLength: number;
+  } | null {
+    if (!this.lastRouteBlockDiagnostic) return null;
+    return {
+      ...this.lastRouteBlockDiagnostic,
+      position: { ...this.lastRouteBlockDiagnostic.position },
+      attemptedPosition: { ...this.lastRouteBlockDiagnostic.attemptedPosition },
+      target: this.lastRouteBlockDiagnostic.target
+        ? { ...this.lastRouteBlockDiagnostic.target }
+        : null,
+    };
   }
 
   previewRouteTo(x: number, y: number): { x: number; y: number }[] | null {
@@ -266,8 +426,12 @@ export class Actor extends Entity {
     return route ? route.map((point) => ({ ...point })) : null;
   }
 
-  previewWalkingRouteTo(x: number, y: number): { x: number; y: number }[] | null {
-    const route = this.planWalkingRouteTo({ x, y });
+  previewWalkingRouteTo(
+    x: number,
+    y: number,
+    ignorePhysicalExits: boolean = false
+  ): { x: number; y: number }[] | null {
+    const route = this.planWalkingRouteTo({ x, y }, ignorePhysicalExits);
     return route ? route.map((point) => ({ ...point })) : null;
   }
 
@@ -309,12 +473,29 @@ export class Actor extends Entity {
       const dy = currentTarget.y - this.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      const p = this.parallax !== undefined ? this.parallax : 1.0;
-      // Scale speed by parallax (dampened: 0.5 input -> 0.6 output)
-      const speedScale = 0.2 + 0.8 * p;
-      const step = this.speed * speedScale * deltaTime;
+      const step = this.getMovementStep(deltaTime);
+      const surfaceStep = this.getSurfaceRouteStep(currentTarget, step);
+      const reached = surfaceStep ? surfaceStep.reached : dist <= step;
 
-      if (dist <= step) {
+      if (reached) {
+        // A route can become invalid after it was planned: dynamic colliders,
+        // effective Quad geometry and surface P updates may all move a boundary
+        // between frames.  Do not bypass collision checks just because this is
+        // the final, short step; doing so places the Actor directly inside the
+        // new boundary and can leave it trapped there.
+        if (isWalkable && !isWalkable(currentTarget.x, currentTarget.y)) {
+          this.lastRouteBlockDiagnostic = {
+            position: { x: this.x, y: this.y },
+            attemptedPosition: { x: currentTarget.x, y: currentTarget.y },
+            target: this.target ? { ...this.target } : null,
+            routeIndex: this.routeIndex,
+            routeLength: this.route.length,
+          };
+          this.stopWithMoveResult(
+            this.createMoveResult('blocked', 'route_blocked', this.target, this.route)
+          );
+          return;
+        }
         this.x = currentTarget.x;
         this.y = currentTarget.y;
         if (this.route.length > 0 && this.routeIndex < this.route.length - 1) {
@@ -325,9 +506,9 @@ export class Actor extends Entity {
           const teleportExit = this.localTeleportExit;
           const teleportTarget = this.localTeleportTarget;
           if (teleportExit && teleportTarget && this.scene) {
+            const activated = ComponentSystem.handleActivation(teleportExit, this.scene, 0, this);
             this.localTeleportExit = null;
             this.localTeleportTarget = null;
-            const activated = ComponentSystem.handleActivation(teleportExit, this.scene, 0, this);
             if (activated) {
               this.moveTo(teleportTarget.x, teleportTarget.y);
               return;
@@ -338,10 +519,11 @@ export class Actor extends Entity {
           );
         }
       } else {
-        const moveX = (dx / dist) * step;
-        const moveY = (dy / dist) * step;
-        const nextX = this.x + moveX;
-        const nextY = this.y + moveY;
+        const next = surfaceStep
+          ? surfaceStep.position
+          : { x: this.x + (dx / dist) * step, y: this.y + (dy / dist) * step };
+        const nextX = next.x;
+        const nextY = next.y;
 
         // Determine Direction
         if (Math.abs(dx) > Math.abs(dy)) {
@@ -357,6 +539,13 @@ export class Actor extends Entity {
         } else if (isWalkable && this.trySlideTowardTarget(nextX, nextY, isWalkable)) {
           if (this.overrideAnimSet) this.overrideAnimSet = null;
         } else {
+          this.lastRouteBlockDiagnostic = {
+            position: { x: this.x, y: this.y },
+            attemptedPosition: { x: nextX, y: nextY },
+            target: this.target ? { ...this.target } : null,
+            routeIndex: this.routeIndex,
+            routeLength: this.route.length,
+          };
           this.stopWithMoveResult(
             this.createMoveResult('blocked', 'route_blocked', this.target, this.route)
           );
@@ -391,31 +580,40 @@ export class Actor extends Entity {
       if (input.isDown('ArrowRight')) dx += 1;
 
       if (dx !== 0 || dy !== 0) {
+        const rawDx = dx;
+        const rawDy = dy;
         this.target = null;
         this.route = [];
         this.routeIndex = 0;
         this.setState('walk');
         if (this.overrideAnimSet) this.overrideAnimSet = null;
 
-        const length = Math.sqrt(dx * dx + dy * dy);
-        if (length > 0) {
-          dx /= length;
-          dy /= length;
+        const step = this.getMovementStep(deltaTime);
+        const perspectivePosition = this.getPerspectiveWalkPosition(dx, dy, step);
+        if (!perspectivePosition) {
+          const length = Math.sqrt(dx * dx + dy * dy);
+          if (length > 0) {
+            dx /= length;
+            dy /= length;
+          }
         }
 
-        const p = this.parallax !== undefined ? this.parallax : 1.0;
-        const speedScale = 0.2 + 0.8 * p;
-        const moveX = dx * this.speed * speedScale * deltaTime;
-        const moveY = dy * this.speed * speedScale * deltaTime;
-
-        const nextX = this.x + moveX;
-        const nextY = this.y + moveY;
+        const nextX = perspectivePosition?.x ?? this.x + dx * step;
+        const nextY = perspectivePosition?.y ?? this.y + dy * step;
 
         // Update Direction
-        if (Math.abs(dx) > Math.abs(dy)) {
-          this.setDirection(dx > 0 ? 'right' : 'left');
+        if (perspectivePosition) {
+          if (rawDy !== 0) {
+            this.setDirection(rawDy < 0 ? 'up' : 'down');
+          } else {
+            this.setDirection(rawDx > 0 ? 'right' : 'left');
+          }
         } else {
-          this.setDirection(dy > 0 ? 'down' : 'up');
+          if (Math.abs(dx) > Math.abs(dy)) {
+            this.setDirection(dx > 0 ? 'right' : 'left');
+          } else {
+            this.setDirection(dy > 0 ? 'down' : 'up');
+          }
         }
 
         if (!isWalkable || isWalkable(nextX, nextY)) {
@@ -432,6 +630,195 @@ export class Actor extends Entity {
         this.setState('idle');
       }
     }
+  }
+
+  private getPerspectiveWalkPosition(
+    inputX: number,
+    inputY: number,
+    distance: number
+  ): { x: number; y: number } | null {
+    if (!this.scene?.entities) return null;
+
+    const cam = this.scene.camera;
+    const actorP = this.parallax !== undefined ? this.parallax : 1.0;
+    const visualPosition = {
+      x: cam ? this.x - cam.x * (actorP - 1.0) : this.x,
+      y: cam ? this.y - cam.y * (actorP - 1.0) : this.y,
+    };
+
+    for (const entity of this.scene.entities) {
+      if (entity.disabled || (entity as any).type !== 'Quad') continue;
+      const quad = entity as any;
+      if (!quad.vertices || quad.vertices.length < 4) continue;
+      const walkBox = quad.components?.find(
+        (c: any) => c && (c.type === 'WalkBox' || c.type === 'Walkbox')
+      );
+      if (!walkBox) continue;
+
+      const metrics = quad.getSurfaceMetricsAt(visualPosition.x, visualPosition.y, true);
+      if (!metrics) continue;
+
+      // Local axes change abruptly when the actor crosses from this Quad to a
+      // neighbouring walkable region. Near any edge, use ordinary movement so
+      // a single key press cannot alternate between incompatible directions.
+      const axisULength = Math.hypot(metrics.axisU.x, metrics.axisU.y);
+      const axisVLength = Math.hypot(metrics.axisV.x, metrics.axisV.y);
+      const edgeDistance = Math.min(
+        metrics.u * axisULength,
+        (1 - metrics.u) * axisULength,
+        metrics.v * axisVLength,
+        (1 - metrics.v) * axisVLength
+      );
+      const colliderMargin = Math.min(this.colliderWidth / 2, this.colliderHeight / 2);
+      const boundaryMargin = Math.max(2, distance * 1.5, colliderMargin);
+      if (edgeDistance <= boundaryMargin) continue;
+
+      const perspectiveWalk =
+        walkBox.perspectiveWalk3D === true || walkBox.threeDPerspectiveWalk === true;
+      const isParallaxSurface = quad.components?.some((c: any) => c?.type === '3d-parallax');
+      if (isParallaxSurface) {
+        const localPosition = this.getLocalSurfaceStepPosition(
+          quad,
+          metrics,
+          inputX,
+          inputY,
+          distance,
+          perspectiveWalk
+        );
+        if (localPosition) return localPosition;
+        continue;
+      }
+
+      if (!perspectiveWalk) continue;
+
+      let dx = inputX * metrics.axisU.x + inputY * metrics.axisV.x;
+      let dy = inputX * metrics.axisU.y + inputY * metrics.axisV.y;
+      const directionLength = Math.hypot(dx, dy);
+      if (directionLength < 0.0000001) continue;
+      dx /= directionLength;
+      dy /= directionLength;
+
+      return toWorldPosition(
+        {
+          x: visualPosition.x + dx * distance,
+          y: visualPosition.y + dy * distance,
+        },
+        cam || { x: 0, y: 0 },
+        actorP
+      );
+    }
+
+    return null;
+  }
+
+  private getLocalSurfaceStepPosition(
+    quad: any,
+    metrics: any,
+    inputX: number,
+    inputY: number,
+    distance: number,
+    perspectiveWalk: boolean
+  ): { x: number; y: number } | null {
+    const inputLength = Math.hypot(inputX, inputY);
+    if (inputLength < 0.0000001) return null;
+
+    let qU = inputX / inputLength;
+    let qV = inputY / inputLength;
+    if (!perspectiveWalk) {
+      // Preserve ordinary arrow directions when 3D Perspective walking is
+      // disabled, but resolve their step through the corrected surface.
+      const determinant = metrics.axisU.x * metrics.axisV.y - metrics.axisV.x * metrics.axisU.y;
+      if (!Number.isFinite(determinant) || Math.abs(determinant) < 0.0000001) return null;
+      const desiredX = inputX / inputLength;
+      const desiredY = inputY / inputLength;
+      const solvedU = (desiredX * metrics.axisV.y - desiredY * metrics.axisV.x) / determinant;
+      const solvedV = (metrics.axisU.x * desiredY - metrics.axisU.y * desiredX) / determinant;
+      const solvedLength = Math.hypot(solvedU, solvedV);
+      if (!Number.isFinite(solvedLength) || solvedLength < 0.0000001) return null;
+      qU = solvedU / solvedLength;
+      qV = solvedV / solvedLength;
+    }
+
+    const referenceX = metrics.referenceAxisU.x * qU + metrics.referenceAxisV.x * qV;
+    const referenceY = metrics.referenceAxisU.y * qU + metrics.referenceAxisV.y * qV;
+    const referenceLength = Math.hypot(referenceX, referenceY);
+    if (!Number.isFinite(referenceLength) || referenceLength < 0.0000001) return null;
+
+    const nextU = metrics.u + (qU * distance) / referenceLength;
+    const nextV = metrics.v + (qV * distance) / referenceLength;
+    if (nextU < 0 || nextU > 1 || nextV < 0 || nextV > 1) return null;
+
+    const nextVisual = quad.getGridPointAt(nextU, nextV, true);
+    if (!nextVisual || !Number.isFinite(nextVisual.x) || !Number.isFinite(nextVisual.y)) {
+      return null;
+    }
+
+    return toWorldPosition(
+      nextVisual,
+      this.scene?.camera || { x: 0, y: 0 },
+      this.parallax !== undefined ? this.parallax : 1.0
+    );
+  }
+
+  private getSurfaceRouteStep(
+    target: { x: number; y: number },
+    distance: number
+  ): { position: { x: number; y: number }; reached: boolean } | null {
+    if (!this.scene?.entities) return null;
+
+    const camera = this.scene.camera || { x: 0, y: 0 };
+    const actorP = this.parallax !== undefined ? this.parallax : 1.0;
+    const currentVisual = toVisualPosition({ x: this.x, y: this.y }, camera, actorP);
+    const targetVisual = toVisualPosition(target, camera, actorP);
+
+    for (let index = this.scene.entities.length - 1; index >= 0; index--) {
+      const quad = this.scene.entities[index] as any;
+      if (quad.disabled || quad.type !== 'Quad' || !quad.vertices?.length) continue;
+      if (!quad.components?.some((component: any) => component?.type === '3d-parallax')) continue;
+
+      const currentMetrics = quad.getSurfaceMetricsAt(currentVisual.x, currentVisual.y, true);
+      if (!currentMetrics) continue;
+      const targetMetrics = quad.getSurfaceMetricsAt(targetVisual.x, targetVisual.y, true);
+      if (!targetMetrics) return null;
+
+      const deltaU = targetMetrics.u - currentMetrics.u;
+      const deltaV = targetMetrics.v - currentMetrics.v;
+      const localDistance = Math.hypot(deltaU, deltaV);
+      if (localDistance < 0.0000001) {
+        return { position: target, reached: true };
+      }
+
+      const qU = deltaU / localDistance;
+      const qV = deltaV / localDistance;
+      const referenceX =
+        currentMetrics.referenceAxisU.x * qU + currentMetrics.referenceAxisV.x * qV;
+      const referenceY =
+        currentMetrics.referenceAxisU.y * qU + currentMetrics.referenceAxisV.y * qV;
+      const referenceLength = Math.hypot(referenceX, referenceY);
+      if (!Number.isFinite(referenceLength) || referenceLength < 0.0000001) return null;
+
+      const localStep = distance / referenceLength;
+      if (localDistance <= localStep) return { position: target, reached: true };
+
+      const nextU = currentMetrics.u + qU * localStep;
+      const nextV = currentMetrics.v + qV * localStep;
+      if (nextU < 0 || nextU > 1 || nextV < 0 || nextV > 1) return null;
+      const nextVisual = quad.getGridPointAt(nextU, nextV, true);
+      if (!nextVisual || !Number.isFinite(nextVisual.x) || !Number.isFinite(nextVisual.y)) {
+        return null;
+      }
+      return {
+        position: toWorldPosition(nextVisual, camera, actorP),
+        reached: false,
+      };
+    }
+
+    return null;
+  }
+
+  private getMovementStep(deltaTime: number): number {
+    const parallax = this.parallax !== undefined ? this.parallax : 1;
+    return this.speed * (0.2 + 0.8 * parallax) * deltaTime;
   }
 
   updateSpriteForState() {
@@ -547,16 +934,20 @@ export class Actor extends Entity {
     this.lastMoveResult = result;
   }
 
-  private planWalkingRouteTo(target: { x: number; y: number }): { x: number; y: number }[] | null {
-    const isWalkable = (x: number, y: number) =>
+  private planWalkingRouteTo(
+    target: { x: number; y: number },
+    ignorePhysicalExits: boolean = false
+  ): { x: number; y: number }[] | null {
+    const isWalkable =
       !this.scene || typeof this.scene.isWalkable !== 'function'
-        ? true
-        : this.scene.isWalkable(x, y, this);
+        ? () => true
+        : (x: number, y: number) => this.scene!.isWalkable!(x, y, this, ignorePhysicalExits);
 
     if (!isWalkable(target.x, target.y)) return null;
-    if (this.isRouteSegmentClear({ x: this.x, y: this.y }, target, isWalkable)) return [target];
+    if (this.isRouteSegmentClear({ x: this.x, y: this.y }, target, isWalkable as any))
+      return [target];
 
-    return this.findGridRoute(target, isWalkable);
+    return this.findGridRoute(target, isWalkable as any);
   }
 
   private isRouteSegmentClear(
@@ -579,11 +970,12 @@ export class Actor extends Entity {
   }
 
   private getRouteGridSize(): number {
-    const colliderSize =
-      this.colliderWidth > 0 && this.colliderHeight > 0
-        ? Math.min(this.colliderWidth, this.colliderHeight)
-        : 12;
-    return Math.max(4, Math.min(24, colliderSize));
+    // A fixed grid size of 16-24 provides a good balance between
+    // pathfinding resolution and A* search space size.
+    // Using min(width, height) causes issues with flat colliders (e.g. 46x2),
+    // resulting in a tiny grid size (4), causing A* to hit the 50,000 iteration limit
+    // and failing to find paths over long distances.
+    return 16;
   }
 
   private trySlideTowardTarget(
@@ -633,11 +1025,13 @@ export class Actor extends Entity {
     const targetCell = this.pointToCell(target, bounds, gridSize);
     const startKey = this.cellKey(startCell);
     const targetKey = this.cellKey(targetCell);
-    const open = new Set<string>([startKey]);
+
+    const heap = new MinHeap();
     const cameFrom = new Map<string, string>();
     const gScore = new Map<string, number>([[startKey, 0]]);
-    const fScore = new Map<string, number>([[startKey, this.cellDistance(startCell, targetCell)]]);
     const cells = new Map<string, { x: number; y: number }>([[startKey, startCell]]);
+    const closed = new Set<string>();
+    heap.push({ key: startKey, score: this.cellDistance(startCell, targetCell) });
     const directions = [
       { x: 1, y: 0 },
       { x: -1, y: 0 },
@@ -648,14 +1042,16 @@ export class Actor extends Entity {
       { x: -1, y: 1 },
       { x: -1, y: -1 },
     ];
-    const maxIterations = (bounds.cols + 1) * (bounds.rows + 1);
+    const maxIterations = Math.min((bounds.cols + 1) * (bounds.rows + 1), 50000);
     let iterations = 0;
 
-    while (open.size > 0 && iterations < maxIterations) {
+    while (heap.size > 0 && iterations < maxIterations) {
       iterations += 1;
-      const currentKey = this.getBestOpenCell(open, fScore);
+      const next = heap.pop();
+      if (!next || closed.has(next.key)) continue;
+      const currentKey = next.key;
       const current = cells.get(currentKey);
-      if (!current) return null;
+      if (!current) continue;
 
       if (currentKey === targetKey) {
         return this.smoothRoute(
@@ -674,7 +1070,7 @@ export class Actor extends Entity {
         );
       }
 
-      open.delete(currentKey);
+      closed.add(currentKey);
 
       for (const direction of directions) {
         const neighbor = { x: current.x + direction.x, y: current.y + direction.y };
@@ -688,16 +1084,8 @@ export class Actor extends Entity {
         }
 
         const neighborKey = this.cellKey(neighbor);
-        const currentPoint = this.cellToRoutePoint(
-          current,
-          currentKey,
-          bounds,
-          gridSize,
-          startKey,
-          targetKey,
-          start,
-          target
-        );
+        if (closed.has(neighborKey)) continue;
+
         const point = this.cellToRoutePoint(
           neighbor,
           neighborKey,
@@ -709,7 +1097,29 @@ export class Actor extends Entity {
           target
         );
         if (!isWalkable(point.x, point.y)) continue;
-        if (!this.isRouteSegmentClear(currentPoint, point, isWalkable)) continue;
+        if (direction.x !== 0 && direction.y !== 0) {
+          const card1 = this.cellToRoutePoint(
+            { x: current.x + direction.x, y: current.y },
+            '',
+            bounds,
+            gridSize,
+            startKey,
+            targetKey,
+            start,
+            target
+          );
+          const card2 = this.cellToRoutePoint(
+            { x: current.x, y: current.y + direction.y },
+            '',
+            bounds,
+            gridSize,
+            startKey,
+            targetKey,
+            start,
+            target
+          );
+          if (!isWalkable(card1.x, card1.y) || !isWalkable(card2.x, card2.y)) continue;
+        }
 
         const tentativeG =
           (gScore.get(currentKey) ?? Number.POSITIVE_INFINITY) +
@@ -719,8 +1129,10 @@ export class Actor extends Entity {
           cameFrom.set(neighborKey, currentKey);
           cells.set(neighborKey, neighbor);
           gScore.set(neighborKey, tentativeG);
-          fScore.set(neighborKey, tentativeG + this.cellDistance(neighbor, targetCell));
-          open.add(neighborKey);
+          heap.push({
+            key: neighborKey,
+            score: tentativeG + this.cellDistance(neighbor, targetCell),
+          });
         }
       }
     }
@@ -815,21 +1227,6 @@ export class Actor extends Entity {
     const dx = a.x - b.x;
     const dy = a.y - b.y;
     return Math.sqrt(dx * dx + dy * dy);
-  }
-
-  private getBestOpenCell(open: Set<string>, fScore: Map<string, number>): string {
-    let best = '';
-    let bestScore = Number.POSITIVE_INFINITY;
-
-    for (const key of open) {
-      const score = fScore.get(key) ?? Number.POSITIVE_INFINITY;
-      if (score < bestScore) {
-        best = key;
-        bestScore = score;
-      }
-    }
-
-    return best;
   }
 
   private reconstructRoute(
@@ -936,4 +1333,109 @@ export class Actor extends Entity {
     actor.load(data);
     return actor;
   }
+}
+
+export function getQuadPerspectiveMovementVector(
+  quadVertices: Array<{ x: number; y: number }>,
+  px: number,
+  py: number,
+  inputX: number,
+  inputY: number
+): { dx: number; dy: number } | null {
+  if (quadVertices.length < 4) return null;
+
+  const v0 = quadVertices[0]; // Top-Left
+  const v1 = quadVertices[1]; // Top-Right
+  const v2 = quadVertices[2]; // Bottom-Right
+  const v3 = quadVertices[3]; // Bottom-Left
+
+  // The vertical trajectory is the ray from the actor to the vanishing point
+  // where the infinite left and right side lines meet. Unlike interpolating a
+  // fresh line from edge distances every frame, this keeps the actor on one
+  // continuous perspective ray for the whole vertical traversal.
+  const vanishingPoint = getInfiniteLineIntersection(v0, v3, v1, v2);
+  let upX: number;
+  let upY: number;
+  if (vanishingPoint) {
+    upX = vanishingPoint.x - px;
+    upY = vanishingPoint.y - py;
+  } else {
+    // Parallel side edges have a vanishing point at infinity.
+    upX = (v0.x + v1.x - v3.x - v2.x) / 2;
+    upY = (v0.y + v1.y - v3.y - v2.y) / 2;
+  }
+  const upLen = Math.hypot(upX, upY);
+  if (upLen > 0.0001) {
+    upX /= upLen;
+    upY /= upLen;
+  } else {
+    upX = 0;
+    upY = -1;
+  }
+
+  // Calculate distance from point P to Top edge (v0 -> v1) and Bottom edge (v3 -> v2)
+  const dT = Geometry.getPointToSegmentDistance({ x: px, y: py }, v0, v1);
+  const dB = Geometry.getPointToSegmentDistance({ x: px, y: py }, v3, v2);
+
+  const totalVerticalDist = dT + dB;
+  const v = totalVerticalDist > 0.0001 ? Math.max(0, Math.min(1, dT / totalVerticalDist)) : 0.5;
+
+  // Left point at ratio v (on left edge v0 -> v3)
+  const LeftV = {
+    x: (1 - v) * v0.x + v * v3.x,
+    y: (1 - v) * v0.y + v * v3.y,
+  };
+
+  // Right point at ratio v (on right edge v1 -> v2)
+  const RightV = {
+    x: (1 - v) * v1.x + v * v2.x,
+    y: (1 - v) * v1.y + v * v2.y,
+  };
+
+  // Right vector (from LeftV to RightV)
+  let rightX = RightV.x - LeftV.x;
+  let rightY = RightV.y - LeftV.y;
+  const rightLen = Math.hypot(rightX, rightY);
+  if (rightLen > 0.0001) {
+    rightX /= rightLen;
+    rightY /= rightLen;
+  } else {
+    rightX = 1;
+    rightY = 0;
+  }
+
+  // Input direction: inputY is -1 for UP, +1 for DOWN
+  // Movement vector = inputX * RightVector - inputY * UpVector
+  let dx = inputX * rightX - inputY * upX;
+  let dy = inputX * rightY - inputY * upY;
+
+  const len = Math.hypot(dx, dy);
+  if (len > 0.0001) {
+    dx /= len;
+    dy /= len;
+  }
+
+  return { dx, dy };
+}
+
+function getInfiniteLineIntersection(
+  a0: { x: number; y: number },
+  a1: { x: number; y: number },
+  b0: { x: number; y: number },
+  b1: { x: number; y: number }
+): { x: number; y: number } | null {
+  const adx = a1.x - a0.x;
+  const ady = a1.y - a0.y;
+  const bdx = b1.x - b0.x;
+  const bdy = b1.y - b0.y;
+  const denominator = adx * bdy - ady * bdx;
+  if (Math.abs(denominator) < 0.000001) return null;
+
+  const offsetX = b0.x - a0.x;
+  const offsetY = b0.y - a0.y;
+  const t = (offsetX * bdy - offsetY * bdx) / denominator;
+  return {
+    x: a0.x + t * adx,
+    y: a0.y + t * ady,
+  };
 }

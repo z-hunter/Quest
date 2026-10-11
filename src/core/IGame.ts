@@ -1,5 +1,4 @@
 import { AssetLoader } from './AssetLoader';
-import { AudioManager } from './AudioManager';
 import { SceneManager } from '../scene/SceneManager';
 import { SceneEditor } from '../tools/SceneEditor';
 import { Entity } from '../entities/Entity';
@@ -16,7 +15,6 @@ import type { ActorCommandExecutor } from '../mechanics/ActorCommandExecutor';
 
 export interface IGame {
   assets: AssetLoader;
-  audio: AudioManager;
   textAssets: TextAssetManager;
   sceneManager: SceneManager;
   editor: SceneEditor;
@@ -66,7 +64,12 @@ export interface IGame {
   closeEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome;
   closeFocusedView(): GameActionOutcome;
   takeEntity(entity: Entity): GameActionOutcome;
-  takeEntityForActor(actor: Actor | null, entity: Entity): GameActionOutcome;
+  takeEntityForActor(
+    actor: Actor | null,
+    entity: Entity,
+    options?: { emitAction?: boolean }
+  ): GameActionOutcome;
+  giveEntityForActor(actor: Actor | null, entity: Entity, targetActor: Actor): GameActionOutcome;
   getSurfacePutMessage(
     surface: SceneObject,
     item: Entity,
@@ -126,6 +129,13 @@ export interface IGame {
     subject?: SceneObject | null,
     payload?: Record<string, unknown>
   ): void;
+  wakeNpc?(actor: Actor, reason?: string): void;
+  recordNpcExitTransition?(args: {
+    npcId: string;
+    sourceSceneId: string;
+    destinationSceneId: string;
+    exitId: string;
+  }): void;
   openFileBrowser(
     mode: 'load' | 'save',
     dir: string,
@@ -152,7 +162,10 @@ export type ObservedActorActionCode =
   | 'open'
   | 'close'
   | 'take'
+  | 'give'
+  | 'give_failed'
   | 'put'
   | 'use'
   | 'command'
-  | 'traverse_exit';
+  | 'traverse_exit'
+  | 'left_immediate_area';

@@ -1,3 +1,5 @@
+import { getGameDesignResolution } from './Resolution';
+
 export class Input {
   game: any; // Using any to avoid circular dependency for now
   canvas: HTMLCanvasElement;
@@ -62,8 +64,9 @@ export class Input {
 
   private updateMouse(e: MouseEvent): void {
     const rect = this.canvas.getBoundingClientRect();
-    const scaleX = this.canvas.width / rect.width;
-    const scaleY = this.canvas.height / rect.height;
+    const { width, height } = getGameDesignResolution();
+    const scaleX = width / rect.width;
+    const scaleY = height / rect.height;
 
     this.mouse.x = (e.clientX - rect.left) * scaleX;
     this.mouse.y = (e.clientY - rect.top) * scaleY;

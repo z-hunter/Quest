@@ -1,10 +1,12 @@
 import type { IGame } from '../core/IGame';
 import type { SceneObject } from '../entities/SceneObject';
 import type { Triggerbox } from '../entities/Triggerbox';
-import type { BlockerComponent } from '../systems/ComponentSystem';
+import { ComponentSystem, type BlockerComponent } from '../systems/ComponentSystem';
 import type { SwitchTrigger } from '../entities/TriggerComponents';
 import type { Scene } from './Scene';
 import type { SpatialPlacement, SpatialRelationType } from './spatialTypes';
+
+import { isWalkboxObject } from './SceneInteraction';
 
 type EffectiveRelation = Exclude<SpatialRelationType, 'near'>;
 
@@ -52,6 +54,7 @@ type SceneTextRelationAccessState = SceneTextLayerAccessState & {
 };
 
 function getSceneObjectTitle(game: IGame, object: SceneObject): string | null {
+  if (ComponentSystem.isNavigationOnlyExit(object)) return null;
   const title = game.textAssets.getResolvedObjectField(object as any, 'title');
   return title && title.trim() ? title.trim() : null;
 }
@@ -187,7 +190,8 @@ export function getSceneTextLayerAccessState(
   game: IGame,
   object: SceneObject,
   objectById?: Map<string, SceneObject>,
-  titleById?: Map<string, string | null>
+  titleById?: Map<string, string | null>,
+  revealedHiddenEntities?: ReadonlySet<string>
 ): SceneTextLayerAccessState {
   const allObjectById =
     objectById ||
@@ -256,7 +260,7 @@ export function getSceneTextLayerAccessState(
 
   if (!hidden && title) {
     const semanticHiddenMode = getSemanticHiddenMode(object);
-    const isRevealed = scene.isHiddenEntityRevealed(object);
+    const isRevealed = (revealedHiddenEntities || scene.revealedHiddenEntities).has(object.name);
     if (semanticHiddenMode && !isRevealed) {
       hidden = true;
       hiddenReason = semanticHiddenMode;
@@ -467,7 +471,7 @@ export function getSceneTextRelationDirectAccessStates(
   game: IGame,
   anchorNodeId: string,
   relation: EffectiveRelation,
-  options: { includeHidden?: boolean } = {}
+  options: { includeHidden?: boolean; revealedHiddenEntities?: ReadonlySet<string> } = {}
 ): SceneTextRelationAccessState[] {
   const allObjects = scene.getAllSceneObjects();
   const objectById = new Map(allObjects.map((object) => [object.name, object] as const));
@@ -478,7 +482,14 @@ export function getSceneTextRelationDirectAccessStates(
 
   return allObjects
     .map((object) => {
-      const accessState = getSceneTextLayerAccessState(scene, game, object, objectById, titleById);
+      const accessState = getSceneTextLayerAccessState(
+        scene,
+        game,
+        object,
+        objectById,
+        titleById,
+        options.revealedHiddenEntities
+      );
       if (!accessState.title) return null;
       if (accessState.effectiveParentId !== anchorNodeId) return null;
       if (accessState.effectiveRelation !== relation) return null;
@@ -500,7 +511,7 @@ export function getSceneTextTargetDescriptor(
   if (!target) return null;
 
   const relation = normalizeRelation(fallbackRelation) || 'on';
-  if (target.type === 'Walkbox') {
+  if (isWalkboxObject(target)) {
     return { title: game.text('engine.floor_label'), relation: 'on' };
   }
 

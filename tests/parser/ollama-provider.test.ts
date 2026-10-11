@@ -61,6 +61,17 @@ describe('OllamaProvider', () => {
 
     expect(res.ok).toBe(false);
     expect(res.error).toBe('Internal Server Error');
-    expect(res.reason).toBe('api_error');
+    expect(res.reason).toBe('unavailable');
+    expect(res.retryable).toBe(true);
+  });
+
+  it('does not retry an aborted request', async () => {
+    const mockFetch = vi.fn().mockRejectedValue(new DOMException('aborted', 'AbortError'));
+    const provider = new OllamaProvider({ fetchImpl: mockFetch, maxAttempts: 2 });
+
+    const res = await provider.sendMessage('sys', []);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(res.reason).toBe('timeout');
   });
 });

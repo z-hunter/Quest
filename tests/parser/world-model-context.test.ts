@@ -3,6 +3,34 @@ import { ParserWorldModelBuilder } from '../../src/mechanics/ParserWorldModelBui
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 describe('Parser world model context', () => {
+  it('excludes a navigation-only Exit from all parser-facing context', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addTriggerbox('service_link', {
+      title: 'Maintenance passage',
+      components: [
+        {
+          type: 'Exit',
+          targetSceneId: '',
+          targetEntryId: 'service_entry',
+          navigationOnly: true,
+        },
+      ],
+    });
+
+    const model = new ParserWorldModelBuilder(fixture.game as any).build('look around', null);
+
+    expect(model.context.entities?.some((entity) => entity.id === 'service_link')).toBe(false);
+    expect((model.context.knownEntities || []).some((entity) => entity.id === 'service_link')).toBe(
+      false
+    );
+    expect((model.context.spatialNodes || []).some((node) => node.id === 'service_link')).toBe(
+      false
+    );
+    expect(model.scope.visible.some((object) => object.name === 'service_link')).toBe(false);
+    expect(model.scope.worldKnown.some((object) => object.name === 'service_link')).toBe(false);
+  });
+
   it('retains details internally for command-targeted prompt projection', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -604,7 +632,7 @@ describe('Parser world model context', () => {
         relation: 'in',
         capacity: 10,
         groups: [],
-        items: [{ id: 'far_cassette', x: 200, y: 0 }],
+        items: [{ id: 'far_cassette', x: 5, y: 0 }],
       },
     ];
     const staleNearCassette = fixture.addEntity('far_cassette', {
@@ -613,7 +641,7 @@ describe('Parser world model context', () => {
       components: [{ type: 'Item' }],
       spatial: { parentNodeId: 'Walk_main', relation: 'in' },
     });
-    staleNearCassette.x = 5;
+    staleNearCassette.x = 200;
     staleNearCassette.y = 0;
 
     const builder = new ParserWorldModelBuilder(fixture.game as any);
