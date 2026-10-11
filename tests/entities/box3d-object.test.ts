@@ -44,8 +44,128 @@ describe('Box3DObject', () => {
     ]);
 
     expect(cullFullyOccludedBox3DFragments([hidden, front])).toEqual([front]);
-    frontQuad.spriteName = 'possibly-transparent.png';
+    expect(cullFullyOccludedBox3DFragments([front, hidden])).toEqual([front, hidden]);
+    const originalProjection = front.projected;
+    front.projected = originalProjection.map((point: { x: number; y: number }) => ({
+      x: point.x + 20,
+      y: point.y,
+    }));
     expect(cullFullyOccludedBox3DFragments([hidden, front])).toEqual([hidden, front]);
+    front.projected = originalProjection;
+    expect(cullFullyOccludedBox3DFragments([hidden, front])).toEqual([front]);
+    for (const exclude of [
+      () => {
+        frontQuad.spriteName = 'possibly-transparent.png';
+      },
+      () => {
+        frontQuad.filled = false;
+      },
+      () => {
+        frontQuad.opacity = 0.99;
+      },
+      () => {
+        frontQuad.blur = 1;
+      },
+      () => {
+        frontQuad.blendMode = 'multiply';
+      },
+      () => {
+        front.entity = {} as any;
+      },
+    ]) {
+      frontQuad.spriteName = '';
+      frontQuad.filled = true;
+      frontQuad.opacity = 1;
+      frontQuad.blur = 0;
+      frontQuad.blendMode = 'source-over';
+      delete front.entity;
+      exclude();
+      expect(cullFullyOccludedBox3DFragments([hidden, front])).toEqual([hidden, front]);
+    }
+  });
+
+  it('checks polygon containment after projected bounds and preserves fragment order', () => {
+    const game: any = { editor: null };
+    const makeFragment = (name: string, projected: Array<{ x: number; y: number }>) => {
+      const quad = new QuadObject(game, name);
+      return {
+        quad,
+        vertices: [],
+        projected,
+        sceneOrder: 0,
+        boxId: 'box',
+        faceIndex: 0,
+        fragmented: false,
+      } as any;
+    };
+    const inNotch = makeFragment('notch', [
+      { x: 4, y: 5 },
+      { x: 6, y: 5 },
+      { x: 6, y: 6 },
+      { x: 4, y: 6 },
+    ]);
+    const concaveCover = makeFragment('concave', [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+      { x: 7, y: 10 },
+      { x: 7, y: 3 },
+      { x: 3, y: 3 },
+      { x: 3, y: 10 },
+      { x: 0, y: 10 },
+    ]);
+    const opaque = makeFragment('opaque', [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+      { x: 0, y: 10 },
+    ]);
+    const later = makeFragment('later', [
+      { x: 20, y: 20 },
+      { x: 30, y: 20 },
+      { x: 30, y: 30 },
+      { x: 20, y: 30 },
+    ]);
+
+    expect(cullFullyOccludedBox3DFragments([inNotch, concaveCover, later])).toEqual([
+      inNotch,
+      concaveCover,
+      later,
+    ]);
+    expect(cullFullyOccludedBox3DFragments([inNotch, opaque, later])).toEqual([opaque, later]);
+  });
+
+  it('keeps the 0.001 projected coverage tolerance', () => {
+    const game: any = { editor: null };
+    const fragment = (name: string, x: number) =>
+      ({
+        quad: new QuadObject(game, name),
+        vertices: [],
+        projected: [
+          { x, y: 2 },
+          { x: 8, y: 2 },
+          { x: 8, y: 8 },
+          { x, y: 8 },
+        ],
+        sceneOrder: 0,
+        boxId: 'box',
+        faceIndex: 0,
+        fragmented: false,
+      }) as any;
+    const withinEpsilon = fragment('within', -0.0005);
+    const beyondEpsilon = fragment('beyond', -0.002);
+    const cover = fragment('cover', 0);
+    cover.projected = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+      { x: 0, y: 10 },
+    ];
+
+    expect(cullFullyOccludedBox3DFragments([withinEpsilon, beyondEpsilon, cover])).toEqual([
+      beyondEpsilon,
+      cover,
+    ]);
   });
 
   it('treats zero-width frustum faces as triangles and drops the zero-area top', () => {

@@ -834,15 +834,31 @@ export function buildBox3DRenderFragments(scene: any, faces: Box3DFace[]): Box3D
 
 /** Removes fragments fully hidden by one nearer guaranteed-opaque static face. */
 export function cullFullyOccludedBox3DFragments(fragments: Box3DFragment[]): Box3DFragment[] {
-  return fragments.filter(
-    (fragment, index) =>
-      !fragments
-        .slice(index + 1)
-        .some(
-          (occluder) =>
-            isGuaranteedOpaqueBox3DFace(occluder) && isProjectedFaceInside(fragment, occluder)
+  const projected = fragments.map((fragment) => ({
+    bounds: getProjectedBounds(fragment.projected),
+    opaque: isGuaranteedOpaqueBox3DFace(fragment),
+  }));
+  const visible: Box3DFragment[] = [];
+  for (let index = 0; index < fragments.length; index++) {
+    const fragment = fragments[index];
+    let occluded = false;
+    for (let next = index + 1; next < fragments.length; next++) {
+      if (
+        projected[next].opaque &&
+        isProjectedFaceInside(
+          fragment,
+          projected[index].bounds,
+          fragments[next],
+          projected[next].bounds
         )
-  );
+      ) {
+        occluded = true;
+        break;
+      }
+    }
+    if (!occluded) visible.push(fragments[index]);
+  }
+  return visible;
 }
 
 function isGuaranteedOpaqueBox3DFace(fragment: Box3DFragment): boolean {
@@ -857,16 +873,27 @@ function isGuaranteedOpaqueBox3DFace(fragment: Box3DFragment): boolean {
   );
 }
 
-function isProjectedFaceInside(fragment: Box3DFragment, occluder: Box3DFragment): boolean {
+function getProjectedBounds(points: { x: number; y: number }[]) {
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+  for (const point of points) {
+    minX = Math.min(minX, point.x);
+    maxX = Math.max(maxX, point.x);
+    minY = Math.min(minY, point.y);
+    maxY = Math.max(maxY, point.y);
+  }
+  return { minX, maxX, minY, maxY };
+}
+
+function isProjectedFaceInside(
+  fragment: Box3DFragment,
+  source: ReturnType<typeof getProjectedBounds>,
+  occluder: Box3DFragment,
+  target: ReturnType<typeof getProjectedBounds>
+): boolean {
   const epsilon = 0.001;
-  const bounds = (points: { x: number; y: number }[]) => ({
-    minX: Math.min(...points.map((point) => point.x)),
-    maxX: Math.max(...points.map((point) => point.x)),
-    minY: Math.min(...points.map((point) => point.y)),
-    maxY: Math.max(...points.map((point) => point.y)),
-  });
-  const source = bounds(fragment.projected);
-  const target = bounds(occluder.projected);
   if (
     source.minX < target.minX - epsilon ||
     source.maxX > target.maxX + epsilon ||
