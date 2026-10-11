@@ -63,6 +63,7 @@ type ParserTimingEntry = {
 };
 
 export class Parser {
+  private parseQueue: Promise<void> = Promise.resolve();
   private allowAutoApproachForCurrentPlan = true;
   game: any;
   inputField: HTMLInputElement | null;
@@ -104,7 +105,13 @@ export class Parser {
     }
   }
 
-  async parse(input: string): Promise<void> {
+  parse(input: string): Promise<void> {
+    const result = this.parseQueue.then(() => this.parseExclusive(input));
+    this.parseQueue = result.catch(() => {});
+    return result;
+  }
+
+  private async parseExclusive(input: string): Promise<void> {
     const trimmed = input.trim();
     if (!trimmed && !this.pendingState) return;
     if (

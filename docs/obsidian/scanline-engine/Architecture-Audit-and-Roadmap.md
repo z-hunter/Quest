@@ -1,10 +1,10 @@
 # Архитектурный аудит Scanline Engine и план развития
 
+> **Историческая заметка.** Числа тестов и замечания ниже относятся к прежнему состоянию проекта и не являются текущей проверкой. Актуальное состояние проверяется через `npm test` и `npm run typecheck`; инструкции SLM pipeline находятся в [`scripts/slm/README.md`](../../../scripts/slm/README.md).
+
 ## Executive assessment
 
-Scanline уже является работающим runtime/editor engine с сильным deterministic core и AI-адаптерами вокруг него. Архитектурно наиболее зрелы Scene/spatial model, parser execution boundary, data-driven Text Assets и общий actor-aware action layer. LLM/NPC-контур функционален, но требует production hardening. SLM пока является инфраструктурным прототипом: runtime adapter и shadow dataset есть, обученной модели и train/eval pipeline нет.
-
-Главный текущий release blocker — не type system, а поведенческая стабильность: `npm run typecheck` проходит, `codex-doctor -Fast` даёт 17/0/0, но полный Vitest сейчас показывает 574/579 passed и 5 failed в 3 test files.
+На дату аудита Scanline был работающим runtime/editor engine с сильным deterministic core и AI-адаптерами вокруг него. SLM training/evaluation pipeline с тех пор документирован в `scripts/slm/README.md`; наличие актуальных артефактов и метрик следует проверять при новой валидации.
 
 ## Системная модель
 
@@ -33,7 +33,7 @@ Text Assets / scene JSON / authored commands / prompts
 | Stage 2 LLM | Anthropic/Ollama, prompt cache, normalization, fallback | функционально готов, эксплуатационно требует replay/quotas/telemetry |
 | NLP.js | training asset, lazy train, cache/import/export, threshold | готово для intent layer; dataset мал и ручной |
 | NPC Puppet Master | plans, async continuation, interrupts, budgets, loop guards | feature-complete, но scheduler/navigation требуют hardening |
-| SLM | adapters, vocabulary, ONNX runtime, shadow collection | prototype; модель и обучение отсутствуют |
+| SLM | adapters, vocabulary, ONNX runtime, shadow collection | pipeline documented; current model artifacts and quality metrics need fresh validation |
 | Rendering/CRT/UI | canvas/WebGL + React overlay, settings/tokens | функционально готово, нужны browser/E2E и performance budgets |
 | Editor/persistence | scene/entity/component editing, Text Assets, scripts | usable, но schema migration/save-state contract нужно формализовать |
 | Audio | Web Audio spatial/reverb/panning | реализовано, проверено unit tests |
@@ -63,19 +63,19 @@ Console peek modes, prompt/static hash, timings, provider metrics, SceneLog и S
 
 ## Слабые места и технические риски
 
-### P0: текущая поведенческая нестабильность
+### P0: исторические сбои тестов
 
-Пять падений полного тестового набора:
+В полном тестовом запуске на дату аудита отмечались пять падений:
 
 - `tests/game/navigation-and-spatial.test.ts`: неверный interaction-distance для actor center и неверно выбранная approach point;
 - `tests/npc/puppet-master.test.ts`: Exit traversal зацикливает timer polling и превышает 10 000 fake timers;
 - `tests/parser/commands.test.ts`: ожидается локализованная missing-remote строка, но приходит английский fallback/service asset.
 
-Пока эти тесты красные, нельзя считать navigation, async NPC continuation и localization contract стабильными.
+Этот список не описывает подтверждённое текущее состояние и требует повторной проверки.
 
 ### P0/P1: неполный SLM production contour
 
-`SlmInferenceEngine` и `ShadowLogger` готовы как runtime infrastructure, но отсутствуют: dataset curation, deduplication, train/validation split, label policy, offline trainer, model registry/versioning, quality gates и поставка `slm_routine_v1.onnx`. Сейчас SLM закономерно эскалирует к LLM.
+На дату аудита `SlmInferenceEngine` и `ShadowLogger` были runtime infrastructure без train/eval pipeline. Текущий pipeline описан в `scripts/slm/README.md`; состояние обученной модели и quality gates требует свежей проверки.
 
 ### P1: runtime state и persistence
 
@@ -103,13 +103,13 @@ JSON и Text Assets data-driven, но нужна единая schema/version/mig
 
 ### P2: test surface
 
-Unit/integration coverage широкая (41 test file), но нужен browser/E2E слой для Canvas/UI/editor/Tauri file APIs и contract tests на serialized assets/provider responses.
+Unit/integration coverage широкая, но нужен browser/E2E слой для Canvas/UI/editor/Tauri file APIs и contract tests на serialized assets/provider responses.
 
 ## Приоритетный roadmap
 
 ### P0 — сделать runtime release-safe
 
-**Статус: выполнено 2026-07-17.** Полный suite: 41 test file / 579 tests; `typecheck` и `lint` проходят. CI теперь запускает `npm test` после build и lint.
+**Исторический статус на 2026-07-17: отмечено как выполненное.** Полный suite, `typecheck`, `lint` и CI не перепроверялись при обновлении этой заметки.
 
 1. Исправить 5 красных тестов и зафиксировать invariants:
    - actor-center interaction distance;

@@ -29,7 +29,7 @@ The Scanline Engine is a 2.5D retro-style adventure game engine built on a moder
 - **IGame Interface**: All runtime services depend on `src/core/IGame.ts`, not the concrete `Game` class, enabling isolated unit testing without a full engine context.
 - **Semantic-Driven World Model**: The game world's behaviour is driven by Text Assets (TA) вЂ” external `.json` files that define descriptions, synonyms, tags, relation facts, authored commands, and failure messages. Engine code is decoupled from authored text.
 - **Facade Pattern**: `SceneEditor` / `vetool.tsx` acts as a central editor facade, delegating operations to specialized managers.
-- **Descriptive Renderer**: `SceneRenderer` is a stateless function that receives `Scene + Context`, fully decoupling rendering from state.
+- **Descriptive Renderer**: `SceneRenderer` renders the current `Scene + Context` and keeps invalidation-safe caches for static Box3D layers.
 - **Platform Adapter**: `src/platform/fileApi.ts` transparently routes file I/O to either the Vite dev middleware or Tauri's native Rust commands.
 
 ---
@@ -49,7 +49,6 @@ For new developers or AI agents вЂ” functional map of the `src/` directory:
 | `ScriptAPI.ts` | Public scripting surface for authored event scripts |
 | `ScriptRegistry.ts` | Registers and invokes authored game scripts |
 | `AssetLoader.ts` | Image, audio, and scene asset loading pipeline |
-| `AudioManager.ts` | High-level audio manager facade |
 | `Input.ts` | Keyboard, mouse, pointer input abstraction |
 
 ### `src/mechanics/` вЂ” Parser, LLM, NPC
@@ -492,7 +491,7 @@ npx vitest run tests/parser/ # Parser subsystem only
 npm run typecheck     # TypeScript type check (no emit)
 ```
 
-### Test Coverage Areas (41 test files)
+### Test Coverage Areas
 
 | Area | Test files (examples) |
 |------|-----------------------|
@@ -533,7 +532,7 @@ Full reference: **[ScriptSys.md](ScriptSys.md)**
 
 ### 10.2 Path Resolution & Portability
 
-In release builds, `src-tauri/src/main.rs` uses `std::env::current_exe()` (not `CARGO_MANIFEST_DIR`) for path resolution вЂ” ensures the packaged app reads/writes relative to the `.exe` location.
+Tauri resolves the project root in this order: an existing path from `QUEST_PROJECT_ROOT` (expected to be a project directory); in debug builds, the parent of `CARGO_MANIFEST_DIR`; in release builds, the executable's parent directory. Release installs may not be writable, so set `QUEST_PROJECT_ROOT` to a writable project directory. There is no project-folder picker yet. Tauri saves use an atomic file replacement, and append operations use the registered `append_project_file` command.
 
 ### 10.3 Windows Build
 

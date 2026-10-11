@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
+import { atomicWrite } from './scripts/atomicWrite';
 
 function ensureFile(targetPath: string, content: string) {
   const dir = path.dirname(targetPath);
@@ -27,7 +28,7 @@ export default defineConfig({
             req.on('data', (chunk) => {
               body += chunk.toString();
             });
-            req.on('end', () => {
+            req.on('end', async () => {
               try {
                 const { path: relativePath, content } = JSON.parse(body);
                 // Resolve path relative to project root
@@ -48,7 +49,7 @@ export default defineConfig({
                     throw new Error('Invalid base64 data URL');
                   }
                 }
-                fs.writeFileSync(targetPath, fileContent);
+                await atomicWrite(targetPath, fileContent);
                 console.log(`[Vite] Saved file: ${targetPath}`);
 
                 res.statusCode = 200;

@@ -502,9 +502,14 @@ export class SceneRenderer {
     halfH: number
   ) {
     const getLayer = (entity: any) => entity.__box3dSurfaceAnchor?.quad.layer ?? entity.layer ?? 0;
-    const layers = [...new Set(entities.map(getLayer))].sort((a, b) => a - b);
-    for (const layer of layers) {
-      const layerEntities = entities.filter((entity) => getLayer(entity) === layer);
+    const entitiesByLayer = new Map<number, Entity[]>();
+    for (const entity of entities) {
+      const layer = getLayer(entity);
+      const layerEntities = entitiesByLayer.get(layer);
+      if (layerEntities) layerEntities.push(entity);
+      else entitiesByLayer.set(layer, [entity]);
+    }
+    for (const [layer, layerEntities] of [...entitiesByLayer].sort(([a], [b]) => a - b)) {
       const flatEntities = layerEntities.filter(
         (entity: any) => !entity.box3dWorldVertices && !entity.__box3dSurfaceAnchor
       );

@@ -4,6 +4,7 @@ import { Entity } from '../../src/entities/Entity';
 import { ActorPlanExecutor } from '../../src/mechanics/ActorPlanExecutor';
 import { NpcWorldModelBuilder } from '../../src/mechanics/NpcWorldModelBuilder';
 import { NpcPuppetMaster } from '../../src/mechanics/NpcPuppetMaster';
+import { SlmInferenceEngine } from '../../src/mechanics/slm/SlmInferenceEngine';
 import { SceneManager } from '../../src/scene/SceneManager';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 import type {
@@ -4795,6 +4796,29 @@ describe('NpcPuppetMaster', () => {
     // Since pm.haltAllNpcs was called while sendMessageStream was running,
     // the returned plan should be discarded and processScene should return empty plans array.
     expect(plans).toEqual([]);
+  });
+
+  it('does not escalate to the LLM when halted during SLM inference', async () => {
+    const fixture = createSceneFixture();
+    addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    let releaseInference!: (result: { kind: 'escalate'; reason: string }) => void;
+    const inferenceGate = new Promise<{ kind: 'escalate'; reason: string }>((resolve) => {
+      releaseInference = resolve;
+    });
+    const ready = vi.spyOn(SlmInferenceEngine, 'isReady').mockReturnValue(true);
+    const infer = vi.spyOn(SlmInferenceEngine, 'infer').mockReturnValue(inferenceGate);
+
+    const processing = pm.processNpc(fixture.scene, 'guard');
+    await vi.waitFor(() => expect(infer).toHaveBeenCalledOnce());
+    pm.haltAllNpcs();
+    releaseInference({ kind: 'escalate', reason: 'test' });
+
+    expect(await processing).toEqual([]);
+    expect(provider.calls).toHaveLength(0);
+    ready.mockRestore();
+    infer.mockRestore();
   });
 
   it('batches nearby NPC wake-ups into one PM request', async () => {

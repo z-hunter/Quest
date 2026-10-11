@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document describes the current automated test setup on the `autotests` branch.
+This document describes the automated test setup included in the current repository.
 
 The first iteration is intentionally narrow:
 
@@ -497,6 +497,16 @@ The next useful expansions would be:
 4. Add a very small browser smoke layer only if a runtime contract cannot be tested elsewhere.
 
 ## Practical Rule
+
+Architecture audit regressions are covered by:
+
+- `tests/parser/concurrency.test.ts`: queued commands preserve their context and recover after a rejected callback.
+- `tests/npc/puppet-master.test.ts`: halting invalidates pending SLM results as well as LLM results.
+- `tests/editor/editor-undo-manager.test.ts`: scene settings, optional fields, identity, and dirty state round-trip through undo/redo without moving the live camera.
+- `tests/entities/box3d-object.test.ts`: inherited disabled state and fallback hit order when the BSP budget is exceeded.
+- `tests/platform/atomic-write.test.ts` and `tests/platform/file-api.test.ts`: safe replacement and native append routing/error propagation.
+
+Native file replacement and append checks live in `src-tauri/src/file_io.rs`; run them with `cargo test --manifest-path src-tauri/Cargo.toml file_io::tests`.
 
 When adding a test, prefer this order:
 

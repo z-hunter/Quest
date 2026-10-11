@@ -8,6 +8,8 @@ use std::sync::Mutex;
 use tauri::{Emitter, State};
 use notify::{Watcher, RecursiveMode, Event as NotifyEvent};
 
+mod file_io;
+
 #[derive(Serialize, Clone)]
 struct FileEventPayload {
   #[serde(rename = "eventType")]
@@ -352,7 +354,16 @@ fn ensure_project_file(
 fn save_project_file(app: tauri::AppHandle, path: String, content: String) -> Result<(), String> {
   let target = resolve_project_path(&app, &path)?;
   ensure_parent_dir(&target)?;
-  fs::write(target, content).map_err(|error| format!("Failed to write file: {error}"))
+  file_io::atomic_write(&target, content.as_bytes())
+    .map_err(|error| format!("Failed to write file: {error}"))
+}
+
+#[tauri::command]
+fn append_project_file(app: tauri::AppHandle, path: String, content: String) -> Result<(), String> {
+  let target = resolve_project_path(&app, &path)?;
+  ensure_parent_dir(&target)?;
+  file_io::append(&target, content.as_bytes())
+    .map_err(|error| format!("Failed to append file: {error}"))
 }
 
 #[tauri::command]
@@ -469,6 +480,7 @@ fn main() {
       list_project_files,
       ensure_project_file,
       save_project_file,
+      append_project_file,
       read_project_file,
       read_project_file_existing,
       read_project_file_base64,

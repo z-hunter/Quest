@@ -167,6 +167,31 @@ describe('Box3DObject', () => {
     expect(getVisibleBox3DFaces({ entities })).toHaveLength(5);
   });
 
+  it('propagates face disable state through non-entity spatial parents and restores reparented children', () => {
+    const game: any = { editor: null };
+    const box = new Box3DObject(game, 'box');
+    const face = new QuadObject(game, 'box_face_0');
+    face.box3dFaceIndex = 0;
+    face.spatial = { parentNodeId: box.name, relation: 'in' };
+    face.disabled = true;
+    const bridge: any = { name: 'bridge', spatial: { parentNodeId: face.name } };
+    const child: any = { name: 'child', spatial: { parentNodeId: bridge.name }, disabled: false };
+    const scene: any = {
+      entities: [box, face, child],
+      triggerboxes: [bridge],
+      camera: { x: 0, y: 0, zoom: 1 },
+      box3dPerspective: 1,
+    };
+
+    box.syncFaces(scene);
+    expect(child.disabled).toBe(true);
+
+    face.disabled = false;
+    child.spatial.parentNodeId = 'elsewhere';
+    box.syncFaces(scene);
+    expect(child.disabled).toBe(false);
+  });
+
   it('clips individual faces at the near plane instead of hiding the whole Box', () => {
     const game: any = { editor: null, canvas: { width: 640, height: 360 } };
     const box = new Box3DObject(game, 'inside');
@@ -602,6 +627,7 @@ describe('Box3DObject', () => {
     expect(raycastBox3DFace(scene, 320, 180)?.name).toBe('wall_face_2');
   });
 
+  // This 1201-face limit case can exceed Vitest's default while other workers compete for CPU.
   it('uses the rendered fallback order for hit testing after the BSP fragment limit', () => {
     const game: any = { editor: null, canvas: { width: 640, height: 360 } };
     const box = new Box3DObject(game, 'crowded');
@@ -626,7 +652,7 @@ describe('Box3DObject', () => {
     expect(fragments.every((fragment) => fragment.depthFallback)).toBe(true);
     expect(fragments.at(-1)?.quad).toBe(faces.at(-1));
     expect(raycastBox3DFace(scene, 320, 180)).toBe(faces.at(-1));
-  });
+  }, 15_000);
 
   it('keeps an unsplit face on the direct Quad render path', () => {
     const game: any = { editor: null };

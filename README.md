@@ -71,7 +71,7 @@ npm run tauri:build
 ## Display modes
 
 Quest uses the external [`scanline-virtual-screen`](https://github.com/z-hunter/Scanline-Virtual-Screen)
-module (pinned to `v2.0.2`) for the display pass. The default source mode is
+module (pinned to commit `964ce181cb2b8e90cb95f2483bda522c37e59bdf`) for the display pass. The default source mode is
 `quest-420x300`; the editor also exposes `quest-800x600` and `quest-1024x768`.
 Changing a mode resizes the source buffer and active world viewport, so camera,
 parallax, and Box3D calculations use the selected dimensions.

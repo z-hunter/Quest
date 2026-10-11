@@ -136,18 +136,42 @@ export class Box3DObject extends SceneObject {
 
   syncFaces(scene: any): void {
     const vertices = this.getWorldVertices();
+    const entities: any[] = scene.entities || [];
+    const entitiesSet = new Set(entities);
+    const nodes = [...entities, ...(scene.triggerboxes || []), ...(scene.walkbox || [])];
+    const faces: QuadObject[] = [];
+    const childrenByParent = new Map<string, any[]>();
+    const markedByQuad = new Map<string, any[]>();
+    for (const entity of nodes) {
+      if (
+        entity instanceof QuadObject &&
+        entity.spatial?.parentNodeId === this.name &&
+        Number.isInteger(entity.box3dFaceIndex)
+      )
+        faces.push(entity);
+      const parentId = entity.spatial?.parentNodeId;
+      if (parentId) {
+        const children = childrenByParent.get(parentId) || [];
+        children.push(entity);
+        childrenByParent.set(parentId, children);
+      }
+      if (!entitiesSet.has(entity)) continue;
+      const marker = (entity as any)[INHERITED_DISABLED] as
+        | { quadName: string; authoredDisabled: boolean }
+        | undefined;
+      if (marker) {
+        const marked = markedByQuad.get(marker.quadName) || [];
+        marked.push(entity);
+        markedByQuad.set(marker.quadName, marked);
+      }
+    }
     const perspective =
       Number.isFinite(scene.box3dPerspective) && scene.box3dPerspective >= 0
         ? scene.box3dPerspective
         : 1;
     const camera = scene.camera || { x: 0, y: 0 };
     const focal = getBox3DProjectionFocal(camera);
-    for (const quad of scene.entities.filter(
-      (o: any) =>
-        o instanceof QuadObject &&
-        o.spatial?.parentNodeId === this.name &&
-        Number.isInteger(o.box3dFaceIndex)
-    ) as QuadObject[]) {
+    for (const quad of faces) {
       const indices = BOX3D_FACE_VERTICES[quad.box3dFaceIndex!];
       const uvIndices = BOX3D_FACE_UV_VERTICES[quad.box3dFaceIndex!];
       if (!indices || !uvIndices) continue;
@@ -162,7 +186,13 @@ export class Box3DObject extends SceneObject {
       quad.perspective = true;
       quad.perspectiveAmount = 1;
       quad.layer = this.layer;
-      syncFaceChildrenDisabled(scene, quad, this.disabled || quad.disabled);
+      syncFaceChildrenDisabled(
+        quad,
+        this.disabled || quad.disabled,
+        childrenByParent,
+        markedByQuad,
+        entitiesSet
+      );
       if (!clipped) continue;
       const points = uvIndices.map((i) =>
         projectBox3DPoint(
@@ -445,13 +475,31 @@ export function isSpatialDescendantOf(scene: any, value: any, ancestorName: stri
   return false;
 }
 
-function syncFaceChildrenDisabled(scene: any, quad: QuadObject, inheritedDisabled: boolean): void {
-  for (const child of scene.entities || []) {
+function syncFaceChildrenDisabled(
+  quad: QuadObject,
+  inheritedDisabled: boolean,
+  childrenByParent: Map<string, any[]>,
+  markedByQuad: Map<string, any[]>,
+  entitiesSet: Set<any>
+): void {
+  const descendants: any[] = [];
+  const visited = new Set<any>();
+  const pending = [...(childrenByParent.get(quad.name) || [])];
+  while (pending.length) {
+    const child = pending.pop();
+    if (!child || visited.has(child)) continue;
+    visited.add(child);
+    descendants.push(child);
+    pending.push(...(childrenByParent.get(child.name) || []));
+  }
+  for (const child of new Set([
+    ...descendants.filter((entity) => entitiesSet.has(entity)),
+    ...(markedByQuad.get(quad.name) || []),
+  ])) {
     const marker = (child as any)[INHERITED_DISABLED] as
       | { quadName: string; authoredDisabled: boolean }
       | undefined;
-    const belongs = isSpatialDescendantOf(scene, child, quad.name);
-    if (inheritedDisabled && belongs) {
+    if (inheritedDisabled && visited.has(child)) {
       if (marker?.quadName !== quad.name) {
         (child as any)[INHERITED_DISABLED] = {
           quadName: quad.name,
@@ -553,7 +601,14 @@ export function getBox3DFrontAxisSegment(
 }
 
 export function getVisibleBox3DFaces(scene: any, candidates?: any[]): Box3DFace[] {
-  const source = candidates || scene.entities || [];
+  const entities = scene.entities || [];
+  const source = candidates || entities;
+  const boxes = new Map<string, Box3DObject>();
+  const sceneOrder = new Map<any, number>();
+  entities.forEach((value: any, index: number) => {
+    sceneOrder.set(value, index);
+    if (value instanceof Box3DObject) boxes.set(value.name, value);
+  });
   const camera = scene.camera || { x: 0, y: 0 };
   const perspective =
     Number.isFinite(scene.box3dPerspective) && scene.box3dPerspective >= 0
@@ -572,9 +627,7 @@ export function getVisibleBox3DFaces(scene: any, candidates?: any[]): Box3DFace[
     const faceIndex = value.box3dFaceIndex;
     if (!Number.isInteger(faceIndex)) return [];
     const boxId = value.spatial?.parentNodeId;
-    const box = scene.entities.find(
-      (item: any) => item instanceof Box3DObject && item.name === boxId
-    );
+    const box = typeof boxId === 'string' ? boxes.get(boxId) : undefined;
     if (!box || box.disabled || box.visible === false) return [];
     const vertices = normalizeFaceVertices(value.box3dWorldVertices);
     if (!vertices) return [];
@@ -584,7 +637,7 @@ export function getVisibleBox3DFaces(scene: any, candidates?: any[]): Box3DFace[
       {
         quad: value,
         vertices: clipped,
-        sceneOrder: scene.entities.indexOf(value),
+        sceneOrder: sceneOrder.get(value) ?? -1,
         boxId,
         faceIndex,
         fragmented: vertices.some(
@@ -722,6 +775,26 @@ export function buildBox3DRenderFragments(scene: any, faces: Box3DFace[]): Box3D
     renderFragmentCache.set(scene, entries);
     return fragments;
   };
+  const depthFallback = () => {
+    if (!warnedAboutFragmentLimit) {
+      warnedAboutFragmentLimit = true;
+      console.warn(
+        `Box3D BSP fragment limit (${MAX_BSP_FRAGMENTS}) exceeded; using stable face-depth sorting.`
+      );
+    }
+    return cache(
+      cullFullyOccludedBox3DFragments(
+        orderWalkboxSurfaceEntities(sortBox3DFacesByDepth(faces)).map((face) => ({
+          ...face,
+          projected: projectFace(face, camera, perspective, focal),
+          fragmented: false,
+          depthFallback: true,
+        }))
+      )
+    );
+  };
+  // Each valid input face contributes at least one fragment, so a larger input cannot fit the BSP budget.
+  if (faces.length > MAX_BSP_FRAGMENTS) return depthFallback();
   let count = faces.length;
   const ordered: Box3DFace[] = [];
   for (const group of partitionScreenOverlaps(faces, camera, perspective, focal)) {
@@ -747,24 +820,7 @@ export function buildBox3DRenderFragments(scene: any, faces: Box3DFace[]): Box3D
         : cameraPoint(camera, perspective, focal);
     traverseBsp(root, viewpoint, ordered);
   }
-  if (count > MAX_BSP_FRAGMENTS) {
-    if (!warnedAboutFragmentLimit) {
-      warnedAboutFragmentLimit = true;
-      console.warn(
-        `Box3D BSP fragment limit (${MAX_BSP_FRAGMENTS}) exceeded; using stable face-depth sorting.`
-      );
-    }
-    return cache(
-      cullFullyOccludedBox3DFragments(
-        orderWalkboxSurfaceEntities(sortBox3DFacesByDepth(faces)).map((face) => ({
-          ...face,
-          projected: projectFace(face, camera, perspective, focal),
-          fragmented: false,
-          depthFallback: true,
-        }))
-      )
-    );
-  }
+  if (count > MAX_BSP_FRAGMENTS) return depthFallback();
   return cache(
     cullFullyOccludedBox3DFragments(
       orderWalkboxSurfaceEntities(ordered).map((face) => ({
@@ -830,6 +886,9 @@ function getRenderFragmentCacheKey(
   perspective: number,
   focal: number
 ): string {
+  const boxes = new Map<string, Box3DObject>();
+  for (const value of scene.entities || [])
+    if (value instanceof Box3DObject) boxes.set(value.name, value);
   return [
     camera.x,
     camera.y,
@@ -841,7 +900,7 @@ function getRenderFragmentCacheKey(
       [
         face.quad.name,
         face.entity?.name || '',
-        getBox3DById(scene, face.boxId)?.occlusionMode || 'inherit',
+        boxes.get(face.boxId)?.occlusionMode || 'inherit',
         face.fragmented ? 1 : 0,
         ...face.vertices.flatMap((vertex) => [vertex.x, vertex.y, vertex.z]),
       ].join(',')

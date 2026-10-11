@@ -57,6 +57,8 @@ export class EditorUndoManager {
   restoreSceneState(data: any): void {
     const scene = this.editor.game.sceneManager.currentScene;
     if (!scene) return;
+    const previousId = scene.id;
+    const previousFilename = scene.filename;
 
     // Clear existing
     scene.entities = [];
@@ -65,6 +67,42 @@ export class EditorUndoManager {
     scene.triggerboxes = [];
     scene.player = null;
     scene.activeSubscene = null;
+    (scene as any)._walkboxEntitiesCache = null;
+    (scene as any)._physicalExitsCache = null;
+
+    // Restore persisted scene settings before constructing objects that derive state from them.
+    if (data.scaling) scene.scaling = { ...data.scaling };
+    if (data.camera) scene.defaultCamera = { ...data.camera };
+    Object.assign(scene, {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      filename: data.filename,
+      textRedirects: { ...(data.textRedirects || {}) },
+      displayOrder: [...(data.displayOrder || [])],
+      autoCenter: data.autoCenter ?? true,
+      cameraSpeed: data.cameraSpeed ?? 5,
+      camDeadzoneX: data.camDeadzoneX ?? 50,
+      camDeadzoneY: data.camDeadzoneY ?? 30,
+      box3dPerspective: data.box3dPerspective ?? 1,
+      box3dOcclusionMode: data.box3dOcclusionMode ?? 'exact',
+      camMinX: data.camMinX,
+      camMaxX: data.camMaxX,
+      camMinY: data.camMinY,
+      camMaxY: data.camMaxY,
+    });
+    if (data.soundEnv) scene.soundEnv = { ...data.soundEnv };
+    if (
+      (previousId !== scene.id || previousFilename !== scene.filename) &&
+      typeof this.editor.game.sceneManager.syncSceneRegistration === 'function'
+    ) {
+      this.editor.game.sceneManager.syncSceneRegistration(
+        scene,
+        previousId !== scene.id ? previousId : undefined,
+        data,
+        false
+      );
+    }
 
     if (data.folders) {
       data.folders.forEach((fData: any) => {
@@ -100,10 +138,6 @@ export class EditorUndoManager {
         });
       });
     }
-
-    // Restore Scene Settings
-    if (data.scaling) scene.scaling = { ...data.scaling };
-    // We do NOT restore cameraX/Y to allow keeping view focused
 
     this.editor.selectObject(null);
     this.editor.transformManager.drawMode = false;

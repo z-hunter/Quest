@@ -1,29 +1,30 @@
 # Tauri Desktop Foundation
 
-This branch contains the first-pass desktop preparation for running the current Vite/React game inside a Tauri shell.
+The Vite/React game runs inside a Tauri shell, with editor file operations routed through `src/platform/fileApi.ts` to native commands.
 
 ## Current State
 
 - The web game/runtime remains the primary implementation.
 - Editor file operations now go through `src/platform/fileApi.ts`.
 - That adapter still supports the current Vite `/api/*` middleware flow.
-- A matching `src-tauri` backend scaffold was added with commands for:
+- The `src-tauri` backend provides commands for:
   - listing project files;
   - ensuring files exist;
   - saving files;
+  - appending to files;
   - reading files;
   - deleting files;
   - opening files/folders in the system shell.
 
-## Important Caveat
+## Project Root and File Writes
 
-The current Rust command layer resolves paths relative to the process working directory. That is good enough for early local development and architectural validation, but it is not yet the final packaged-project model.
+The backend selects its project root in this order:
 
-For a production editor build we should decide where project data lives:
+- An existing path named by `QUEST_PROJECT_ROOT` (expected to be the project directory).
+- In debug builds, the parent of `CARGO_MANIFEST_DIR`.
+- In release builds, the directory containing the executable.
 
-- open/edit a user-selected project folder;
-- work from a dedicated workspace path;
-- or separate the desktop editor from the packaged player.
+Release install directories may not be writable; set `QUEST_PROJECT_ROOT` to a writable project directory when needed. The editor does not yet provide a project-folder picker. Native save operations replace files atomically, and append operations use the native `append_project_file` command.
 
 ## Expected Local Prerequisites
 

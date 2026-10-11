@@ -696,6 +696,7 @@ export class NpcPuppetMaster {
     if (worldModel.npcs && worldModel.npcs.length === 1 && SlmInferenceEngine.isReady()) {
       const npcContext = worldModel.npcs[0];
       const slmResult = await SlmInferenceEngine.infer(npcContext);
+      if (this.haltGenerationId !== currentGeneration) return [];
       if (slmResult.kind === 'success' && slmResult.plans.length > 0) {
         const normalized = this.normalizeResponse(
           { kind: 'pm_response', plans: slmResult.plans },
