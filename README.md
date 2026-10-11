@@ -1,7 +1,9 @@
 # Scanline: AI-Powered Retro-Vibe Adventure game engine [WIP]
 
 ![logo](public/assets/scanline_logo.png)
+
 SHALL WE MAKE A GAME?
+
 **Scanline** is a 2D third-person adventure game engine inspired by 80s classics (like early Sierra and LukasArt games) with a modern twist. It combines traditional Point-n-Click mechanics for movement and inspection with a _text parser_ for interactions.
 
 ## Key Features
@@ -66,7 +68,7 @@ npm run tauri:build
 
 - `src/` - Source code (React, TypeScript).
 - `public/` - Static assets (sprites, sounds, scenes).
-- `GDD.md` - Game Design Document (Russian).
+- `GDD.md` - Game Design Document (Russian). ---> Also see Git Wiki (English) for this project.
 
 ## Display modes
 
