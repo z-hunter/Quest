@@ -17,6 +17,9 @@ __pycache__/
 *.py[cod]
 .env
 .env.local
+
+# Agent memory is local/private and must never be committed.
+/data/memory-store/
 docs
 !docs/
 !docs/obsidian/
