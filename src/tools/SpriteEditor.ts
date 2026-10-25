@@ -14,6 +14,26 @@ export interface SpriteData {
   frames: number;
 }
 
+type SpriteEditorDrag =
+  | { kind: 'pan'; last: { x: number; y: number } }
+  | { kind: 'draw'; start: { x: number; y: number } }
+  | {
+      kind: 'scrollbar';
+      axis: 'x' | 'y';
+      start: number;
+      pan: number;
+      overflow: number;
+      travel: number;
+    }
+  | {
+      kind: 'move' | 'resize';
+      start: { x: number; y: number };
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    };
+
 export class SpriteEditor {
   game: IGame;
 
@@ -38,6 +58,15 @@ export class SpriteEditor {
   isPlaying: boolean = true;
   previewBg: 'black' | 'checker' | 'pink' = 'black';
   showRulers: boolean = false;
+  private viewZoom = 1;
+  private panX = 0;
+  private panY = 0;
+  private drag: SpriteEditorDrag | null = null;
+  private boundWheelHandler: (e: WheelEvent) => void;
+  private boundMouseDownHandler: (e: MouseEvent) => void;
+  private boundContextMenuHandler: (e: MouseEvent) => void;
+  private boundMouseMoveHandler: (e: MouseEvent) => void;
+  private boundMouseUpHandler: (e: MouseEvent) => void;
 
   constructor(game: IGame) {
     this.game = game;
@@ -57,10 +86,34 @@ export class SpriteEditor {
     // Bind Global Keys (Capture Phase on Document)
     // Using bind to ensure 'this' context and consistent reference
     this.boundKeyHandler = this.handleKey.bind(this);
+    this.boundWheelHandler = this.handleWheel.bind(this);
+    this.boundMouseDownHandler = this.handleMouseDown.bind(this);
+    this.boundContextMenuHandler = this.handleContextMenu.bind(this);
+    this.boundMouseMoveHandler = this.handleMouseMove.bind(this);
+    this.boundMouseUpHandler = this.handleMouseUp.bind(this);
     document.addEventListener('keydown', this.boundKeyHandler, true);
+
+    this.game.canvas.addEventListener('wheel', this.boundWheelHandler, {
+      capture: true,
+      passive: false,
+    });
+    this.game.canvas.addEventListener('mousedown', this.boundMouseDownHandler);
+    this.game.canvas.addEventListener('contextmenu', this.boundContextMenuHandler, true);
+    window.addEventListener('mousemove', this.boundMouseMoveHandler);
+    window.addEventListener('mouseup', this.boundMouseUpHandler);
   }
 
   private boundKeyHandler: (e: KeyboardEvent) => void;
+
+  destroy(): void {
+    document.removeEventListener('keydown', this.boundKeyHandler, true);
+    this.game.canvas.removeEventListener('wheel', this.boundWheelHandler, true);
+    this.game.canvas.removeEventListener('mousedown', this.boundMouseDownHandler);
+    this.game.canvas.removeEventListener('contextmenu', this.boundContextMenuHandler, true);
+    window.removeEventListener('mousemove', this.boundMouseMoveHandler);
+    window.removeEventListener('mouseup', this.boundMouseUpHandler);
+    this.stopPreviewLoop();
+  }
 
   toggle(force?: boolean): void {
     const newState = force !== undefined ? force : !this.active;
@@ -152,6 +205,14 @@ export class SpriteEditor {
       return;
     }
 
+    if (e.altKey && !e.ctrlKey && e.code === 'KeyS') {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      this.promptLoadImage();
+      return;
+    }
+
     if (e.ctrlKey && e.key === 'F6') {
       if (!isTauriRuntime()) {
         e.preventDefault();
@@ -216,6 +277,289 @@ export class SpriteEditor {
   updateUI(): void {
     useEditorStore.getState().incrementSpriteVersion();
     this.updatePreview();
+  }
+
+  private getCanvasPos(e: MouseEvent | WheelEvent): { x: number; y: number } {
+    const rect = this.game.canvas.getBoundingClientRect();
+    return {
+      x: ((e.clientX - rect.left) / rect.width) * this.game.canvas.width,
+      y: ((e.clientY - rect.top) / rect.height) * this.game.canvas.height,
+    };
+  }
+
+  private getViewport() {
+    const canvas = this.game.canvas;
+    return { x: 0, y: 16, width: canvas.width - 16, height: canvas.height - 32 };
+  }
+
+  private getImageView() {
+    if (!this.sourceImage?.width || !this.sourceImage.height) return null;
+    const viewport = this.getViewport();
+    const fit = Math.min(
+      viewport.width / this.sourceImage.width,
+      viewport.height / this.sourceImage.height
+    );
+    const scale = fit * this.viewZoom;
+    const width = this.sourceImage.width * scale;
+    const height = this.sourceImage.height * scale;
+    return {
+      viewport,
+      scale,
+      x: viewport.x + (viewport.width - width) / 2 + this.panX,
+      y: viewport.y + (viewport.height - height) / 2 + this.panY,
+      width,
+      height,
+    };
+  }
+
+  private getScrollbar(
+    view: NonNullable<ReturnType<SpriteEditor['getImageView']>>,
+    axis: 'x' | 'y'
+  ) {
+    const horizontal = axis === 'x';
+    const imageSize = horizontal ? view.width : view.height;
+    const viewportSize = horizontal ? view.viewport.width : view.viewport.height;
+    if (imageSize <= viewportSize) return null;
+    const trackStart = horizontal ? view.viewport.x : view.viewport.y;
+    const trackSize = viewportSize;
+    const thumbSize = Math.min(trackSize, Math.max(24, (viewportSize / imageSize) * trackSize));
+    const overflow = imageSize - viewportSize;
+    const travel = trackSize - thumbSize;
+    const pan = horizontal ? this.panX : this.panY;
+    const thumbStart = trackStart + ((overflow / 2 - pan) / overflow) * travel;
+    return {
+      x: horizontal ? thumbStart : view.viewport.x + view.viewport.width + 4,
+      y: horizontal ? view.viewport.y + view.viewport.height + 5 : thumbStart,
+      width: horizontal ? thumbSize : 6,
+      height: horizontal ? 6 : thumbSize,
+      trackStart,
+      overflow,
+      travel,
+    };
+  }
+
+  private clampPan(): void {
+    const view = this.getImageView();
+    if (!view) return;
+    const maxX = Math.max(0, (view.width - view.viewport.width) / 2);
+    const maxY = Math.max(0, (view.height - view.viewport.height) / 2);
+    this.panX = Math.max(-maxX, Math.min(maxX, this.panX));
+    this.panY = Math.max(-maxY, Math.min(maxY, this.panY));
+  }
+
+  private handleWheel(e: WheelEvent): void {
+    if (!this.active) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (!this.sourceImage) return;
+
+    const pos = this.getCanvasPos(e);
+    const view = this.getImageView();
+    if (!view) return;
+    const zoom = Math.max(1, Math.min(10, this.viewZoom * Math.exp(-e.deltaY * 0.001)));
+    const ratio = zoom / this.viewZoom;
+    this.panX =
+      pos.x -
+      view.viewport.x -
+      view.viewport.width / 2 -
+      (pos.x - view.viewport.x - view.viewport.width / 2 - this.panX) * ratio;
+    this.panY =
+      pos.y -
+      view.viewport.y -
+      view.viewport.height / 2 -
+      (pos.y - view.viewport.y - view.viewport.height / 2 - this.panY) * ratio;
+    this.viewZoom = zoom;
+    this.clampPan();
+  }
+
+  private handleMouseDown(e: MouseEvent): void {
+    if (!this.active || !this.sourceImage) return;
+    const pos = this.getCanvasPos(e);
+    if (e.button === 2) {
+      this.drag = { kind: 'pan', last: pos };
+    } else if (e.button === 0) {
+      const view = this.getImageView();
+      if (!view) return;
+      const scrollbars = (['x', 'y'] as const)
+        .map((axis) => ({ axis, bar: this.getScrollbar(view, axis) }))
+        .find(
+          ({ bar }) =>
+            bar &&
+            pos.x >= bar.x &&
+            pos.x <= bar.x + bar.width &&
+            pos.y >= bar.y &&
+            pos.y <= bar.y + bar.height
+        );
+      if (scrollbars?.bar) {
+        const axis = scrollbars.axis;
+        this.drag = {
+          kind: 'scrollbar',
+          axis,
+          start: axis === 'x' ? pos.x : pos.y,
+          pan: axis === 'x' ? this.panX : this.panY,
+          overflow: scrollbars.bar.overflow,
+          travel: scrollbars.bar.travel,
+        };
+      } else {
+        const frame = {
+          x: view.x + this.sprite.x * view.scale,
+          y: view.y + this.sprite.y * view.scale,
+          width: this.sprite.width * view.scale,
+          height: this.sprite.height * view.scale,
+        };
+        const start = {
+          x: (pos.x - view.x) / view.scale,
+          y: (pos.y - view.y) / view.scale,
+        };
+        const handleSize = 12;
+        const nearHandle =
+          Math.abs(pos.x - (frame.x + frame.width)) <= handleSize &&
+          Math.abs(pos.y - (frame.y + frame.height)) <= handleSize;
+        const onSecondaryFrame = Array.from({ length: Math.max(0, this.sprite.frames - 1) }).some(
+          (_, index) => {
+            const y = view.y + (this.sprite.y + (index + 1) * this.sprite.height) * view.scale;
+            return (
+              pos.x >= frame.x &&
+              pos.x <= frame.x + frame.width &&
+              pos.y >= y &&
+              pos.y <= y + frame.height
+            );
+          }
+        );
+        const onImage =
+          pos.x >= view.x &&
+          pos.x <= view.x + view.width &&
+          pos.y >= view.y &&
+          pos.y <= view.y + view.height;
+        if (
+          !onSecondaryFrame &&
+          (nearHandle ||
+            (pos.x >= frame.x &&
+              pos.x <= frame.x + frame.width &&
+              pos.y >= frame.y &&
+              pos.y <= frame.y + frame.height))
+        ) {
+          this.drag = {
+            kind: nearHandle ? 'resize' : 'move',
+            start,
+            x: this.sprite.x,
+            y: this.sprite.y,
+            width: this.sprite.width,
+            height: this.sprite.height,
+          };
+        } else if (!onSecondaryFrame && onImage) {
+          this.drag = {
+            kind: 'draw',
+            start: {
+              x: Math.max(0, Math.min(this.sourceImage.width, (pos.x - view.x) / view.scale)),
+              y: Math.max(0, Math.min(this.sourceImage.height, (pos.y - view.y) / view.scale)),
+            },
+          };
+        }
+      }
+    }
+    if (this.drag) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }
+
+  private handleContextMenu(e: MouseEvent): void {
+    if (!this.active) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }
+
+  private handleMouseMove(e: MouseEvent): void {
+    if (!this.active) return;
+    const pos = this.getCanvasPos(e);
+    const view = this.getImageView();
+    const overScrollbar =
+      !!view &&
+      (['x', 'y'] as const).some((axis) => {
+        const bar = this.getScrollbar(view, axis);
+        return (
+          !!bar &&
+          pos.x >= bar.x &&
+          pos.x <= bar.x + bar.width &&
+          pos.y >= bar.y &&
+          pos.y <= bar.y + bar.height
+        );
+      });
+    this.game.canvas.style.cursor =
+      this.drag?.kind === 'scrollbar' ? 'grabbing' : overScrollbar ? 'pointer' : '';
+    if (!this.drag) return;
+    if (this.drag.kind === 'pan') {
+      this.panX += pos.x - this.drag.last.x;
+      this.panY += pos.y - this.drag.last.y;
+      this.drag.last = pos;
+      this.clampPan();
+      return;
+    }
+    if (this.drag.kind === 'scrollbar') {
+      const coordinate = this.drag.axis === 'x' ? pos.x : pos.y;
+      const pan =
+        this.drag.pan - ((coordinate - this.drag.start) / this.drag.travel) * this.drag.overflow;
+      if (this.drag.axis === 'x') this.panX = pan;
+      else this.panY = pan;
+      this.clampPan();
+      return;
+    }
+    if (!view || !this.sourceImage) return;
+    const local = {
+      x: (pos.x - view.x) / view.scale,
+      y: (pos.y - view.y) / view.scale,
+    };
+    if (this.drag.kind === 'draw') {
+      const x = Math.max(0, Math.min(this.sourceImage.width, local.x));
+      const y = Math.max(0, Math.min(this.sourceImage.height, local.y));
+      this.sprite.x = Math.floor(Math.min(this.drag.start.x, x));
+      this.sprite.y = Math.floor(Math.min(this.drag.start.y, y));
+      this.sprite.width = Math.max(1, Math.floor(Math.abs(x - this.drag.start.x)));
+      this.sprite.height = Math.max(
+        1,
+        Math.min(
+          Math.floor(Math.abs(y - this.drag.start.y)),
+          Math.floor((this.sourceImage.height - this.sprite.y) / Math.max(1, this.sprite.frames))
+        )
+      );
+      this.isDirty = true;
+      this.updateUI();
+      return;
+    }
+    const dx = local.x - this.drag.start.x;
+    const dy = local.y - this.drag.start.y;
+    if (this.drag.kind === 'move') {
+      this.sprite.x = Math.max(
+        0,
+        Math.min(this.sourceImage.width - this.drag.width, Math.round(this.drag.x + dx))
+      );
+      this.sprite.y = Math.max(
+        0,
+        Math.min(
+          Math.floor(this.sourceImage.height - this.drag.height * Math.max(1, this.sprite.frames)),
+          Math.round(this.drag.y + dy)
+        )
+      );
+    } else {
+      this.sprite.width = Math.max(
+        1,
+        Math.min(this.sourceImage.width - this.drag.x, Math.round(this.drag.width + dx))
+      );
+      this.sprite.height = Math.max(
+        1,
+        Math.min(
+          Math.floor((this.sourceImage.height - this.drag.y) / Math.max(1, this.sprite.frames)),
+          Math.round(this.drag.height + dy)
+        )
+      );
+    }
+    this.isDirty = true;
+    this.updateUI();
+  }
+
+  private handleMouseUp(): void {
+    this.drag = null;
   }
 
   // Animation State
@@ -419,6 +763,10 @@ export class SpriteEditor {
     }
 
     this.sprite.imageFile = path; // Keep original path in data
+    this.viewZoom = 1;
+    this.panX = 0;
+    this.panY = 0;
+    this.drag = null;
     if (!keepDimensions) {
       this.isDirty = true;
     }
@@ -574,6 +922,10 @@ export class SpriteEditor {
     };
     this.isDirty = false;
     this.sourceImage = null;
+    this.viewZoom = 1;
+    this.panX = 0;
+    this.panY = 0;
+    this.drag = null;
     this.updateUI();
   }
 
@@ -614,23 +966,57 @@ export class SpriteEditor {
       ctx.fillRect(0, 0, this.game.canvas.width, this.game.canvas.height);
     }
 
-    // Available Workspace Calculation
-    // Adjusted to shift more left as per user request to optimize space.
-    // Screen width: 840 (scaled) -> 420 game pixels.
-    // Panel: 250px -> ~125 game pixels.
-    // Center of open area is roughly X=147.
-    // Let's shift it further left, say X=100.
-
-    const centerX = 170; // Shifted right slightly to accommodate larger max width
-    const centerY = this.game.bufferCanvas.height / 2;
-
     // Draw Source Image
     if (this.sourceImage && this.sourceImage.complete && this.sourceImage.naturalWidth > 0) {
-      // Draw Info Text (Filename and Resolution) - Moved to TOP Header
-      // Black Header Bar
+      this.clampPan();
+      const view = this.getImageView()!;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(view.viewport.x, view.viewport.y, view.viewport.width, view.viewport.height);
+      ctx.clip();
+      ctx.drawImage(this.sourceImage, view.x, view.y, view.width, view.height);
+
+      for (let i = 0; i < this.sprite.frames; i++) {
+        const sx = view.x + this.sprite.x * view.scale;
+        const sy = view.y + (this.sprite.y + i * this.sprite.height) * view.scale;
+        const sw = this.sprite.width * view.scale;
+        const sh = this.sprite.height * view.scale;
+        ctx.strokeStyle = i === 0 ? Theme.mainColor : '#f2b84b';
+        ctx.lineWidth = i === 0 ? 2 : 1;
+        ctx.strokeRect(sx, sy, sw, sh);
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(`${i}`, sx + 2, sy + 12);
+        if (i === 0) {
+          ctx.fillRect(sx + sw - 5, sy + sh - 5, 10, 10);
+        }
+      }
+      ctx.restore();
+
+      for (const axis of ['x', 'y'] as const) {
+        const bar = this.getScrollbar(view, axis);
+        if (!bar) continue;
+        const horizontal = axis === 'x';
+        ctx.fillStyle = '#252525';
+        ctx.fillRect(
+          horizontal ? view.viewport.x : view.viewport.x + view.viewport.width + 4,
+          horizontal ? view.viewport.y + view.viewport.height + 5 : view.viewport.y,
+          horizontal ? view.viewport.width : 6,
+          horizontal ? 6 : view.viewport.height
+        );
+        ctx.fillStyle = Theme.mainColor;
+        ctx.fillRect(bar.x, bar.y, bar.width, bar.height);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#000';
+        ctx.strokeRect(bar.x, bar.y, bar.width, bar.height);
+        ctx.strokeStyle = '#fff';
+        ctx.strokeRect(bar.x - 1, bar.y - 1, bar.width + 2, bar.height + 2);
+      }
+
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, this.game.canvas.width, 15);
-
       ctx.fillStyle = '#fff';
       ctx.font = '10px monospace';
       ctx.textAlign = 'center';
@@ -638,78 +1024,9 @@ export class SpriteEditor {
       const filename = this.sprite.imageFile.split('/').pop() || 'image';
       ctx.fillText(
         `${filename} (${this.sourceImage.width}x${this.sourceImage.height})`,
-        centerX,
+        this.game.canvas.width / 2,
         8
       );
-
-      // Auto-Scale Logic
-      // If image is larger than workspace, scale down.
-      // Workspace approx 350x280 (roughly available in 420x300 canvas minus UI margin)
-
-      // Adjust max dimensions to keep margins
-      // User requested ~10% size increase.
-      // Max Height 250 -> 280 (Fits in 300 with header)
-      // Max Width 300 -> 330 (Might slightly overlap panel but utilizes space better)
-
-      const maxW = 330;
-      const maxH = 280;
-
-      let scale = 1.0;
-      // Always calculate fit scale, even if image is smaller, to standardizing behavior?
-      // Or only if larger?
-      // Previous logic: if (width > maxW || height > maxH) scale down.
-      // If we want to UPSCALING small images to fill view, we'd remove that condition.
-      // But usually sprite editors show 1:1 for small pixel art unless "Zoom" is active.
-      // Sticking to "fit to max" logic for now, but with larger max.
-
-      if (this.sourceImage.width > maxW || this.sourceImage.height > maxH) {
-        const scaleW = maxW / this.sourceImage.width;
-        const scaleH = maxH / this.sourceImage.height;
-        scale = Math.min(scaleW, scaleH);
-      }
-
-      // Allow user to zoom? For now strictly auto-fit or 1:1 if fits.
-      // If scale is applied, everything must be scaled.
-
-      // Draw centered in workspace
-      // Workspace Center X is purely the canvas center for now, maybe offset by panel?
-      // Panel is roughly 1/3 of screen on right.
-      // Canvas Width = 420. Panel width ~120?
-      // Center of "Canvas minus Panel" is approx 150.
-
-      const drawW = this.sourceImage.width * scale;
-      const drawH = this.sourceImage.height * scale;
-
-      const imgX = Math.floor(centerX - drawW / 2);
-      const imgY = Math.floor(centerY - drawH / 2);
-
-      ctx.drawImage(this.sourceImage, imgX, imgY, drawW, drawH);
-
-      // Draw Frame Rects (Scaled)
-      ctx.strokeStyle = Theme.mainColor;
-      ctx.lineWidth = 1;
-
-      // Frame visualization needs to respect scale
-      for (let i = 0; i < this.sprite.frames; i++) {
-        // Determine frame position relative to image
-        // Scale applies to the position within the image
-
-        // Effective Position on Canvas = ImagePos + (FrameLocalPos * Scale)
-        const sx = imgX + this.sprite.x * scale;
-        const sy = imgY + (this.sprite.y + i * this.sprite.height) * scale;
-
-        const sw = this.sprite.width * scale;
-        const sh = this.sprite.height * scale;
-
-        ctx.strokeRect(sx, sy, sw, sh);
-
-        // Frame Number
-        ctx.fillStyle = Theme.mainColor;
-        ctx.font = '10px monospace';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
-        ctx.fillText(`${i}`, sx + 2, sy + 12);
-      }
     }
 
     ctx.restore();

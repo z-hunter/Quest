@@ -284,6 +284,7 @@ export class Game implements IGame {
     if (this.editor) {
       this.editor.destroy();
     }
+    this.spriteEditor?.destroy();
     if (this.input) {
       this.input.destroy();
     }

@@ -65,7 +65,11 @@ export const SpritePropertiesPanel: React.FC = () => {
               value={spriteEditor.sprite.imageFile}
               onChange={(e) => handlePropChange('imageFile', e.target.value)}
             />
-            <button className="e-btn" onClick={() => spriteEditor.promptLoadImage()}>
+            <button
+              className="e-btn"
+              title="Load image (Alt+S)"
+              onClick={() => spriteEditor.promptLoadImage()}
+            >
               ...
             </button>
           </div>
