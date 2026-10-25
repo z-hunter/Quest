@@ -161,6 +161,19 @@ describe('SpriteEditor direct manipulation', () => {
     expect(bottomBar.y).toBeCloseTo(view.viewport.y + bottomBar.travel);
   });
 
+  it('hides scrollbars when the image fits within rounding tolerance or the thumb cannot travel', () => {
+    const view = {
+      width: 800.5,
+      height: 200,
+      viewport: { x: 0, y: 0, width: 800, height: 600 },
+    };
+    expect((editor as any).getScrollbar(view, 'x')).toBeNull();
+
+    view.width = 100;
+    view.viewport.width = 20;
+    expect((editor as any).getScrollbar(view, 'x')).toBeNull();
+  });
+
   it('shows a hand cursor when hovering over a scrollbar thumb', () => {
     (editor as any).viewZoom = 2;
     const view = (editor as any).getImageView();

@@ -319,12 +319,13 @@ export class SpriteEditor {
     const horizontal = axis === 'x';
     const imageSize = horizontal ? view.width : view.height;
     const viewportSize = horizontal ? view.viewport.width : view.viewport.height;
-    if (imageSize <= viewportSize) return null;
+    if (imageSize <= viewportSize + 1) return null;
     const trackStart = horizontal ? view.viewport.x : view.viewport.y;
     const trackSize = viewportSize;
     const thumbSize = Math.min(trackSize, Math.max(24, (viewportSize / imageSize) * trackSize));
     const overflow = imageSize - viewportSize;
     const travel = trackSize - thumbSize;
+    if (travel <= 0) return null;
     const pan = horizontal ? this.panX : this.panY;
     const thumbStart = trackStart + ((overflow / 2 - pan) / overflow) * travel;
     return {

@@ -68,7 +68,7 @@ npm run tauri:build
 
 - `src/` - Source code (React, TypeScript).
 - `public/` - Static assets (sprites, sounds, scenes).
-- `GDD.md` - Game Design Document (Russian). ---> Also see Git Wiki (English) for this project.
+- `GDD.md` - Game Design Document (Russian). ---> Also see [Git Wiki (English)](https://github.com/z-hunter/Quest/wiki) for this project.
 
 ## Display modes
 
