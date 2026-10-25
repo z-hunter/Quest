@@ -4943,3 +4943,74 @@ BSP fragment  -> own clip + reuse mesh
 ## Durable Project Facts
 
 - SVS changes must be made and committed in its own repository first, then consumers pin the exact tested commit; avoid copying SVS package source into Quest or Term.
+
+## Session Entry - 2026-10-11 22:20 Europe/Bucharest
+
+## Session Goals
+
+- Review the Scanline Engine architecture, identify defects, performance bottlenecks, outdated material, and repository cleanup opportunities.
+- Execute the user-approved audit items 1–3 and 5–9, while deferring the development-file endpoint item because release users run Tauri.
+- Remove the specifically approved temporary diagnostics from Git while preserving a local ignored archive.
+- Commit and publish the refactoring, profile the accepted Box3D cache behavior, implement the measured culling optimization, then prepare a durable session handoff.
+
+## What Was Implemented
+
+The architecture audit found and fixed several independent runtime issues in commit `45a9d5f181c692b68970e8a6fb5e0b7f78fab459` (`Refactoring & clean-up`):
+
+- Editor Undo now restores serialized scene settings before object reconstruction, handles omitted optional values and camera defaults, preserves the live camera view, registers object identity without overwriting authored state, and invalidates derived caches.
+- Parser submissions are serialized per Parser instance; a rejected early callback no longer poisons subsequent queued submissions. NPC SLM results are discarded when a halt generation changes while inference is pending.
+- Vite and native Tauri saves now use same-directory temporary writes and replacement so a failed write does not truncate the previous project file. Native append failures are propagated, and ShadowLogger only counts a sample after a successful write.
+- Box3D avoids repeated hierarchy/name/order scans, groups render layers once, and sends pathological input above the existing 1,200-fragment budget directly to the established fallback. Only the CPU-sensitive 1,201-face test received a 15-second local timeout; fixture and assertions remain intact.
+- Lint excludes generated scratch trees; repository docs, Tauri save behavior, and autotest coverage were corrected.
+- Sixteen explicitly reviewed diagnostic/artifact files were removed from Git after path and SHA-256 verification. Their contents were kept in workstation-local `archived.zip`, excluded from Git; history was not rewritten.
+
+The Vite server endpoint path-containment audit item was deferred by the user because shipping end users use Tauri. Native path validation rejects absolute and parent segments, but it does not resolve symlink/junction escapes for untrusted project directories. That caveat remains tracked as Kairo `OI000133`.
+
+After the user visually accepted the previously implemented multi-surface retained Box3D cache, Debug API profiling reproduced camera-motion cost on `box3d2_t` (5 Box3Ds, 30 managed faces, 26 Grid faces, 4 textured faces, 420×300 source resolution). Exact rendering went from about 60 FPS stationary to 26–27 FPS while moving the camera. A Chrome CPU sample attributed most sampled fragment-builder time to full-occlusion culling and repeated polygon bounds calculations; it did not establish BSP splitting as the dominant cost.
+
+The user authorized the bounded optimization. `cullFullyOccludedBox3DFragments` now computes each fragment's projected bounds and guaranteed-opaque eligibility once per culling call and scans later fragments by index, avoiding repeated bounds calculations and suffix-array allocations. Polygon containment, the `0.001` tolerance, nearer-only painter order, and entity/texture/opacity/blur/blend exclusions remain. Tests cover concave containment rather than only bounding-box containment, tolerance, exclusions, reverse order, and coordinate mutation between calls.
+
+## Architecture and Runtime Decisions
+
+- The accepted retained cache correctness fix and moving-camera performance are separate concerns. Cache correctness was visually accepted and its task closed; dynamic frame cost was profiled separately.
+- Exact Box3D occlusion remains enabled. `fast` mode reached about 60 FPS in the diagnostic control but changes intersection occlusion and is not an equivalent user-facing fix.
+- The culling optimization holds no persistent geometry cache; it derives bounds from current projected points every call, so camera and geometry mutations cannot leave stale bounds.
+- Renderer fragment construction timing includes preprocessing, cache lookup, BSP work, and culling. The CPU sample specifically pointed to `cullFullyOccludedBox3DFragments` and the repeated `bounds` helper, not pure BSP cost.
+- Release Tauri/WebView was not included in the interactive performance measurement.
+
+## Parser, Mechanics, Scene, Subscene, and Inventory
+
+- `Parser.parse` serialization and NPC inference halt isolation changed in commit `45a9d5f`; parser/gameplay contract tests passed.
+- Box3D projected-fragment culling changed in commit `cadac3cd00a77668057cf3d643e0fec2702ca9ec`. Existing renderer ordering keeps the interleaving of cached bitmaps with the two surface entities.
+- No inventory, subscene, or game-design contract changed in the Box3D follow-up. The security endpoint concern remains deferred rather than silently expanded into this work.
+
+## Tests and Measurements
+
+- Final full Vitest: 933 tests passed across 84 files. Focused Box3D and renderer suites: 43 passed.
+- `npm run typecheck`, `npm run lint`, Prettier check, `git diff --check`, and production build passed. Build retained pre-existing chunk-size and dynamic/static import warnings.
+- The refactoring commit also passed Rust `cargo check` and four native Windows file-I/O checks, including replacement and locked-target failure behavior.
+- Same Debug API camera path and two 2.5-second samples after the culling change: exact rendering with Grid and textures measured 43.0/43.6 FPS, 13.10/11.98 ms average render, and 2.04/1.82 ms fragment-build time, versus baseline 26.0/26.9 FPS, 36.10/34.84 ms render, and 26.27/25.44 ms fragment build.
+- With Grid off, measurements were 59.5 FPS; with textures off, 46.4–47.8 FPS; with both off, 59.6 FPS. Moving all-on samples recorded 108–109 bitmap-cache misses, so the result includes active rerendering rather than only the stationary cache.
+- Final renderer diagnostics reported 30 visible faces, 114 BSP fragments, and retained the expected `bitmap → Static_66 → bitmap → miles → bitmap` command order. The resulting scene screenshot and detailed ignored local profiling notes are under `output/playwright/`.
+- An initial post-edit browser measurement during Vite HMR was discarded because stale module identity resulted in zero visible Box3D faces. A full reload restored scene identity; subsequent captures assert the expected geometry count.
+
+## Commits
+
+- `45a9d5f181c692b68970e8a6fb5e0b7f78fab459` — `Refactoring & clean-up`; all approved architecture-audit fixes and tracked-file cleanup, with detailed commit body. Pushed to `origin/dev`.
+- `cadac3cd00a77668057cf3d643e0fec2702ca9ec` — `Optimize Box3D fragment occlusion culling`; implementation and regression tests. Pushed to `origin/dev`.
+- At wrap-up, local branch is `main` at `b6d20bcabbbee009c98e46182b0ba65d6c1d813f`, tracking `origin/main`; it contains both published Box3D commits. The checkout was clean before this wrap-up entry; after appending this entry, `Sessions.md` is its only repository change.
+
+## Remaining Work and Risks
+
+- Kairo `OI000137`: diagnose the independent React `Maximum update depth exceeded` loop observed in scene-editor profiling. It was not modified as part of Box3D optimization.
+- Kairo `OI000133`: decide whether native resolved-path containment against symlink/junction escapes is needed for untrusted projects; the user deferred this audit item.
+- Exact rendering with Grid and textures improved substantially but measured 43–44 FPS on this browser/machine, not 60. Other hardware, source resolutions, and release Tauri rendering remain unmeasured.
+- `fast` occlusion can misrender intersecting Box3Ds; it remains a diagnostic comparison only.
+- Earlier commit `45a9d5f` retained an ignored workstation-local `archived.zip`; no history rewrite was done.
+- Local RAG mirror refresh initially hit a legacy invalid-UTF-8 title in the shared SQLite database. The local exporter was made resilient by decoding invalid bytes as U+FFFD without altering the database; the final refresh exported 3,816 records, and the curated temporary `AgentMemory.md` contains 240 selected records. The raw generated dump is not tracked in the repository.
+- NotebookLM synchronization dry-run found 12 changed sources, 14 unchanged, 0 manifest-tracked removals. The bundled sync then failed twice and a direct file/Markdown upload failed once for `3dSys.md`, each with NotebookLM HTTP 500. Replacement had already deleted the old source, and each failed upload left an `UNKNOWN` / `preparing` placeholder; the final placeholder was removed after verifying its ID and state. `3dSys.md` is currently absent from NotebookLM. The hash manifest was not advanced; all other changed sources and `AgentMemory.md` remain unsynchronized. Retry after the NotebookLM upload service recovers, then verify all changed files are `Markdown` sources rather than pasted text. Follow-up is Kairo `OI000138`.
+- NotebookLM source list also shows six older managed files as `PASTED_TEXT` (`AgentMemory.md`, `COMMERCIAL.md`, `README.md`, `Sessions.md`, `debugAPI.md`, and `progress.md`); they remain stale because the sync stopped at the first source error. Exact basenames are correct, but their types/content need verification on the next successful sync.
+
+## User-Owned Worktree Changes
+
+At the start of this wrap-up, the current `main` checkout was clean. The session had earlier observed untracked `.agent/mcp_config.json`, `.agents/`, and `.mcp.json` during the optimization commit. They were intentionally not included in `cadac3c`; they are absent from the current `main` checkout/status and were not edited or removed during wrap-up.
