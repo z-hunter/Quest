@@ -32,6 +32,22 @@ describe('Scene camera parallax centering', () => {
     );
   });
 
+  it('does not reverse camera follow when surface parallax jitters at the deadzone edge', () => {
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 100, 100);
+    fixture.scene.cameraSpeed = 5;
+    let state = { centeringDirX: 0, centeringDirY: 0 };
+    const cameraPositions: number[] = [];
+
+    for (let frame = 0; frame < 240; frame++) {
+      player.parallax = frame % 2 === 0 ? 0.5 : 0.50001;
+      state = updateSceneCamera(fixture.scene, 1000 / 60, state);
+      if (frame >= 120) cameraPositions.push(fixture.scene.camera.x);
+    }
+
+    expect(Math.max(...cameraPositions) - Math.min(...cameraPositions)).toBeLessThan(1);
+  });
+
   it('uses a stable authored player offset instead of depth-scaled height', () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero', 100, 100);

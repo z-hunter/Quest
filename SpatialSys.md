@@ -284,6 +284,7 @@ Chair (Title, Surface relation under)
 У одного titled object не должно быть двух storage components с одинаковым relation — даже если это разные типы компонентов (например, один `Inventory`, а другой `Surface`). Валидатор должен подсвечивать такие duplicate relation slots как ошибку.
 
 Пример конфликта (invalid):
+
 - `Box` (Title)
   - `Inventory` (relation: `in`)
   - `Surface` (relation: `in`)

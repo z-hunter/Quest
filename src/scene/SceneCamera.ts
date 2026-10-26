@@ -6,6 +6,8 @@ export interface CameraCenteringState {
 }
 
 const playerCameraOffsets = new WeakMap<object, number>();
+// Prevent depth/parallax updates from reversing follow at the deadzone edge.
+const cameraDeadzoneHysteresis = 2;
 
 export function getPlayerCameraOffsetY(player: {
   baseHeight?: number;
@@ -70,7 +72,7 @@ export function updateSceneCamera(
   let dirX = state.centeringDirX;
   let dirY = state.centeringDirY;
 
-  if (Math.abs(dx) > scene.camDeadzoneX) {
+  if (Math.abs(dx) > scene.camDeadzoneX + cameraDeadzoneHysteresis) {
     dirX = Math.sign(dx);
   }
 
@@ -82,7 +84,7 @@ export function updateSceneCamera(
     }
   }
 
-  if (Math.abs(dy) > scene.camDeadzoneY) {
+  if (Math.abs(dy) > scene.camDeadzoneY + cameraDeadzoneHysteresis) {
     dirY = Math.sign(dy);
   }
 
