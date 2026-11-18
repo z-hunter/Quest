@@ -517,6 +517,15 @@ npm run tauri:build
 
 ---
 
+## Documentation Ownership and Change Policy
+
+- **`GDD.md`** owns player-facing design intent and gameplay principles; link to a subsystem document rather than copying its runtime algorithms.
+- **`Parser.md`** owns parser pipeline, cascade boundaries, parser DSL and recovery. **`NPCsys.md`** owns NPC cognition, orchestration, scene events and plan lifecycle.
+- **`docs/npc-pm-slm.md`** owns local SLM integration, model lifecycle and training. **`SpatialSys.md`**, **`TextAssets.md`** and **`Commands.md`** own their respective data and semantic contracts.
+- **`tech-spec.md`** is an architectural map and entry point, not a parallel authoritative implementation specification for each subsystem.
+- Adjustable delays, thresholds, window sizes, budgets, model identifiers and paths are defined by **named constants/configuration in source code**. Documentation explains their purpose and points to the defining symbol/file, without duplicating volatile numeric defaults.
+- Distinguish **implemented behavior**, **known implementation limitations**, and **proposals**. When implementation changes, update its owning document; keep links from overviews stable.
+
 ## 11. Documentation Index
 
 | Document | Subject |
