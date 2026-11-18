@@ -1,7 +1,7 @@
 # NPC Puppet Master — Hybrid SLM Subsystem
 
 > **Расположение**: `src/mechanics/slm/`  
-> **Статус**: runtime и полный offline pipeline реализованы. Модель требует обучения на собранном production dataset перед активацией.
+> **Статус по проверенному коду**: runtime и offline-пайплайн реализованы; готовая модель не обнаружена в `public/models/` ветки `main`. Для запуска нужны обученные ONNX + manifest и корректная инициализация.
 
 Offline pipeline: `npm run slm:pipeline`. Реализация и зависимости находятся в `scripts/slm/`; runtime принимает ONNX только вместе с совместимым manifest.
 
@@ -48,7 +48,7 @@ Offline pipeline: `npm run slm:pipeline`. Реализация и зависим
 
 ### Решение
 
-При наличии обученной модели `slm_routine_v1.onnx`, большинство **рутинных задач** (подобрать предмет, переместиться к цели, выполнить authored-команду) может решить локальная нейросеть за **< 5 мс** без сетевых запросов. К LLM эскалируются только **сложные ситуации**: диалог, когнитивная неопределённость, неизвестные объекты.
+При наличии совместимой обученной модели `slm_routine_v1.onnx` локальная нейросеть **предназначена** для рутинных задач без сетевых запросов. Сложные или неподдержанные запросы эскалируются к LLM. Процент перехвата, задержка и качество **не гарантированы архитектурой**: их следует измерять на реальной модели и игровых сценариях.
 
 ---
 
@@ -319,7 +319,7 @@ SlmInferenceEngine.infer(context: NpcActorContext): Promise<SlmDecodeResult>
 
 #### Загрузка модели
 
-По умолчанию загружается из `/models/slm_routine_v1.onnx`. Загрузка происходит лениво при первом вызове `infer()`, если сессия ещё не создана. При ошибке загрузки движок переходит в режим `escalate` для всех последующих вызовов (fallback на LLM остаётся активным).
+Путь модели по умолчанию — `/models/slm_routine_v1.onnx`; рядом загружается совместимый manifest. `SlmInferenceEngine.infer()` действительно может лениво вызвать `init()`, если сессии ещё нет. **Но текущий `NpcPuppetMaster.processWorldModel()` проверяет `isReady()` до `infer()`**, поэтому при обычном маршруте PM необходим предварительный успешный `SlmInferenceEngine.init()`. Ошибка загрузки приводит к `escalate` при вызове `infer()`; PM fallback зависит также от доступности LLM-провайдера.
 
 #### Технические детали
 
@@ -331,11 +331,13 @@ SlmInferenceEngine.infer(context: NpcActorContext): Promise<SlmDecodeResult>
 
 ## Гибридный роутер в NpcPuppetMaster
 
-**Файл**: `src/mechanics/NpcPuppetMaster.ts`, метод `processWorldModel()`, строки ~431–479.
+**Проверка доступности провайдера:** `NpcPuppetMaster.flushBatch()` и прямые `processScene()` / `processNpc()` проверяют `this.provider.isAvailable()` **до** `processWorldModel()`. Поэтому недоступность LLM-провайдера может заблокировать даже локальную SLM. Это ограничение текущего кода, требующее отдельного изменения для автономной работы.
+
+**Файл**: `src/mechanics/NpcPuppetMaster.ts`, метод `processWorldModel()`. Номера строк не фиксируются: они меняются при рефакторинге.
 
 Роутер активируется **только** при следующих условиях:
 - в `worldModel` ровно один NPC (одиночная обработка);
-- `SlmInferenceEngine.isReady()` возвращает `true`.
+- `SlmInferenceEngine.isReady()` возвращает `true` (ONNX-сессия уже инициализирована).
 
 ### Логика выполнения (быстрый путь)
 
@@ -344,7 +346,7 @@ SlmInferenceEngine.infer(context: NpcActorContext): Promise<SlmDecodeResult>
 2. Вызвать SlmInferenceEngine.infer(context)
 3. Если result.kind === 'success':
    a. normalizeResponse()               → санитизировать планы
-   b. expandImplicitTakeApproaches()    → MOVE_TO перед TAKE если нужно
+   b. expandImplicitApproaches()        → MOVE_TO перед TAKE/GIVE/Exit, когда нужно
    c. validatePlanItems()               → проверить наличие предметов
    d. removePrematureStrategySteps()    → убрать преждевременный THINK_STRATEGY
    e. removeRepeatedNoProgressSteps()   → убрать повторяющиеся бесполезные шаги
@@ -455,7 +457,7 @@ torch.onnx.export(
 
 ### Шаг 5. Деплой
 
-Скопировать `slm_routine_v1.onnx` в папку `public/models/`. Модель загружается автоматически при первом вызове `SlmInferenceEngine.infer()`.
+Поместить совместимые `slm_routine_v1.onnx` и `slm_routine_v1.manifest.json` в `public/models/`. Сам инференс может вызвать загрузку, но текущий PM требует заранее инициализированной сессии (см. «Загрузка модели»).
 
 ---
 
@@ -705,6 +707,8 @@ npx vitest run tests/npc/                        # все NPC тесты
 ---
 
 ## Известные ограничения и риски
+
+**Обязательные точки проверки при автономной поставке:** наличие ONNX/manifest, явная инициализация SLM, одиночный NPC в текущем роутере, ранняя проверка доступности LLM-провайдера и реальное качество локальных решений. Эти условия описывают текущую реализацию, а не требования к будущей архитектуре.
 
 ### Текущие ограничения
 
