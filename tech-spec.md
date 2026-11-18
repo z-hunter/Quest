@@ -330,67 +330,27 @@ Built on the Web Audio API, mapping 2.5D parallax to 3D coordinates:
 
 ## 4. Gameplay & AI Systems
 
-### 4.1 Text Parser вЂ” Stage 1 (Deterministic)
+### 4.1 Text Parser — subsystem boundary
 
-`Parser.ts` is the primary player input processor:
+`Parser.ts` serializes player inputs, applies the deterministic rule/command layer, invokes `NlpCascade` on handoff, then optionally invokes `LlmCascade` for an unresolved input or recoverable post-API outcome. All branches return a common envelope to Parser Core; only the engine confirms world changes. The current NLP.js cascade classifies a **fixed set of intents** from input text with a code-defined confidence threshold; it does not reason over `ParserContext` (its context argument is currently unused).
 
-- **Rule-based verb cascade**: Exact match в†’ NLP synonym в†’ multi-verb compound detection.
-- **NLP.js integration** (`NlpCascade.ts`): Noun phrase extraction, stemming, and language-aware lemmatization for robust input parsing on standard CPU hardware.
-- **Semantic World Model**: `ParserWorldModelBuilder` constructs a JSON snapshot of the current scene (takable items, openable containers, known entities, relation facts from Text Assets) and passes it to the LLM cascade.
-- **Authored Commands**: Text Assets define `parserCommands` вЂ” structured command definitions with `requires`, `effects`, and `plan` steps that directly execute engine actions.
+**Owner:** [`Parser.md`](Parser.md), with authoritative runtime paths `src/mechanics/Parser.ts`, `NlpCascade.ts`, `LlmCascade.ts` and `ParserWorldModelBuilder.ts`. The detailed intents, escalation rules, provider defaults and thresholds belong there or in the code, not in this overview.
 
-### 4.2 LLM Cascade вЂ” Stage 2 (AI Game Master)
+### 4.2 LLM Provider Boundary
 
-`LlmCascade.ts` activates when Stage 1 cannot handle the input:
-
-- **Parser GM Prompt**: Constructed from static prefix (cached, sent with `cache_control`) + dynamic player context.
-- **Post-API Recovery**: On recoverable parser failures (e.g., `cannot_take`, `not_takeable`), the LLM can retry with a corrected plan, return atmospheric text, or explicitly fall back to the original parser response.
-- **Provider switching**: Seamless toggle between `AnthropicProvider` (Claude) and `OllamaProvider` (local Ollama).
-
-#### LLM Providers
-
-| Provider | Class | Endpoint | Typical use |
-|----------|-------|----------|------------|
-| **Anthropic Claude** | `AnthropicProvider` | `/api/llm` proxy | Cloud / dev with API key |
-| **Ollama (local)** | `OllamaProvider` | `http://localhost:11434/v1/...` | Offline play on CPU hardware |
-
-**OllamaProvider optimizations** (CPU-targeted):
-- Grammar-constrained JSON mode (`response_format: { type: 'json_object' }`)
-- `num_ctx: 4096` вЂ” minimizes KV-cache memory pressure
-- `keep_alive: -1` вЂ” model permanently loaded in RAM
-- 600 s request timeout for cold prefill
-- Recommended model: `qwen2.5:3b`
+Both Parser and Puppet Master use `ILlmProvider` with selectable `AnthropicProvider` (remote proxy) or `OllamaProvider` (local service). Provider availability, configuration, request constraints and retry policy are runtime details owned by `src/mechanics/llm/`. **A local Ollama service is not the same as bundling an embedded offline model:** it must be installed/available separately unless packaging is implemented. See [`Parser.md`](Parser.md) and [`Tauri.md`](Tauri.md) for the relevant subsystem contracts.
 
 ### 4.3 NPC Puppet Master
 
-`NpcPuppetMaster.ts` drives fully autonomous NPC behaviour:
+`NpcPuppetMaster.ts` is an event-driven scene orchestrator, not a per-frame independent agent for each NPC. It coalesces selected NPC wake-ups into a shared LLM request while keeping per-NPC memory, objectives, inventory, knowledge, and event cursors separate. Results are typed `NpcPlan[]` executed via `ActorPlanExecutor` and shared actor-aware semantic API. Plans run under continuation barriers and validation; cross-NPC GIVE dependencies receive special coordination, but a response is not an atomic scene transaction.
 
-- **World Model**: `NpcWorldModelBuilder` builds a per-NPC context: position, visible entities (with interaction flags, approach status, switch state, commands), inventory, scene events (unread delta + recent history), known entities, action history, objectives, memory.
-- **Scene Log Integration**: NPCs wake on unread `SceneLog` entries. Each NPC tracks its own cursor; `markProcessed` advances it after plan generation.
-- **Plan DSL**: Typed `NpcPlanStep[]` covering `SAY`, `MOVE_TO`, `TRAVERSE_EXIT`, `LOOK`, `EXAMINE`, `OPEN`, `CLOSE`, `TAKE`, `PUT`, `COMMAND`, `USE`, `WAIT`, `THINK_STRATEGY`, `MEMORY_SET`, `OBJECTIVES_SET`.
-- **Multi-step Plans with `interruptOn`**: Plans execute step-by-step; conditions `ITEM_FOUND`, `WORLD_CHANGED`, `STATE_CHANGED`, `ACTION_FAILED` can abort the chain.
-- **Continuation System**: Asynchronous steps (MOVE_TO, WAIT) schedule wakeups; NPC resumes with `move_completed` / `action_completed` / `wait_elapsed` triggers.
-- **Strategy Pass** (`THINK_STRATEGY`): Scheduled internal reflection that rewrites memory and objectives without producing speech or physical actions. Rate-limited to prevent premature triggering.
-- **Rate Limiting**: Per-NPC and per-scene call budgets; player speech always bypasses autonomous rate limits.
-- **Loop Watchdog**: Detects `repeated_without_progress` and `pattern_without_progress` loops; applies escalating sleep penalties.
-- **Batch Processing**: NPCs waking within 50 ms are batched into a single LLM request.
-- **Hybrid SLM Router**: If `SlmInferenceEngine.isReady()`, routine plans are served in < 5 ms locally. See В§4.4 and `docs/npc-pm-slm.md`.
+**Owner:** [`NPCsys.md`](NPCsys.md). Batch delay and other adjustable limits live in named `PM_*` constants in `src/mechanics/NpcPuppetMaster.ts`; no duplicate numeric values are maintained here.
 
-### 4.4 Hybrid SLM вЂ” Offline NPC Inference
+### 4.4 Hybrid SLM — Local NPC Inference
 
-Located in `src/mechanics/slm/`:
+The ONNX/WASM SLM infrastructure and shadow-data training pipeline exist, but the checked repository does not contain a published `public/models/slm_routine_v1.onnx` runtime model. In the current PM router the SLM path is considered only when **exactly one NPC** is in the world model and `SlmInferenceEngine.isReady()` is true. The session therefore needs prior initialization; `infer()`'s lazy `init()` does not itself make the PM path reachable. In addition, a provider-availability guard before `processWorldModel()` can prevent SLM use when the LLM provider is unavailable.
 
-| Module | Role |
-|--------|------|
-| `ShadowLogger.ts` | Captures Gold Standard dataset (successful LLM plans в†’ `logs/slm_shadow_dataset.jsonl`) |
-| `SlmVocabulary.ts` | Static integer token vocabulary (actions, flags, special tokens; dynamic entities в‰Ґ 100) |
-| `SlmInputAdapter.ts` | Encodes `NpcActorContext` в†’ `Int32Array` token sequence for ONNX inference |
-| `SlmOutputAdapter.ts` | Decodes ONNX output tokens в†’ `NpcPlan[]`; escalates to LLM on structural failures |
-| `SlmInferenceEngine.ts` | Singleton ONNX session manager; lazy model load; `isReady()` / `setEnabled()` / `infer()` |
-
-**Status**: Phase 1вЂ“3 complete (infrastructure, adapters, hybrid router). Model (`slm_routine_v1.onnx`) requires training before activation. System gracefully escalates all requests to LLM when model is absent.
-
-Full reference: [`docs/npc-pm-slm.md`](docs/npc-pm-slm.md)
+**Owner:** [`docs/npc-pm-slm.md`](docs/npc-pm-slm.md) for tokenizer, inference adapter, manifest, training and known implementation limitations. Source: `src/mechanics/slm/` and `src/mechanics/NpcPuppetMaster.ts`. No guaranteed inference latency or coverage is implied without measured results.
 
 ### 4.5 Text Asset System (TA-Driven Model)
 
@@ -556,6 +516,15 @@ npm run tauri:build
 - **Workspace Model**: Recommended to adopt an explicit workspace model for robust path handling in packaged player vs. editor builds.
 
 ---
+
+## Documentation Ownership and Change Policy
+
+- **`GDD.md`** owns player-facing design intent and gameplay principles; link to a subsystem document rather than copying its runtime algorithms.
+- **`Parser.md`** owns parser pipeline, cascade boundaries, parser DSL and recovery. **`NPCsys.md`** owns NPC cognition, orchestration, scene events and plan lifecycle.
+- **`docs/npc-pm-slm.md`** owns local SLM integration, model lifecycle and training. **`SpatialSys.md`**, **`TextAssets.md`** and **`Commands.md`** own their respective data and semantic contracts.
+- **`tech-spec.md`** is an architectural map and entry point, not a parallel authoritative implementation specification for each subsystem.
+- Adjustable delays, thresholds, window sizes, budgets, model identifiers and paths are defined by **named constants/configuration in source code**. Documentation explains their purpose and points to the defining symbol/file, without duplicating volatile numeric defaults.
+- Distinguish **implemented behavior**, **known implementation limitations**, and **proposals**. When implementation changes, update its owning document; keep links from overviews stable.
 
 ## 11. Documentation Index
 

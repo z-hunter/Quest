@@ -6,15 +6,12 @@
 
 ## Puppet Master (PM) — Оркестратор NPC
 
-За управление NPC и диалоги с ними отвечает **Puppet Master** (PM) — модуль на базе LLM, который «отыгрывает» роль каждого NPC в сцене. Реализован в `src/mechanics/NpcPuppetMaster.ts`.
+За управление NPC и диалоги с ними отвечает **Puppet Master** (PM) — событийный оркестратор в `src/mechanics/NpcPuppetMaster.ts`. Он собирает контексты NPC, маршрутизирует запрос к локальной SLM (когда она готова) или LLM, валидирует планы и передаёт их исполнителю. Это не покадровый пересчёт всех NPC.
 
 PM принимает решения, ориентируясь на:
 
 - Системный промпт из файла `public/text/system/npc-pm-system.md` (содержит инструкцию по поведению, правила DSL-плана и т.д.);
-- **Статический контекст сцены** (кешируется у LLM-провайдеров, поддерживающих prompt caching):
-  - id и заголовок сцены;
-  - описание (`description`) и лорный текст (`lore`) сцены;
-  - `id`, `title` и `lore` каждого NPC в сцене (берутся из Text Assets).
+- **Статический контекст сцены** (может кешироваться LLM-провайдером): authored-данные сцены и каталог семантических объектов — `id`, `title`, `description`, `lore`, свойства доступных действий и определения команд. Статический каталог **не доказывает** текущего присутствия или доступности объекта для конкретного NPC.
 - **Динамический контекст** (передаётся при каждом вызове):
   - Текущие цели (`objectives`) и память (`memory`) NPC;
   - Инвентарь NPC;
@@ -171,7 +168,7 @@ PM возвращает **структурированный JSON** в форм�
 - Если marker удалён из-за структурного противоречия, остальные независимые шаги того же плана не отбрасываются; их отдельно проверит executor.
 - `[JUST COMPLETED]` — информационная пометка; после одного PM-turn цель автоматически удаляется из дерева.
 
-Этот протокол предотвращает преждевременные заявления LLM о завершении задач, которые runtime ещё не подтвердил.
+Этот протокол отсеивает структурно противоречивые завершения, но не требует строгого подтверждения каждой leaf-цели: закрытие может быть оптимистичным. Реальные игровые изменения остаются полностью под контролем runtime.
 
 Обновлённые цели сохраняются вместе с игрой. Пустое дерево с текущей `objectivesTARevision` означает намеренно очищенный список; та же версия TA не заполняет его повторно.
 
@@ -312,7 +309,11 @@ PM не хранит потенциально устаревающий authored 
 
 ### Динамическое батчирование
 
-Несколько почти одновременных событий объединяются в один PM-вызов за счёт дебаунсинга: система ждёт `400 мс` в production и `150 мс` в тестах (`PM_BATCH_DEBOUNCE_MS`) перед отправкой запроса к LLM, собирая все триггеры для текущей сцены в один batch. Это снижает количество LLM-запросов при активном взаимодействии.
+Несколько почти одновременных пробуждений NPC одной сцены объединяются дебаунсингом в один batch. Интервал задаёт **`PM_BATCH_DEBOUNCE_MS`** в `src/mechanics/NpcPuppetMaster.ts`; конкретное значение не является частью контракта. В batch включаются только NPC с непрочитанными событиями или явными триггерами. `NpcWorldModelBuilder` создаёт **индивидуальный** контекст каждого выбранного NPC; общая LLM получает их в одном запросе.
+
+**События во время запроса:** `flushBatch()` фиксирует watermark необработанных событий до формирования контекста. Новые события остаются непрочитанными и коалесцируются в следующий batch без холостого расходования rate budget.
+
+**Многоперсонажный план не является транзакцией:** принятые планы NPC исполняются последовательно через `ActorPlanExecutor` и проверяются runtime. Предусмотрена специальная отсрочка зависимых планов при `GIVE` до подтверждения `item_given` (см. [протокол GIVE](#протокол-передачи-предметов-give)); общего механизма атомарного резервирования всех объектов нет. Индивидуальная память и восприятие NPC остаются раздельными.
 
 ---
 
@@ -322,8 +323,10 @@ PM не хранит потенциально устаревающий authored 
 
 Чтобы автономные NPC не провоцировали лавинообразный поток LLM-запросов, реализованы два уровня ограничений (см. `NpcPuppetMaster.ts`):
 
-- **На NPC:** максимум `6` вызовов за `10` секунд (`PM_MAX_NPC_CALLS_PER_WINDOW`, `PM_RATE_WINDOW_MS`).
-- **На сцену:** максимум `12` вызовов за `10` секунд (`PM_MAX_SCENE_CALLS_PER_WINDOW`).
+- **На NPC:** ограничение `PM_MAX_NPC_CALLS_PER_WINDOW` за окно `PM_RATE_WINDOW_MS`.
+- **На сцену:** ограничение `PM_MAX_SCENE_CALLS_PER_WINDOW` за то же окно.
+
+Конкретные значения этих констант см. в `src/mechanics/NpcPuppetMaster.ts`.
 
 Если бюджет исчерпан, вызов откладывается (deferred) до следующего свободного окна.
 
@@ -331,8 +334,10 @@ PM не хранит потенциально устаревающий authored 
 
 Если NPC раз за разом повторяет одно и то же действие без прогресса (`worldChanged = false`), система это отслеживает:
 
-- После `2` повторений (`PM_REPEAT_WARNING_COUNT`) — модель получает явное предупреждение об отсутствии прогресса.
-- После `3` повторений (`PM_REPEAT_SUPPRESS_COUNT`) — действие подавляется с кодом `repeated_without_progress` и включается cooldown на `10` секунд (`PM_LOOP_COOLDOWN_MS`).
+- При достижении `PM_REPEAT_WARNING_COUNT` модель получает предупреждение об отсутствии прогресса.
+- При достижении `PM_REPEAT_SUPPRESS_COUNT` повторение подавляется с кодом `repeated_without_progress` и включается cooldown `PM_LOOP_COOLDOWN_MS`.
+
+Значения констант — в `src/mechanics/NpcPuppetMaster.ts`.
 
 ### Watchdog паттернов действий (Sliding Window)
 
@@ -340,7 +345,7 @@ PM не хранит потенциально устаревающий authored 
 
 В окно попадают только действия, которые завершились без изменения мира и относятся к навигации/осмотру/переключателям: `MOVE_TO`, `LOOK`, `EXAMINE`, `OPEN`, `CLOSE`. Сигнатура строится из типа действия и цели, например `EXAMINE:Sofa`.
 
-Если окно длиной `6` действий (`PM_PATTERN_LOOP_WINDOW`) содержит не больше `3` уникальных сигнатур (`PM_PATTERN_LOOP_UNIQUE_LIMIT`), PM считает это петлёй:
+Если окно `PM_PATTERN_LOOP_WINDOW` содержит не больше `PM_PATTERN_LOOP_UNIQUE_LIMIT` уникальных сигнатур, PM считает это петлёй (значения — в `src/mechanics/NpcPuppetMaster.ts`):
 
 - Сначала возвращает модели предупреждение `pattern_without_progress` с перечислением повторяющихся сигнатур. Это даёт LLM шанс сменить стратегию, остановиться, подождать или попросить помощи.
 - Если после предупреждения NPC продолжает тот же паттерн, PM возвращает `pattern_loop_sleep` и ставит короткий cooldown, чтобы не сжигать LLM-вызовы.
@@ -352,9 +357,9 @@ PM не хранит потенциально устаревающий authored 
 
 ### Защита от зависания модели (Continuation Guard)
 
-Если plan NPC, пришедший в ответ на триггер `move_completed`, содержит только обновление памяти или целей (`MEMORY_SET` / `OBJECTIVES_SET`) без единого физического или асинхронного действия — NPC мог бы «застрять», ожидая триггера, который никогда не придёт.
+Если PM вернул только когнитивные обновления (`MEMORY_*`, `OBJECTIVE_*`) или одну реплику при активной цели, NPC может остаться без нового физического действия и без события пробуждения. `maybeScheduleContinuation()` планирует `plan_continued`, чтобы продолжить работу над целью; для SAY-only плана предусмотрена небольшая задержка.
 
-В этом случае PM автоматически посылает триггер `plan_continued`, давая модели возможность принять следующее решение. Чтобы эта логика не создавала бесконечную цепочку, введён лимит: максимум `3` продолжения подряд (`PM_MEMORY_CONTINUATION_LIMIT`) без явного обновления состояния через `MEMORY_SET` или `OBJECTIVES_SET`.
+Количество последовательных пробуждений ограничено **`PM_STATE_ONLY_CONTINUATION_LIMIT`**, а задержка после реплики — **`PM_SAY_ONLY_CONTINUATION_DELAY_MS`**. Продолжения многошаговых планов защищены отдельными barriers и watchdog **`PM_PENDING_CONTINUATION_TIMEOUT_MS`**. Значения — в `src/mechanics/NpcPuppetMaster.ts`.
 
 ### Предотвращение галлюцинаций (Discovery Claims Filter)
 
@@ -462,7 +467,7 @@ Subscene для NPC не активируется визуально — это 
 | 8   | `deferPlansDependingOnUnconfirmedGive`     | Откладывает планы, зависящие от незавершённого GIVE в другом плане (SCC resolution)                                            |
 | 9   | `validateObjectiveCompletionConfirmations` | Реализует двухфазный протокол подтверждения `OBJECTIVE_MARK_COMPLETED`                                                         |
 
-Pipeline применяется идентично для планов из SLM-инференса и LLM-ответа.
+SLM и LLM используют общий контракт `NpcPlan[]`, нормализацию, ключевые проверки и `ActorPlanExecutor`, но **не полностью идентичные ветки фильтрации**. В частности, LLM-путь дополнительно вызывает `removeUnavailableCommandSteps` и `removeUnsupportedDiscoveryClaims`; актуальный порядок — в `processWorldModel()` файла `src/mechanics/NpcPuppetMaster.ts`.
 
 `validateObjectiveCompletionConfirmations` теперь сохраняет оптимистичный marker leaf-цели и отбрасывает только marker parent-цели с незавершёнными subtask. Удалённый marker не обрывает независимый хвост плана.
 
@@ -470,38 +475,13 @@ Pipeline применяется идентично для планов из SLM-
 
 ## SLM Hybrid Router
 
-PM поддерживает **гибридный маршрут**: перед обращением к cloud LLM для одиночного NPC пробуется быстрый локальный инференс через SLM (Small Language Model), работающий как ONNX-модель в WebAssembly.
+В `processWorldModel()` предусмотрен локальный ONNX/WASM-путь для рутинных NPC-планов. В текущем коде он доступен лишь при **одном NPC** в `worldModel` и `SlmInferenceEngine.isReady()`. Пакет из нескольких NPC уходит в LLM; неудачный локальный план также эскалируется.
 
-### Архитектура
+`ShadowLogger` собирает успешные примеры LLM-планов для обучения SLM. Наличие runtime-инфраструктуры само по себе не означает, что обученная модель поставляется с игрой.
 
-| Файл                                      | Роль                                                            |
-| :---------------------------------------- | :-------------------------------------------------------------- |
-| `src/mechanics/slm/SlmInferenceEngine.ts` | ONNX-runtime: загрузка модели, SHA-256 валидация, инференс      |
-| `src/mechanics/slm/SlmInputAdapter.ts`    | Кодирование NPC-контекста в фиксированный vocabulary            |
-| `src/mechanics/slm/SlmOutputAdapter.ts`   | Декодирование output tensor в `NpcPlan[]` или escalation signal |
-| `src/mechanics/slm/SlmVocabulary.ts`      | Фиксированный vocabulary с version hash                         |
-| `src/mechanics/slm/ShadowLogger.ts`       | Теневое логирование LLM-планов для обучения SLM                 |
-
-### Маршрут решения
-
-```
-NPC Context → SLM.infer() → SlmDecodeResult
-  ├─ kind: 'success' → normalizeResponse → pipeline → execute
-  └─ kind: 'escalate' → cloud LLM fallback
-```
-
-SLM escalates к LLM при: превышении input capacity, неизвестных dynamic entities, или если decoded план не проходит нормализацию. Shadow Logger записывает каждый LLM-принятый план для последующего offline-обучения SLM.
-
-### Совместимость
-
-SLM-модель валидируется через compatibility manifest (`*.manifest.json`) с контролем:
-
-- `schemaVersion`, `vocabularyVersion`, `vocabularySha256` — совместимость vocabulary
-- `modelSha256` — целостность модели
-- Tensor shapes и dtypes — contract input/output
+Полный контракт адаптеров, обучение, manifest, запуск и текущие ограничения приведены в профильном документе **[docs/npc-pm-slm.md](docs/npc-pm-slm.md)**. Источник истины по маршруту: `NpcPuppetMaster.processWorldModel()` и `flushBatch()`.
 
 ---
-
 ## Ключевые файлы системы
 
 | Файл                                      | Роль                                                                                                         |
@@ -523,10 +503,11 @@ SLM-модель валидируется через compatibility manifest (`*.
 
 ## Тесты
 
-Основное тестовое покрытие системы:
+- `tests/npc/puppet-master.test.ts` — оркестрация, batch, continuations, GIVE, охранные фильтры, исполнение и маршрутизация.
+- `tests/npc/slm-adapters.test.ts` — адаптеры локального SLM.
+- `tests/slm/slm-manifest.test.ts` — совместимость manifest и vocabulary.
+- `tests/parser/` и `tests/scene/` — смежные контракты.
 
-- `tests/npc/puppet-master.test.ts` — unit-тесты PM: батчинг, rate limiting, plan execution, discovery claim filter, objective confirmation, GIVE protocol, pattern watchdog.
-- `tests/npc/actor-plan-executor.test.ts` — unit-тесты исполнителя DSL-шагов.
-- `tests/npc/npc-world-model-builder.test.ts` — unit-тесты сборки мировой модели.
-- `tests/npc/slm-*.test.ts` — тесты SLM: input/output adapters, inference engine, shadow logger.
-- `tests/scene/scene-log.test.ts` — тесты SceneLog: курсоры, TTL, фильтрация событий по NPC.
+Тесты с mock LLM проверяют исполнение ответов движком, а не качество решений реальной LLM или скорость ONNX. Актуальный перечень файлов — в дереве `tests/` репозитория.
+
+Смежные документы: [GDD.md](GDD.md) — игровая концепция; [Parser.md](Parser.md) — парсер; [SpatialSys.md](SpatialSys.md) — пространственная модель; [docs/npc-pm-slm.md](docs/npc-pm-slm.md) — SLM.
